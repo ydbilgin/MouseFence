@@ -98,6 +98,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         }
 
         _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds));
+        _guard.DeliberateCross = _settings.DeliberateCross;
     }
 
     private void RegisterHotkey()

@@ -22,6 +22,7 @@ public sealed class Settings
     // behaviour
     public bool StartGateClosed { get; set; } = true;  // main->top crossing blocked at launch
     public bool AutoStart { get; set; } = false;       // launch with Windows
+    public bool DeliberateCross { get; set; } = true;  // true: deliberate push to cross; false: any upward move
 
     // which monitors to block
     public string Mode { get; set; } = "AutoTop";   // "AutoTop" | "Manual"

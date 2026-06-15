@@ -220,6 +220,14 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     Check("game mode: leaving upward is also blocked", up.act == GuardAction.Block, $"act={up.act}");
 }
 
+// ---- deliberate-cross toggle: OFF = any upward move crosses ----
+{
+    var c = New(); c.DeliberateCross = false;
+    Move(c, 1280, 0, true);
+    var r = Move(c, 1290, -3, true);          // would be blocked when deliberate is ON
+    Check("deliberate OFF: any upward move through the gate crosses", r.act == GuardAction.Pass && r.onTop, $"act={r.act}");
+}
+
 Console.WriteLine();
 Console.WriteLine(fails == 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
 Environment.Exit(fails == 0 ? 0 : 1);

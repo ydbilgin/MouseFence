@@ -16,6 +16,7 @@ public sealed class GuardCore
 {
     public int CrossMinUp = 3;     // min upward px in a move to count as a deliberate cross
     public int CrossSlack = 5;     // allowed horizontal beyond the vertical component
+    public bool DeliberateCross = true;   // true: a deliberate push is required; false: any upward move crosses
 
     public bool HasTop;
     public int BarrierY;
@@ -105,7 +106,8 @@ public sealed class GuardCore
         bool inGate = gatesEnabled && LastY >= BarrierY && InSameGate(x, LastX);
         int dxAbs = Math.Abs(x - LastX);
         int dyUp = LastY - y;
-        if (inGate && dyUp >= CrossMinUp && dxAbs <= dyUp + CrossSlack)
+        bool intent = DeliberateCross ? (dyUp >= CrossMinUp && dxAbs <= dyUp + CrossSlack) : dyUp > 0;
+        if (inGate && intent)
         {
             OnTop = true;
             Accept(x, y);

@@ -24,6 +24,7 @@ public sealed class SettingsForm : Form
 
     private readonly TabControl _tabs;
     private readonly TextBox _gameHotkeyBox;
+    private readonly CheckBox _deliberateCheck;
     private readonly Dictionary<string, HashSet<string>> _rules = new();
     private bool _mc, _ma, _ms, _mw;
     private Keys _key;
@@ -64,7 +65,8 @@ public sealed class SettingsForm : Form
 
         var headFont = new Font("Segoe UI Semibold", 9f);
 
-        _tabs = new TabControl { Left = 12, Top = 12, Width = 446, Height = 476 };
+        _tabs = new TabControl { Left = 12, Top = 12, Width = 446, Height = 476, DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(147, 28) };
+        _tabs.DrawItem += DrawTab;
         var tabGeneral = new TabPage(Strings.TabGeneral) { Padding = new Padding(10) };
         var tabAppearance = new TabPage(Strings.TabAppearance) { Padding = new Padding(10) };
         var tabMonitors = new TabPage(Strings.TabMonitors) { Padding = new Padding(10) };
@@ -159,6 +161,9 @@ public sealed class SettingsForm : Form
         _topsCheck.ItemCheck += TopsCheck_ItemCheck;
         tabMonitors.Controls.Add(_topsCheck);
 
+        _deliberateCheck = new CheckBox { Text = Strings.DeliberateCrossLabel, Left = 12, Top = 378, Width = 416, Height = 34, Checked = s.DeliberateCross };
+        tabMonitors.Controls.Add(_deliberateCheck);
+
         if (_bottoms.Count > 0 && _tops.Count > 0) { _fromCombo.SelectedIndex = 0; }
 
         // ---- buttons ----
@@ -250,9 +255,24 @@ public sealed class SettingsForm : Form
 
     private Theme SelectedTheme() => Theming.Resolve(_themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" });
 
+    private void DrawTab(object sender, DrawItemEventArgs e)
+    {
+        var t = SelectedTheme();
+        var rect = _tabs.GetTabRect(e.Index);
+        bool sel = e.Index == _tabs.SelectedIndex;
+        using (var bg = new SolidBrush(sel ? t.Surface : t.Back))
+            e.Graphics.FillRectangle(bg, rect);
+        if (sel)
+            using (var bar = new SolidBrush(t.Accent))
+                e.Graphics.FillRectangle(bar, rect.X, rect.Bottom - 2, rect.Width, 2);
+        TextRenderer.DrawText(e.Graphics, _tabs.TabPages[e.Index].Text, _tabs.Font, rect,
+            sel ? t.Accent : t.Subtle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+    }
+
     private void ApplyThemeLive()
     {
         Theming.Apply(this, SelectedTheme());
+        _tabs.Invalidate();
         _map.Invalidate();
         Invalidate(true);
     }
@@ -328,6 +348,7 @@ public sealed class SettingsForm : Form
             Language = _langCombo.SelectedIndex switch { 1 => "en", 2 => "tr", _ => "auto" },
             Theme = _themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" },
             ConfineModCtrl = _gc, ConfineModAlt = _ga, ConfineModShift = _gs, ConfineModWin = _gw, ConfineHotKey = _gkey,
+            DeliberateCross = _deliberateCheck.Checked,
         };
 
         if (res.Mode == "Manual")
