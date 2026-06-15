@@ -1,0 +1,17 @@
+## .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+## Build output
+publish/
+app/
+*.exe
+*.dll
+*.pdb
+
+## OS
+Thumbs.db
+desktop.ini

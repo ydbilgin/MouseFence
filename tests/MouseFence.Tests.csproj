@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>MouseFence.Tests</AssemblyName>
+    <RootNamespace>MouseFence.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Don't pull in the council scratch sub-projects nested under tests/ -->
+    <Compile Remove="council_*/**/*.cs" />
+    <!-- Test the REAL production decision logic -->
+    <Compile Include="..\GuardCore.cs" Link="GuardCore.cs" />
+  </ItemGroup>
+
+</Project>
