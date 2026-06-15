@@ -17,6 +17,10 @@ STAGING/
 .ax_dispatch/
 .cx_dispatch/
 
+## Local working notes (not part of the public repo)
+PROJECT_RULES.md
+CURRENT_STATUS.md
+
 ## OS
 Thumbs.db
 desktop.ini
