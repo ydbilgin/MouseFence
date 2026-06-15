@@ -69,6 +69,7 @@ public static class Strings
     public static string AllowedTopsLabel => G("AllowedTopsLabel");
     public static string RuleHint => G("RuleHint");
     public static string NoTopsHint => G("NoTopsHint");
+    public static string DeliberateCrossLabel => G("DeliberateCrossLabel");
     public static string MenuGame => G("MenuGame");
     public static string GameHotkeyHead => G("GameHotkeyHead");
     public static string GameHotkeyHint => G("GameHotkeyHint");
@@ -124,6 +125,7 @@ public static class Strings
         ["AllowedTopsLabel"] = "May cross up into",
         ["RuleHint"] = "Pick a bottom screen, then check which top screens it may cross up into. (Empty = the primary may cross up into every top.)",
         ["NoTopsHint"] = "No top monitors detected — nothing to configure.",
+        ["DeliberateCrossLabel"] = "Require a deliberate push to cross up (off = any upward move crosses)",
         ["MenuGame"] = "Game mode (confine cursor)",
         ["GameHotkeyHead"] = "Game mode hotkey",
         ["GameHotkeyHint"] = "Confine the cursor to its monitor (windowed/borderless games; not exclusive-fullscreen).",

@@ -25,6 +25,13 @@ public sealed class MouseGuard : IDisposable
         set => _core.Confine = value;
     }
 
+    /// <summary>When true a deliberate upward push is required to cross; when false any upward move crosses.</summary>
+    public bool DeliberateCross
+    {
+        get => _core.DeliberateCross;
+        set => _core.DeliberateCross = value;
+    }
+
     public MouseGuard() => _proc = HookCallback;
 
     /// <summary>Configure the barrier from the top monitors, the allowed crossing gates, and all monitor rects (for game mode).</summary>
