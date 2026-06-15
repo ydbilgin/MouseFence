@@ -10,10 +10,10 @@ namespace MouseFence;
 /// </summary>
 internal static class Screenshot
 {
-    public static void CaptureSettings(string path, string themeOverride = null, int tabIndex = 0)
+    public static void CaptureSettings(string path, string themeOverride = null, int tabIndex = 0, string lang = "en")
     {
         var s = Settings.Load();
-        s.Language = "en";                                  // docs screenshots are English
+        s.Language = string.IsNullOrEmpty(lang) ? "en" : lang;
         if (!string.IsNullOrEmpty(themeOverride)) s.Theme = themeOverride;   // "Light" | "Dark"
         Strings.Use(s.Language);
 

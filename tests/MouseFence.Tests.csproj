@@ -14,6 +14,7 @@
     <Compile Remove="council_*/**/*.cs" />
     <!-- Test the REAL production logic (these files are WinForms-free) -->
     <Compile Include="..\GuardCore.cs" Link="GuardCore.cs" />
+    <Compile Include="..\Strings.cs" Link="Strings.cs" />
   </ItemGroup>
 
 </Project>
