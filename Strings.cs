@@ -23,6 +23,10 @@ public static class Strings
     private static string G(string key) =>
         _t.TryGetValue(key, out var v) ? v : (En.TryGetValue(key, out var e) ? e : key);
 
+    // For tests: every key must exist in BOTH languages, so nothing ever falls back across languages.
+    public static IReadOnlyCollection<string> EnglishKeys => En.Keys;
+    public static IReadOnlyCollection<string> TurkishKeys => Tr.Keys;
+
     // ---- settings dialog ----
     public static string SettingsTitle => G("SettingsTitle");
     public static string Subtitle => G("Subtitle");
@@ -180,6 +184,7 @@ public static class Strings
         ["AllowedTopsLabel"] = "Çıkabileceği üst ekranlar",
         ["RuleHint"] = "Bir alt ekran seç, sonra çıkabileceği üst ekranları işaretle. (Boş = ana ekran her üst ekrana çıkabilir.)",
         ["NoTopsHint"] = "Üst ekran algılanmadı — yapılandırılacak bir şey yok.",
+        ["DeliberateCrossLabel"] = "Yukarı geçmek için bilinçli itiş gerekir (kapalı = her yukarı hareket geçer)",
         ["MenuGame"] = "Oyun modu (imleci hapset)",
         ["GameHotkeyHead"] = "Oyun modu kısayolu",
         ["GameHotkeyHint"] = "İmleci bulunduğu ekrana hapset (windowed/borderless oyunlar; exclusive-fullscreen hariç).",

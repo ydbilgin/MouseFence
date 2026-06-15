@@ -228,6 +228,17 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     Check("deliberate OFF: any upward move through the gate crosses", r.act == GuardAction.Pass && r.onTop, $"act={r.act}");
 }
 
+// ---- localization parity: every key exists in BOTH languages (no cross-language fallback) ----
+{
+    var en = new HashSet<string>(Strings.EnglishKeys);
+    var tr = new HashSet<string>(Strings.TurkishKeys);
+    var missingInTr = en.Except(tr).ToList();
+    var missingInEn = tr.Except(en).ToList();
+    Check("i18n: EN and TR dictionaries have identical keys",
+        missingInTr.Count == 0 && missingInEn.Count == 0,
+        $"missingInTr=[{string.Join(",", missingInTr)}] missingInEn=[{string.Join(",", missingInEn)}]");
+}
+
 Console.WriteLine();
 Console.WriteLine(fails == 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
 Environment.Exit(fails == 0 ? 0 : 1);
