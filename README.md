@@ -18,7 +18,7 @@ On a multi‑monitor setup the cursor slips onto screens you didn't mean to reac
 - 🚧 **One‑way "up" barrier** — the cursor can't drift up into a monitor mounted above the main row by accident.
 - 🎛️ **Per‑screen crossing rules** — choose exactly which bottom screen may cross up into which top screen (great for layouts with several monitors above). Empty = the primary may cross up into every top.
 - 🔒 **Side screens stay put** — a screen with no rule can never cross up; the empty "void" corners above side screens stop trapping the cursor.
-- 🎯 **Deliberate crossing** — where crossing is allowed, it takes an intentional upward push; fast horizontal slides and jitter never leak through.
+- 🎯 **Deliberate crossing (optional)** — by default a crossing takes an intentional upward push (fast horizontal slides and jitter never leak through); turn it off in Settings to let any upward move cross like a normal monitor edge.
 - 🎮 **Game mode** — a hotkey that confines the cursor to whichever monitor it's on (so it can't escape a windowed/borderless game).
 - ⌨️ **Global hotkeys** — toggle crossing (default **Ctrl + Alt + ↑**) and game mode (default **Ctrl + Alt + G**); plus a tray double‑click and a **Pause**.
 - 🌗 **Light / Dark / Follow‑system theme** and **English / Türkçe** (auto‑detected from your OS).
