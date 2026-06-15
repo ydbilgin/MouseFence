@@ -12,7 +12,7 @@
   <ItemGroup>
     <!-- Don't pull in the council scratch sub-projects nested under tests/ -->
     <Compile Remove="council_*/**/*.cs" />
-    <!-- Test the REAL production decision logic -->
+    <!-- Test the REAL production logic (these files are WinForms-free) -->
     <Compile Include="..\GuardCore.cs" Link="GuardCore.cs" />
   </ItemGroup>
 

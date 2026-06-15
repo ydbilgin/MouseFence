@@ -12,6 +12,11 @@ app/
 *.dll
 *.pdb
 
+## Council / process scratch (not part of the product)
+STAGING/
+.ax_dispatch/
+.cx_dispatch/
+
 ## OS
 Thumbs.db
 desktop.ini

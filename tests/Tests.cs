@@ -11,7 +11,21 @@ int fails = 0;
 
 GuardCore New()
 {
-    var c = new GuardCore { HasTop = true, BarrierY = 0, GateLeft = 24, GateRight = 2536 };
+    var c = new GuardCore { HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) } };
+    c.Reset();
+    return c;
+}
+
+GuardCore NewGates(params (int Min, int Max)[] gates)
+{
+    var c = new GuardCore { HasTop = true, BarrierY = 0, Gates = gates.ToList() };
+    c.Reset();
+    return c;
+}
+
+GuardCore NewConfine(params (int L, int T, int R, int B)[] mons)
+{
+    var c = new GuardCore { HasTop = false, Confine = true, Monitors = mons.ToList() };
     c.Reset();
     return c;
 }
@@ -160,6 +174,50 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     var c = New(); Move(c, 1280, 0, true);
     var r = Move(c, 1283, -10, true);            // dx=3, dyUp=10 -> 3 <= 15 -> Pass
     Check("near-vertical push still crosses with slack=5", r.act == GuardAction.Pass && r.onTop, $"act={r.act}");
+}
+
+// ---- MULTI-GATE (per-screen directional rules): two separate gate columns ----
+// Gate A = [0,1000), Gate B = [2000,3000). e.g. left-bottom may only go to left-top (A),
+// right-bottom may only go to right-top (B). Each column is independent.
+{
+    var c = NewGates((0, 1000), (2000, 3000));
+    Move(c, 500, 0, true);
+    var r = Move(c, 500, -15, true);
+    Check("multi-gate: deliberate up in gate A crosses", r.act == GuardAction.Pass && r.onTop, $"act={r.act}");
+}
+{
+    var c = NewGates((0, 1000), (2000, 3000));
+    Move(c, 2500, 0, true);
+    var r = Move(c, 2500, -15, true);
+    Check("multi-gate: deliberate up in gate B crosses", r.act == GuardAction.Pass && r.onTop, $"act={r.act}");
+}
+{
+    var c = NewGates((0, 1000), (2000, 3000));
+    Move(c, 1500, 0, true);                 // column BETWEEN the two gates (no UpLink there)
+    var r = Move(c, 1500, -15, true);
+    Check("multi-gate: up between gates is blocked", r.act == GuardAction.Block && !r.onTop, $"act={r.act}");
+}
+{
+    var c = NewGates((0, 1000), (2000, 3000));
+    Move(c, 500, 0, true);                  // origin in gate A
+    var r = Move(c, 2500, -200, true);      // landing in gate B -> different gate, must be blocked
+    Check("multi-gate: cross-gate diagonal blocked (origin-aware)", r.act == GuardAction.Block && !r.onTop, $"act={r.act}");
+}
+
+// ---- GAME MODE (confine cursor to its monitor) ----
+{
+    var c = NewConfine((0, 0, 2560, 1440), (2560, 0, 4480, 1080));
+    Move(c, 1000, 500, true);                  // baseline on monitor 1
+    var inside = Move(c, 2000, 600, true);     // still on monitor 1
+    var cross = Move(c, 3000, 500, true);      // try to leave to monitor 2
+    Check("game mode: move within active monitor passes", inside.act == GuardAction.Pass, $"act={inside.act}");
+    Check("game mode: leaving active monitor is blocked", cross.act == GuardAction.Block, $"act={cross.act}");
+}
+{
+    var c = NewConfine((0, 0, 2560, 1440), (2560, 0, 4480, 1080));
+    Move(c, 1000, 500, true);                  // on monitor 1
+    var up = Move(c, 1000, -10, true);         // try to go above monitor 1 (no top above it here)
+    Check("game mode: leaving upward is also blocked", up.act == GuardAction.Block, $"act={up.act}");
 }
 
 Console.WriteLine();
