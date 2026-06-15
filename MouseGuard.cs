@@ -8,8 +8,6 @@ namespace MouseFence;
 /// </summary>
 public sealed class MouseGuard : IDisposable
 {
-    private const int GateInset = 24;   // shrink the main-screen gate by this many px on each side
-
     private IntPtr _hook = IntPtr.Zero;
     private readonly Native.HookProc _proc;   // kept alive so the GC never collects the callback
     private readonly GuardCore _core = new();
@@ -17,20 +15,26 @@ public sealed class MouseGuard : IDisposable
     /// <summary>True while the hook is installed (the tool is running, not paused).</summary>
     public bool Enabled => _hook != IntPtr.Zero;
 
-    /// <summary>When true, a deliberate push up from the MAIN screen is honoured. Side screens are never affected.</summary>
+    /// <summary>Master toggle: when true the configured crossing gates are active; when false all crossing is blocked.</summary>
     public bool GateOpen { get; set; }
+
+    /// <summary>Game mode: confine the cursor to whichever monitor it is currently on.</summary>
+    public bool Confine
+    {
+        get => _core.Confine;
+        set => _core.Confine = value;
+    }
 
     public MouseGuard() => _proc = HookCallback;
 
-    public void Configure(IEnumerable<Native.RECT> blocked, int gateLeft, int gateRight)
+    /// <summary>Configure the barrier from the top monitors, the allowed crossing gates, and all monitor rects (for game mode).</summary>
+    public void Configure(IEnumerable<Native.RECT> blocked, IEnumerable<(int Min, int Max)> gates, IEnumerable<Native.RECT> allMonitors)
     {
         var rects = blocked.ToList();
         _core.HasTop = rects.Count > 0;
         _core.BarrierY = _core.HasTop ? rects.Max(r => r.Bottom) : 0;
-
-        int inset = Math.Min(GateInset, Math.Max(0, (gateRight - gateLeft) / 4));
-        _core.GateLeft = gateLeft + inset;
-        _core.GateRight = gateRight - inset;
+        _core.Gates = gates.Where(g => g.Max > g.Min).ToList();
+        _core.Monitors = allMonitors.Select(r => (r.Left, r.Top, r.Right, r.Bottom)).ToList();
     }
 
     public void Start()
@@ -49,7 +53,7 @@ public sealed class MouseGuard : IDisposable
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode < 0 || (int)wParam != Native.WM_MOUSEMOVE || !_core.HasTop)
+        if (nCode < 0 || (int)wParam != Native.WM_MOUSEMOVE || (!_core.HasTop && !_core.Confine))
             return Native.CallNextHookEx(_hook, nCode, wParam, lParam);
 
         var data = Marshal.PtrToStructure<Native.MSLLHOOKSTRUCT>(lParam);

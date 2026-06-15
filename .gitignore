@@ -12,6 +12,7 @@ app/
 *.dll
 *.pdb
 
+
 ## OS
 Thumbs.db
 desktop.ini

@@ -1,138 +1,100 @@
 # MouseFence 🛡️🖱️
 
-**A tiny Windows tray app that stops your mouse cursor from drifting up into a monitor mounted *above* your main screen — with a one‑key toggle for when you actually want to go there.**
+**A tiny Windows tray app that stops your mouse cursor from drifting into monitors you don't want it on — with per‑screen rules, a hotkey, and a "game mode" that confines the cursor to one screen.**
 
-> _[screenshot / gif placeholder — drop a short clip of the cursor hitting the invisible barrier and the tray icon flipping from red to green here]_
+<p align="center">
+  <img src="docs/settings.png" alt="MouseFence settings — General" width="430">
+  <img src="docs/settings-monitors.png" alt="MouseFence settings — Monitors / crossing rules" width="430">
+</p>
 
 ---
 
 ## The problem
 
-If you have a monitor stacked **above** your primary display (or side monitors that leave empty "void" corners above them), Windows lets the cursor slide straight up there by accident. You overshoot a window's title bar, fling the pointer at a top‑edge menu, or slide sideways too fast — and suddenly the cursor is lost on the top screen, or worse, pinned against an invisible wall in a dead zone above a side monitor.
-
-MouseFence puts up a smart, one‑way barrier so the cursor stays where you expect it — and lets you cross up **only when you mean to**.
+On a multi‑monitor setup the cursor slips onto screens you didn't mean to reach — a display stacked *above* your main one, a side monitor you only use sometimes, or it escapes the game you're playing. MouseFence puts an invisible, configurable barrier so the cursor stays where you expect it, and crosses only when you actually mean to.
 
 ## Features
 
-- 🚧 **One‑way barrier** along the bottom edge of your top monitor(s). The cursor can't drift up by accident.
-- 🔒 **Side screens are always protected** — you can never wander up into the top monitor from a side display, and the empty "void" areas above side screens stop trapping the cursor.
-- 🎯 **Deliberate crossing from your main screen** — opt in with a global hotkey, then make a clear upward push to go up. Fast horizontal slides and tiny jitter never leak through.
-- ⬆️ **Free roam once you're up there** — on the top monitor the cursor moves normally, and coming back down is never blocked.
-- ⌨️ **Global hotkey** to open/close the gate (default **Ctrl + Alt + Up**), or just double‑click the tray icon.
-- ⏸️ **Pause** to suspend the whole barrier instantly.
-- 🚦 **Tray icon shows state** at a glance: red (blocked), green (open), grey (paused).
-- ⚙️ **Simple settings GUI** — pick the hotkey, choose which monitors to block (auto‑detect or manual), set the startup state, and start with Windows.
-- 🖥️ **DPI‑aware (PerMonitorV2)** — handles mixed‑DPI, multi‑monitor layouts.
-- 🪶 **Single instance**, lightweight, no background services.
+- 🚧 **One‑way "up" barrier** — the cursor can't drift up into a monitor mounted above the main row by accident.
+- 🎛️ **Per‑screen crossing rules** — choose exactly which bottom screen may cross up into which top screen (great for layouts with several monitors above). Empty = the primary may cross up into every top.
+- 🔒 **Side screens stay put** — a screen with no rule can never cross up; the empty "void" corners above side screens stop trapping the cursor.
+- 🎯 **Deliberate crossing** — where crossing is allowed, it takes an intentional upward push; fast horizontal slides and jitter never leak through.
+- 🎮 **Game mode** — a hotkey that confines the cursor to whichever monitor it's on (so it can't escape a windowed/borderless game).
+- ⌨️ **Global hotkeys** — toggle crossing (default **Ctrl + Alt + ↑**) and game mode (default **Ctrl + Alt + G**); plus a tray double‑click and a **Pause**.
+- 🌗 **Light / Dark / Follow‑system theme** and **English / Türkçe** (auto‑detected from your OS).
+- 🪶 **Safe & light** — it only watches the mouse; it **never changes your display arrangement**. DPI‑aware, single instance, no installer.
 
 ## How it works
 
-MouseFence installs a **low‑level mouse hook** (`WH_MOUSE_LL`) and enforces a horizontal barrier line at the **bottom edge of the top monitor(s)** — which is the top edge of your primary screen (Y = 0). While the cursor is on the bottom row, it cannot go above that line. This single line also covers the empty void areas above side screens.
+MouseFence installs a **low‑level mouse hook** (`WH_MOUSE_LL`) and enforces a barrier line at the top edge of your bottom row of monitors. While the cursor is on the bottom row it can't go above that line — which blocks the top monitors *and* the empty void areas above side screens. Crossing up is allowed only through a **gate**: an X‑range opening (derived from your per‑screen rules) that a deliberate upward push, starting in that same opening, may pass. **Game mode** instead confines the cursor to the rectangle of the monitor it's currently on.
 
-The crossing rule is deliberately strict:
-
-- **Side screens:** crossing up is **never** allowed. Permanent.
-- **Main screen:** crossing up is allowed only when the **gate is open** *and* you make a deliberate upward push inside an inset band of the main screen. The decision is **origin‑aware** — the move must both *start* and *end* inside the main gate column — so a fast diagonal coming off a side screen can't sneak up just because it happens to land in the gate column.
-- **Once above the line,** the cursor roams the whole top monitor freely and can always descend back down.
-
-Blocked moves are clamped to the barrier line (keeping your X so horizontal sliding stays smooth). The hook ignores injected/synthetic input, so its own corrections never recurse.
-
-The core decision logic lives in a small, pure class (`GuardCore`) with **no Win32 dependencies**, which is why it can be unit‑tested deterministically (see [Testing](#testing)).
+The barrier decision logic lives in a pure, Win32‑free class (`GuardCore`) with a deterministic test suite, so the tricky cases are verified without a multi‑monitor rig.
 
 ## Install
 
-### Option A — Download a release
-
+### Option A — download a release
 1. Grab the latest `MouseFence.exe` from the **[Releases page](https://github.com/ydbilgin/MouseFence/releases)**.
-2. Run it. It lives in the system tray — there's no installer and no window on launch.
+2. Run it — it lives in the system tray, no installer, no window on launch.
 
-> The standard release needs the **.NET 9 Desktop Runtime**. If you don't have it, use a self‑contained build (see below) that bundles the runtime.
+> A framework‑dependent build needs the **.NET 9 Desktop Runtime**; a self‑contained build runs without it.
 
-### Option B — Build from source
-
+### Option B — build from source
 You'll need the **.NET 9 SDK**.
 
 ```bash
 git clone https://github.com/ydbilgin/MouseFence.git
 cd MouseFence
-
-# Run directly from source
 dotnet run -c Release
 
-# Build a single-file exe (requires the .NET 9 runtime on the target machine)
+# single-file exe (needs the .NET 9 runtime on the target machine)
 dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
-
-# Or a self-contained build that bundles the runtime (for machines without .NET installed)
+# or self-contained (bundles the runtime)
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 ```
 
-The published `MouseFence.exe` lands under `bin\Release\net9.0-windows\win-x64\publish\`.
-
 ## Usage
 
-- **Launch** MouseFence — it appears in the system tray. The barrier is active immediately.
-- **Tray icon color** tells you the state:
-  - 🔴 **Red** — main → top crossing is *blocked* (gate closed)
-  - 🟢 **Green** — main → top crossing is *open* (gate open)
-  - ⚪ **Grey** — the tool is *paused*
-- **Toggle the gate** with the global hotkey (default **Ctrl + Alt + Up**) or by **double‑clicking** the tray icon. A short balloon tip confirms the new state.
-- **Right‑click the tray icon** for the menu: toggle the gate, pause/resume the tool, open Settings, or quit.
-- **Crossing up from the main screen** (when the gate is open): aim into the middle band of the screen and push **straight up**. A small jitter or a fast sideways slide won't carry you across — that's by design.
-- **Pause** suspends the entire barrier (the hook is removed) until you resume.
+- The tray icon shows state: 🔴 crossing closed · 🟢 crossing open · ⚪ paused.
+- **Toggle crossing** with the hotkey (default Ctrl + Alt + ↑) or a double‑click on the tray icon.
+- **Game mode**: press its hotkey (default Ctrl + Alt + G) to confine the cursor to its monitor; press again to release.
+- **Right‑click the tray** for: toggle crossing, game mode, pause/resume, Settings, Exit.
+- **Crossing up** (where allowed): aim into the middle of the screen and push **straight up**.
 
-## Configuration
+## Settings
 
-Open **Settings…** from the tray menu. Options:
+Open **Settings…** from the tray. Three tabs:
 
-- **Toggle hotkey** — click the box, then press your combo (needs at least one modifier + a key). Default: `Ctrl + Alt + Up`.
-- **Which monitor(s) to block:**
-  - *Auto* — automatically block any monitor sitting entirely above the primary.
-  - *Manual* — tick the specific monitors from the list.
-- **Start with the gate closed** — whether main → top crossing begins blocked on launch.
-- **Start with Windows** — adds/removes a per‑user startup entry (`HKCU\…\Run`).
+- **General** — the toggle hotkey, the game‑mode hotkey, start with crossing closed, start with Windows.
+- **Appearance** — language (Automatic / English / Türkçe) and theme (Follow system / Light / Dark).
+- **Monitors** — which monitors count as "top" (auto‑detect or manual), and the **crossing rules**: pick a bottom screen, then check which top screens it may cross up into. A read‑only mini diagram shows your layout.
 
-Settings persist to:
-
-```
-%APPDATA%\MouseFence\settings.json
-```
-
-It's plain JSON — safe to inspect, back up, or delete (deleting it just restores defaults).
+Settings persist to `%APPDATA%\MouseFence\settings.json` (plain JSON; delete it to reset).
 
 ## Troubleshooting / FAQ
 
-**The cursor still slips between displays.**
-Windows has its own setting that can fight MouseFence. Go to **Settings → System → Display → Multiple displays** and turn off **"Ease cursor movement between displays."**
+**The cursor still slips between displays.** Turn off Windows' **Settings → System → Display → Multiple displays → "Ease cursor movement between displays."**
 
-**The barrier doesn't work over certain windows.**
-Low‑level mouse hooks **can't intercept input over elevated/administrator windows** unless MouseFence itself runs elevated, and they **don't apply inside exclusive‑fullscreen games**. This is a Windows limitation, not a bug.
+**It doesn't work in some games.** Low‑level mouse hooks can't act over **exclusive‑fullscreen** games or **administrator** windows (run MouseFence elevated for the latter). Windowed/borderless games are fine — that's what game mode is for.
 
-**I can't cross up even with the gate open.**
-The crossing is intentionally deliberate: push **straight up** from the **middle band** of the main screen (the gate is inset from the screen edges). Fast diagonals and tiny jitters are rejected on purpose. Make sure the gate is open (green icon) and that the move starts on the main screen.
+**I can't cross up even when it's allowed.** The crossing is deliberate: push **straight up** from the middle of the screen. Make sure crossing is open (green icon) and the rule allows that bottom→top pair.
 
-**The hotkey didn't register.**
-Another app may already own that combo — MouseFence shows a balloon tip if registration fails. Pick a different combination in Settings.
-
-**Mixed‑DPI monitors?**
-Handled. MouseFence is PerMonitorV2‑aware and works in physical pixels across displays with different scaling.
-
-> ℹ️ The tray menu and settings window are currently in **Turkish**. English/other‑language localization is welcome — see Contributing.
+**Mixed‑DPI monitors?** Handled — MouseFence is PerMonitorV2‑aware and works in physical pixels.
 
 ## Testing
 
-The barrier decision logic is isolated in the pure, Win32‑free `GuardCore` class and backed by a deterministic scenario test suite:
+The pure barrier logic (`GuardCore`) is covered by a deterministic scenario suite:
 
 ```bash
 dotnet run --project tests\MouseFence.Tests.csproj -c Release
 ```
 
-The suite covers the tricky cases — side‑screen voids, origin‑aware diagonals from side screens, gate open/closed, jitter rejection, free roam after crossing, and descent — and exits non‑zero on any failure.
+It covers side‑screen voids, origin‑aware diagonals, per‑screen multi‑gate rules, deliberate‑push thresholds, free roam + descent, and game‑mode confinement.
 
-> **Note:** the live cursor *feel* must still be verified by hand. The hook deliberately ignores injected/synthetic input, so it cannot be exercised with simulated mouse events — only by moving a real mouse on real hardware.
+> The live cursor *feel* must still be verified by hand — the hook ignores injected/synthetic input, so it can't be exercised with simulated mouse events.
 
 ## Contributing
 
-Contributions are welcome. If you're changing barrier behavior, please add or update a scenario in `tests\Tests.cs` and make sure the suite passes. Keep the Win32‑free logic in `GuardCore` so it stays testable, and verify the cursor feel by hand on a multi‑monitor setup before opening a PR.
+Contributions welcome. Keep the barrier logic in the Win32‑free `GuardCore` (so it stays testable), add/​update a scenario in `tests\Tests.cs`, and verify the feel by hand on a multi‑monitor setup before opening a PR.
 
 ## License
 

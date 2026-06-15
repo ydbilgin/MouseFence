@@ -3,13 +3,14 @@ namespace MouseFence;
 public enum GuardAction { Pass, Block }
 
 /// <summary>
-/// Pure, Win32-free decision logic for the one-way barrier, so it can be unit-tested deterministically.
-/// <see cref="MouseGuard"/> wraps this with the actual hook + SetCursorPos.
+/// Pure, Win32-free decision logic for the one-way barrier (unit-tested).
 ///
-/// Barrier model: a horizontal line at <see cref="BarrierY"/> (the top monitors' bottom edge). While the
-/// cursor is on the bottom row it may not go above the line — this blocks the top monitor AND the empty
-/// voids above the side screens. Crossing up is honoured only for a deliberate upward push through the
-/// open, inset gate. Once above the line the cursor roams freely until it descends back.
+/// Barrier line at <see cref="BarrierY"/> (the bottom row's top edge). While the cursor is on the
+/// bottom row it may not go above that line — blocking the top monitors AND the voids above side
+/// screens. Crossing up is honoured only through a GATE: an inset X-range opening that a deliberate
+/// upward push, originating in the same opening, may pass. Multiple gates = per-screen rules (each
+/// allowed bottom→top crossing contributes one X-range). Once above the line ("on top") the cursor
+/// roams freely and may always descend (one-way-up tool).
 /// </summary>
 public sealed class GuardCore
 {
@@ -18,7 +19,11 @@ public sealed class GuardCore
 
     public bool HasTop;
     public int BarrierY;
-    public int GateLeft, GateRight; // already inset
+    public List<(int Min, int Max)> Gates = new();   // inset X-ranges where crossing up is allowed
+
+    // game mode: confine the cursor to whichever monitor it is currently on
+    public bool Confine;
+    public List<(int L, int T, int R, int B)> Monitors = new();
 
     public int LastX, LastY;
     public bool HaveLast;
@@ -30,23 +35,55 @@ public sealed class GuardCore
         OnTop = false;
     }
 
+    private bool InSameGate(int x, int lastX)
+    {
+        foreach (var g in Gates)
+            if (x >= g.Min && x < g.Max && lastX >= g.Min && lastX < g.Max)
+                return true;
+        return false;
+    }
+
+    private bool TryActiveMonitor(int x, int y, out (int L, int T, int R, int B) m)
+    {
+        foreach (var r in Monitors)
+            if (x >= r.L && x < r.R && y >= r.T && y < r.B) { m = r; return true; }
+        m = default;
+        return false;
+    }
+
     /// <summary>
-    /// Decide what to do with a NON-injected mouse move to (x,y). Returns Pass (let it through) or Block
-    /// (caller must SetCursorPos to bx,by). Mutates state.
+    /// Decide a NON-injected move to (x,y). Returns Pass or Block (caller clamps to bx,by). Mutates state.
+    /// <paramref name="gatesEnabled"/> is the master toggle: when false, no crossing is allowed anywhere.
     /// </summary>
-    public GuardAction Decide(int x, int y, bool gateOpen, out int bx, out int by)
+    public GuardAction Decide(int x, int y, bool gatesEnabled, out int bx, out int by)
     {
         bx = x; by = y;
 
-        if (!HasTop) { Accept(x, y); return GuardAction.Pass; }
+        if (!HasTop && !Confine) { Accept(x, y); return GuardAction.Pass; }
 
-        // Baseline on the first event so we never act on a stale (0,0) previous position.
         if (!HaveLast)
         {
             Accept(x, y);
-            OnTop = y < BarrierY;
+            OnTop = HasTop && y < BarrierY;
             return GuardAction.Pass;
         }
+
+        // Game mode: confine the cursor to the monitor it is currently on (overrides the up-barrier).
+        if (Confine)
+        {
+            if (TryActiveMonitor(LastX, LastY, out var m))
+            {
+                if (x >= m.L && x < m.R && y >= m.T && y < m.B) { Accept(x, y); return GuardAction.Pass; }
+                bx = Math.Clamp(x, m.L, m.R - 1);
+                by = Math.Clamp(y, m.T, m.B - 1);
+                Accept(bx, by);
+                return GuardAction.Block;
+            }
+            Accept(x, y);
+            return GuardAction.Pass;
+        }
+
+        if (!HasTop) { Accept(x, y); return GuardAction.Pass; }
 
         // (A) Already above the line -> free roam; clears once the cursor descends past the line.
         if (OnTop)
@@ -63,13 +100,9 @@ public sealed class GuardCore
             return GuardAction.Pass;
         }
 
-        // (C) Upward crossing attempt. Honour only a deliberate push that BOTH starts and ends in the
-        // open, inset main gate — checking the origin (Last) too, so a fast diagonal originating on a
-        // side screen can't sneak up just because its landing X falls in the gate column.
-        bool inGate = gateOpen
-            && x >= GateLeft && x < GateRight              // candidate within the main gate column
-            && LastX >= GateLeft && LastX < GateRight      // origin also within the gate column
-            && LastY >= BarrierY;                          // origin was on the bottom row, not already above
+        // (C) Upward crossing attempt. Honour only a deliberate push that BOTH starts and ends inside
+        // the SAME open gate (origin-aware -> a side-screen diagonal can't sneak through another column).
+        bool inGate = gatesEnabled && LastY >= BarrierY && InSameGate(x, LastX);
         int dxAbs = Math.Abs(x - LastX);
         int dyUp = LastY - y;
         if (inGate && dyUp >= CrossMinUp && dxAbs <= dyUp + CrossSlack)
