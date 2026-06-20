@@ -48,7 +48,7 @@ The barrier decision logic lives in a pure, Win32‑free class (`GuardCore`) wit
 ## Install
 
 ### Option A — download a release
-1. Grab the latest `MouseFence.exe` from the **[Releases page](https://github.com/ydbilgin/MouseFence/releases)**.
+1. Grab the latest **`MouseFence-win-x64.exe`** from the **[Releases page](https://github.com/ydbilgin/MouseFence/releases/latest)**.
 2. Run it — it lives in the system tray, no installer, no window on launch.
 
 > A framework‑dependent build needs the **.NET 9 Desktop Runtime**; a self‑contained build runs without it.
