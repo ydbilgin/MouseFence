@@ -35,13 +35,16 @@ public sealed class MouseGuard : IDisposable
     public MouseGuard() => _proc = HookCallback;
 
     /// <summary>Configure the barrier from the top monitors, the allowed crossing gates, and all monitor rects (for game mode).</summary>
-    public void Configure(IEnumerable<Native.RECT> blocked, IEnumerable<(int Min, int Max)> gates, IEnumerable<Native.RECT> allMonitors)
+    public void Configure(IEnumerable<Native.RECT> blocked, IEnumerable<(int Min, int Max)> gates,
+                          IEnumerable<Native.RECT> allMonitors,
+                          IEnumerable<(int Min, int Max, int OwnerT, int OwnerB)> safetyGates)
     {
         var rects = blocked.ToList();
         _core.HasTop = rects.Count > 0;
         _core.BarrierY = _core.HasTop ? rects.Max(r => r.Bottom) : 0;
         _core.Gates = gates.Where(g => g.Max > g.Min).ToList();
         _core.Monitors = allMonitors.Select(r => (r.Left, r.Top, r.Right, r.Bottom)).ToList();
+        _core.SafetyGates = safetyGates.Where(g => g.Max > g.Min).ToList();
     }
 
     public void Start()

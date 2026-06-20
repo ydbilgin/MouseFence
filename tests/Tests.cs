@@ -30,6 +30,13 @@ GuardCore NewConfine(params (int L, int T, int R, int B)[] mons)
     return c;
 }
 
+GuardCore NewSafety(params (int Min, int Max, int OwnerT, int OwnerB)[] safety)
+{
+    var c = new GuardCore { HasTop = true, BarrierY = 0, SafetyGates = safety.ToList() };
+    c.Reset();
+    return c;
+}
+
 (GuardAction act, int by, bool onTop) Move(GuardCore c, int x, int y, bool gate)
 {
     var a = c.Decide(x, y, gate, out _, out int by);
@@ -249,6 +256,98 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
         r.act == GuardAction.Pass, $"act={r.act}");
 }
 
+// ---- ANTI-TRAP SAFETY (C): an isolated screen's sole up-exit is always honoured, but stays owner-bound ----
+// owner = a side screen at Y [0,1080); its only escape is the up-overlap X-span [2830,3000).
+{
+    var c = NewSafety((2830, 3000, 0, 1080));
+    Move(c, 2900, 0, false);                       // origin on the owner screen, crossing CLOSED
+    var r = Move(c, 2900, -15, false);             // deliberate up push
+    Check("safety: sole-up-exit crosses even when crossing is CLOSED", r.act == GuardAction.Pass && r.onTop, $"act={r.act} onTop={r.onTop}");
+}
+{
+    var c = NewSafety((2830, 3000, 0, 1080));
+    Move(c, 2900, 0, false);
+    var r = Move(c, 2960, -2, false);              // dx=60, dyUp=2 -> slide/jitter, not a deliberate push
+    Check("safety: slide-jitter does NOT leak through the safety gate", r.act == GuardAction.Block && !r.onTop, $"act={r.act}");
+}
+{
+    // OWNER-BOUND (fix #2): a different screen stacked in the SAME X-column (different Y) must NOT ride the gate.
+    var c = NewSafety((2830, 3000, 0, 1080));
+    Move(c, 2900, 2500, false);                    // origin Y=2500 -> below the owner's Y-band
+    var r = Move(c, 2900, -5, false);
+    Check("safety: a screen in the same X-column but different Y can't cross the safety gate", r.act == GuardAction.Block && !r.onTop, $"act={r.act}");
+}
+{
+    // Independent of user gates: with the master toggle CLOSED, a user gate blocks but the safety gate passes.
+    var c = new GuardCore { HasTop = true, BarrierY = 0,
+        Gates = new List<(int, int)> { (24, 2536) },
+        SafetyGates = new List<(int, int, int, int)> { (2830, 3000, 0, 1080) } };
+    c.Reset();
+    Move(c, 2900, 0, false); var s = Move(c, 2900, -15, false);
+    var c2 = new GuardCore { HasTop = true, BarrierY = 0,
+        Gates = new List<(int, int)> { (24, 2536) },
+        SafetyGates = new List<(int, int, int, int)> { (2830, 3000, 0, 1080) } };
+    c2.Reset();
+    Move(c2, 1280, 0, false); var u = Move(c2, 1280, -15, false);
+    Check("safety: independent of user gates (safety passes, user gate blocks, toggle closed)",
+        s.act == GuardAction.Pass && u.act == GuardAction.Block, $"safety={s.act} user={u.act}");
+}
+
+// ---- ANTI-TRAP TOPOLOGY (B + C feed): pure detection from rects ----
+{
+    // Real bug: left, MAIN, right (270px gap from MAIN), top. Only the right screen is isolated.
+    var mons = new List<(int, int, int, int)>
+    {
+        (-1920, 0, 0, 1080),     // 0 left
+        (0, 0, 2560, 1440),      // 1 MAIN
+        (2830, 0, 4480, 1080),   // 2 right (gap: 2830 vs MAIN's 2560)
+        (-450, -1440, 2990, 0),  // 3 top
+    };
+    var (warn, gates) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
+    Check("topology: the 270px-gap right screen is the only isolated one",
+        warn.Count == 1 && warn[0] == 2, $"warn=[{string.Join(",", warn)}]");
+    Check("topology: its safety gate is clipped to the up-overlap, owner-bound",
+        gates.Count == 1 && gates[0] == (2830, 2990, 0, 1080), $"gates=[{string.Join(";", gates)}]");
+}
+{
+    var mons = new List<(int, int, int, int)>
+    { (-1920, 0, 0, 1080), (0, 0, 2560, 1440), (2560, 0, 4480, 1080), (-450, -1440, 2990, 0) };
+    var (warn, gates) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
+    Check("topology: edge-touching right screen is NOT isolated", warn.Count == 0 && gates.Count == 0, $"warn=[{string.Join(",", warn)}]");
+}
+{
+    // SeamTol (fix #1): a 1px seam (mixed-DPI rounding) is treated as aligned, NOT isolated.
+    var mons = new List<(int, int, int, int)>
+    { (-1920, 0, 0, 1080), (0, 0, 2560, 1440), (2561, 0, 4480, 1080), (-450, -1440, 2990, 0) };
+    var (warn, _) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
+    Check("topology: a 1px seam is tolerated (SeamTol) -> NOT isolated", warn.Count == 0, $"warn=[{string.Join(",", warn)}]");
+}
+{
+    // Fully-islanded screen (no neighbour any side, no top above): warns but gets NO gate (would gate into a void).
+    var mons = new List<(int, int, int, int)>
+    { (-1920, 0, 0, 1080), (0, 0, 2560, 1440), (5000, 5000, 6000, 6000), (-450, -1440, 2990, 0) };
+    var (warn, gates) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
+    Check("topology: a four-sided island warns but yields NO safety gate",
+        warn.Contains(2) && gates.Count == 0, $"warn=[{string.Join(",", warn)}] gates={gates.Count}");
+}
+{
+    var a = (0, 0, 100, 100); var b = (100, 100, 200, 200);   // touch only at the corner
+    Check("topology: zero-width corner touch is NOT adjacency", !GuardCore.Adjacent(a, b, Dir.Right) && !GuardCore.Adjacent(a, b, Dir.Down));
+}
+{
+    var a = (0, 0, 100, 100); var b = (100, 50, 200, 300);    // share [50,100) vertically
+    Check("topology: partial vertical overlap is Right-adjacency", GuardCore.Adjacent(a, b, Dir.Right));
+}
+{
+    var mons = new List<(int, int, int, int)> { (0, 0, 2560, 1440), (-450, -1440, 2990, 0) };
+    var (warn, _) = GuardCore.AntiTrap(mons, new HashSet<int> { 1 });
+    Check("topology: a top-set screen is never in warn/gates", !warn.Contains(1), $"warn=[{string.Join(",", warn)}]");
+}
+{
+    Check("topology: IsTop classifies an above-origin monitor",
+        GuardCore.IsTop((-450, -1440, 2990, 0)) && !GuardCore.IsTop((0, 0, 2560, 1440)));
+}
+
 // ---- localization parity: every key exists in BOTH languages (no cross-language fallback) ----
 {
     var en = new HashSet<string>(Strings.EnglishKeys);
@@ -258,6 +357,20 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     Check("i18n: EN and TR dictionaries have identical keys",
         missingInTr.Count == 0 && missingInEn.Count == 0,
         $"missingInTr=[{string.Join(",", missingInTr)}] missingInEn=[{string.Join(",", missingInEn)}]");
+}
+{
+    // placeholder arity (fix #5): an interpolated string must carry the SAME {0}/{1}... in both languages,
+    // else string.Format throws at runtime on the warning path. The parity test above checks keys only.
+    bool ok = true; string bad = "";
+    int Count(string s, int n) { var ph = "{" + n + "}"; return s == null ? 0 : (s.Length - s.Replace(ph, "").Length) / ph.Length; }
+    foreach (var key in Strings.EnglishKeys)
+    {
+        var en = Strings.Raw("en", key); var tr = Strings.Raw("tr", key);
+        for (int n = 0; n < 4; n++)
+            if (Count(en, n) != Count(tr, n)) { ok = false; bad = $"{key} {{{n}}}"; break; }
+        if (!ok) break;
+    }
+    Check("i18n: placeholder arity matches across EN and TR", ok, bad);
 }
 
 Console.WriteLine();

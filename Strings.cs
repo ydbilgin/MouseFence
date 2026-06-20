@@ -27,6 +27,10 @@ public static class Strings
     public static IReadOnlyCollection<string> EnglishKeys => En.Keys;
     public static IReadOnlyCollection<string> TurkishKeys => Tr.Keys;
 
+    // For tests: raw value for a key in a specific language ("tr" -> Turkish, else English) — used to verify
+    // that interpolated strings carry identical {0}/{1} placeholders in both languages.
+    public static string Raw(string lang, string key) => (lang == "tr" ? Tr : En).TryGetValue(key, out var v) ? v : null;
+
     // ---- settings dialog ----
     public static string SettingsTitle => G("SettingsTitle");
     public static string Subtitle => G("Subtitle");
@@ -79,12 +83,19 @@ public static class Strings
     public static string GameHotkeyHint => G("GameHotkeyHint");
     public static string TipGameOn => G("TipGameOn");
     public static string TipGameOff => G("TipGameOff");
+    public static string PauseHotkeyHead => G("PauseHotkeyHead");
+    public static string PauseHotkeyHint => G("PauseHotkeyHint");
+    public static string TipPaused => G("TipPaused");
+    public static string TipResumed => G("TipResumed");
+    public static string NoneRegistered => G("NoneRegistered");
 
     // ---- interpolated (keep {0} out of the table) ----
     public static string TipHotkeyFail(string combo) => string.Format(G("TipHotkeyFail"), combo);
     public static string TrayPaused(string combo) => string.Format(G("TrayPaused"), combo);
     public static string TrayOpen(string combo) => string.Format(G("TrayOpen"), combo);
     public static string TrayClosed(string combo) => string.Format(G("TrayClosed"), combo);
+    public static string TipIsolated(string screens, string hotkey) => string.Format(G("TipIsolated"), screens, hotkey);
+    public static string IsolatedNote(string screens) => string.Format(G("IsolatedNote"), screens);
 
     private static readonly Dictionary<string, string> En = new()
     {
@@ -135,6 +146,13 @@ public static class Strings
         ["GameHotkeyHint"] = "Confine the cursor to its monitor (windowed/borderless games; not exclusive-fullscreen).",
         ["TipGameOn"] = "Game mode ON 🎮  cursor confined to its monitor",
         ["TipGameOff"] = "Game mode OFF",
+        ["PauseHotkeyHead"] = "Pause hotkey",
+        ["PauseHotkeyHint"] = "Pause/resume the barrier — a keyboard escape if the cursor ever gets trapped.",
+        ["TipPaused"] = "MouseFence: PAUSED — barrier off",
+        ["TipResumed"] = "MouseFence: resumed — barrier on",
+        ["NoneRegistered"] = "(not registered)",
+        ["TipIsolated"] = "Screen {0} has no side/down exit — only UP. MouseFence auto-opened an up-escape there; align its edges, or press {1} to pause.",
+        ["IsolatedNote"] = "⚠ Screen {0} is isolated (a gap in the layout). Up-crossing from it is auto-allowed so it can't trap the cursor.",
         ["TipHotkeyFail"] = "Couldn't register hotkey: {0} — another app may be using it.",
         ["TrayPaused"] = "MouseFence: PAUSED ({0})",
         ["TrayOpen"] = "MouseFence: main→top OPEN ({0})",
@@ -190,6 +208,13 @@ public static class Strings
         ["GameHotkeyHint"] = "İmleci bulunduğu ekrana hapset (windowed/borderless oyunlar; exclusive-fullscreen hariç).",
         ["TipGameOn"] = "Oyun modu AÇIK 🎮  imleç ekrana hapsedildi",
         ["TipGameOff"] = "Oyun modu KAPALI",
+        ["PauseHotkeyHead"] = "Duraklatma kısayolu",
+        ["PauseHotkeyHint"] = "Bariyeri duraklat/sürdür — imleç kapana kısılırsa klavyeden çıkış.",
+        ["TipPaused"] = "MouseFence: DURAKLATILDI — bariyer kapalı",
+        ["TipResumed"] = "MouseFence: devam etti — bariyer açık",
+        ["NoneRegistered"] = "(kaydedilmedi)",
+        ["TipIsolated"] = "{0} numaralı ekranın yana/aşağı çıkışı yok — yalnızca YUKARI. MouseFence oradan yukarı çıkışı otomatik açtı; kenarlarını hizala veya duraklatmak için {1} tuşuna bas.",
+        ["IsolatedNote"] = "⚠ {0} numaralı ekran yalıtılmış (yerleşimde boşluk). Kapana kısmaması için oradan yukarı geçiş otomatik açıldı.",
         ["TipHotkeyFail"] = "Kısayol kaydedilemedi: {0} — başka bir uygulama kullanıyor olabilir.",
         ["TrayPaused"] = "MouseFence: DURAKLATILDI ({0})",
         ["TrayOpen"] = "MouseFence: ana→üst AÇIK ({0})",

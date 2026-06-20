@@ -16,6 +16,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly MouseGuard _guard = new();
     private readonly HotKeyWindow _hotkey = new();
     private readonly HotKeyWindow _confineHotkey = new();
+    private readonly HotKeyWindow _pauseHotkey = new();   // universal keyboard escape from any trap
 
     // Re-apply the barrier when the monitor layout changes (arrangement / resolution / dock / undock),
     // so the gates and barrier line always track the live displays without a restart. The OS event can
@@ -34,6 +35,9 @@ public sealed class TrayApplicationContext : ApplicationContext
     private Icon _iconClosed;
     private Icon _iconOpen;
     private Icon _iconPaused;
+
+    private List<string> _isolatedDevices = new();   // stable-keyed latch: warn once per bad layout, re-arm when it heals
+    private bool _pauseRegistered;                    // did the pause hotkey actually register? (for the escape-key hint)
 
     public TrayApplicationContext()
     {
@@ -63,7 +67,9 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _hotkey.HotKeyPressed += ToggleGate;
         _confineHotkey.HotKeyPressed += ToggleGame;
+        _pauseHotkey.HotKeyPressed += TogglePause;
 
+        RegisterHotkey();   // before Configure() so _pauseRegistered is known for the first isolation warning
         Configure();
         _guard.GateOpen = !_settings.StartGateClosed;
         _guard.Start();
@@ -73,7 +79,6 @@ public sealed class TrayApplicationContext : ApplicationContext
         _reconfigTimer.Tick += (s, e) => { _reconfigTimer.Stop(); Configure(); UpdateUi(); };
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
-        RegisterHotkey();
         RebuildMenuText();
         UpdateUi();
     }
@@ -119,8 +124,37 @@ public sealed class TrayApplicationContext : ApplicationContext
             gates.Add((lo + inset, hi - inset));
         }
 
-        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds));
+        // Anti-trap: from the live rects, find isolated screens (warn) and owner-bound safety gates (so the
+        // barrier never blocks a screen's only exit). One pure pass feeds both the warning and the gates.
+        var rects = monitors.Select(m => (m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom)).ToList();
+        var topIdx = new HashSet<int>();
+        for (int i = 0; i < monitors.Count; i++)
+            if (topSet.Contains(monitors[i].Device)) topIdx.Add(i);
+        var (warn, safety) = GuardCore.AntiTrap(rects, topIdx);
+
+        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), safety);
         _guard.DeliberateCross = _settings.DeliberateCross;
+
+        WarnIsolationIfChanged(warn.Select(i => monitors[i].Device).ToList(),
+                               warn.Select(i => monitors[i].Index).ToList());
+    }
+
+    // Warn (once per distinct bad layout) when a screen is isolated. Latch on the stable Device id so reordering
+    // doesn't re-nag; show the LIVE pause-hotkey text so the user always sees the working escape key.
+    private void WarnIsolationIfChanged(List<string> devices, List<int> displayIndices)
+    {
+        bool changed = !devices.OrderBy(d => d).SequenceEqual(_isolatedDevices.OrderBy(d => d));
+        _isolatedDevices = devices;
+        if (devices.Count > 0 && changed)
+            _tray.ShowBalloonTip(5000, "MouseFence",
+                Strings.TipIsolated(string.Join(", ", displayIndices), PauseKeyLabel()), ToolTipIcon.Warning);
+    }
+
+    private string PauseKeyLabel()
+    {
+        bool pauseSet = _settings.PauseHotKey != Keys.None && _settings.PauseModifiers() != 0;
+        if (!pauseSet) return _settings.PauseHotKeyText();          // "(none)" — intentionally cleared
+        return _pauseRegistered ? _settings.PauseHotKeyText() : Strings.NoneRegistered;
     }
 
     private void RegisterHotkey()
@@ -129,6 +163,10 @@ public sealed class TrayApplicationContext : ApplicationContext
             _tray.ShowBalloonTip(3000, "MouseFence", Strings.TipHotkeyFail(_settings.HotKeyText()), ToolTipIcon.Warning);
         if (!_confineHotkey.Register(_settings.ConfineModifiers(), (uint)_settings.ConfineHotKey))
             _tray.ShowBalloonTip(3000, "MouseFence", Strings.TipHotkeyFail(_settings.ConfineHotKeyText()), ToolTipIcon.Warning);
+        _pauseRegistered = _pauseHotkey.Register(_settings.PauseModifiers(), (uint)_settings.PauseHotKey);
+        bool pauseSet = _settings.PauseHotKey != Keys.None && _settings.PauseModifiers() != 0;
+        if (pauseSet && !_pauseRegistered)   // only nag if a key was set but couldn't register (not when cleared)
+            _tray.ShowBalloonTip(3000, "MouseFence", Strings.TipHotkeyFail(_settings.PauseHotKeyText()), ToolTipIcon.Warning);
     }
 
     private void RebuildMenuText()
@@ -159,6 +197,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         if (_guard.Enabled) _guard.Stop();
         else _guard.Start();
         UpdateUi();
+        // A keyboard user who pauses to escape a trap can't see the grey tray icon -> confirm with a balloon.
+        _tray.ShowBalloonTip(1200, "MouseFence",
+            _guard.Enabled ? Strings.TipResumed : Strings.TipPaused, ToolTipIcon.Info);
     }
 
     private void UpdateUi()
@@ -197,12 +238,13 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _hotkey.Unregister();
         _confineHotkey.Unregister();
+        _pauseHotkey.Unregister();
         _settings = f.Result;
         _settings.Save();
         Strings.Use(_settings.Language);
         AutoStart.Apply(_settings.AutoStart);
+        RegisterHotkey();   // before Configure() so _pauseRegistered is fresh for any isolation warning
         Configure();
-        RegisterHotkey();
         RebuildMenuText();
         UpdateUi();
     }
@@ -217,6 +259,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _guard.Dispose();
         _hotkey.Dispose();
         _confineHotkey.Dispose();
+        _pauseHotkey.Dispose();
         DisposeIcon(ref _iconClosed);
         DisposeIcon(ref _iconOpen);
         DisposeIcon(ref _iconPaused);
