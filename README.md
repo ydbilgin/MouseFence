@@ -1,6 +1,21 @@
-# MouseFence 🛡️🖱️
+<p align="center">
+  <img src="docs/icon.png" alt="MouseFence" width="120">
+</p>
 
-**A tiny Windows tray app that stops your mouse cursor from drifting into monitors you don't want it on — with per‑screen rules, a hotkey, and a "game mode" that confines the cursor to one screen.**
+<h1 align="center">MouseFence 🛡️🖱️</h1>
+
+<p align="center">
+  A tiny Windows tray app that stops your mouse cursor from drifting into monitors you don't want it on —<br>
+  with per‑screen rules, a hotkey, and a "game mode" that confines the cursor to one screen.
+</p>
+
+<p align="center">
+  <a href="https://github.com/ydbilgin/MouseFence/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/ydbilgin/MouseFence?label=release&color=2ea44f"></a>
+  <a href="https://github.com/ydbilgin/MouseFence/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/ydbilgin/MouseFence/total?color=success"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D6?logo=windows&logoColor=white">
+  <img alt=".NET" src="https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet&logoColor=white">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/ydbilgin/MouseFence?color=blue"></a>
+</p>
 
 <p align="center">
   <img src="docs/settings.png" alt="MouseFence settings — General" width="430">
