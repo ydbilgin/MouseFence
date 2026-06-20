@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Text.Json;
 
 namespace MouseFence;
 
@@ -203,7 +204,15 @@ public sealed class SettingsForm : Form
         var ok = new Button { Text = Strings.Save, Left = cancel.Left - 104, Top = 500, Width = 96, Height = 30, FlatStyle = FlatStyle.Flat, Tag = "primary", DialogResult = DialogResult.OK };
         ok.Click += Ok_Click;
 
+        // back up / restore the whole configuration as a single settings.json-format file (e.g. before a format/reinstall)
+        var export = new Button { Text = Strings.ExportLabel, Left = 12, Top = 500, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat };
+        export.Click += Export_Click;
+        var import = new Button { Text = Strings.ImportLabel, Left = export.Left + 116, Top = 500, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat };
+        import.Click += Import_Click;
+
         Controls.Add(_tabs);
+        Controls.Add(export);
+        Controls.Add(import);
         Controls.Add(ok);
         Controls.Add(cancel);
         AcceptButton = ok;
@@ -395,6 +404,12 @@ public sealed class SettingsForm : Form
             return;
         }
 
+        Result = BuildResult();
+    }
+
+    /// <summary>Snapshot the current dialog selections into a <see cref="Settings"/> (shared by Save and Export).</summary>
+    private Settings BuildResult()
+    {
         var res = new Settings
         {
             ModCtrl = _mc, ModAlt = _ma, ModShift = _ms, ModWin = _mw, HotKey = _key,
@@ -418,6 +433,62 @@ public sealed class SettingsForm : Form
             foreach (var to in kv.Value)
                 res.UpLinks.Add(new UpLink { FromDevice = kv.Key, ToDevice = to });
 
-        Result = res;
+        return res;
+    }
+
+    // Export the current dialog state to a settings.json-format file the user picks.
+    private void Export_Click(object sender, EventArgs e)
+    {
+        using var dlg = new SaveFileDialog
+        {
+            Title = Strings.ExportTitle,
+            Filter = Strings.SettingsFileFilter,
+            FileName = "MouseFence-settings.json",
+            DefaultExt = "json",
+            AddExtension = true,
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var json = JsonSerializer.Serialize(BuildResult(), new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(dlg.FileName, json);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    // Import a settings.json-format file: validate, confirm, then hand it back through the normal Save path
+    // (tray persists it and reconfigures the barrier). Same format as Export -> a round-trip just works.
+    private void Import_Click(object sender, EventArgs e)
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Title = Strings.ImportTitle,
+            Filter = Strings.SettingsFileFilter,
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        Settings imported;
+        try
+        {
+            imported = JsonSerializer.Deserialize<Settings>(File.ReadAllText(dlg.FileName));
+        }
+        catch
+        {
+            imported = null;
+        }
+        if (imported == null)
+        {
+            MessageBox.Show(this, Strings.ImportInvalid, "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (MessageBox.Show(this, Strings.ImportConfirm, "MouseFence", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        Result = imported;
+        DialogResult = DialogResult.OK;   // closes the dialog; the tray saves + reconfigures via the existing path
     }
 }
