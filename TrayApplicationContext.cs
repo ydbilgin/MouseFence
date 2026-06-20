@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace MouseFence;
 
@@ -15,6 +16,13 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly MouseGuard _guard = new();
     private readonly HotKeyWindow _hotkey = new();
     private readonly HotKeyWindow _confineHotkey = new();
+
+    // Re-apply the barrier when the monitor layout changes (arrangement / resolution / dock / undock),
+    // so the gates and barrier line always track the live displays without a restart. The OS event can
+    // arrive on a non-UI thread and in bursts, so it is marshalled to the UI thread via _uiSync and
+    // debounced through _reconfigTimer.
+    private readonly Control _uiSync = new();
+    private readonly System.Windows.Forms.Timer _reconfigTimer;
 
     private readonly ToolStripMenuItem _gateItem;
     private readonly ToolStripMenuItem _pauseItem;
@@ -59,9 +67,23 @@ public sealed class TrayApplicationContext : ApplicationContext
         Configure();
         _guard.GateOpen = !_settings.StartGateClosed;
         _guard.Start();
+
+        _ = _uiSync.Handle;   // force the marshaling window handle onto this (UI) thread
+        _reconfigTimer = new System.Windows.Forms.Timer { Interval = 750 };
+        _reconfigTimer.Tick += (s, e) => { _reconfigTimer.Stop(); Configure(); UpdateUi(); };
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+
         RegisterHotkey();
         RebuildMenuText();
         UpdateUi();
+    }
+
+    // OS fires this when the display arrangement/resolution changes; marshal to the UI thread and debounce
+    // (one change often raises several events), then rebuild the gates/barrier from the live monitors.
+    private void OnDisplaySettingsChanged(object sender, EventArgs e)
+    {
+        if (!_uiSync.IsHandleCreated) return;
+        _uiSync.BeginInvoke((Action)(() => { _reconfigTimer.Stop(); _reconfigTimer.Start(); }));
     }
 
     private void Configure()
@@ -187,6 +209,10 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void ExitApp()
     {
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _reconfigTimer.Stop();
+        _reconfigTimer.Dispose();
+        _uiSync.Dispose();
         _tray.Visible = false;
         _guard.Dispose();
         _hotkey.Dispose();
