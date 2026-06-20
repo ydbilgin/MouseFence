@@ -8,6 +8,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>MouseFence</AssemblyName>
     <RootNamespace>MouseFence</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <Version>1.0.0</Version>
     <Product>MouseFence</Product>
     <Description>Toggle a barrier that stops the mouse cursor from crossing into a chosen monitor (e.g. a top screen). Tray app with a global hotkey and a simple settings GUI.</Description>
