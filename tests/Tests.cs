@@ -228,6 +228,27 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     Check("deliberate OFF: any upward move through the gate crosses", r.act == GuardAction.Pass && r.onTop, $"act={r.act}");
 }
 
+// ---- REGRESSION: barrier must track the LIVE seam (auto-reconfigure on display change) ----
+// The "cursor leaks up from a side screen and Windows easing teleports it to a far corner" bug was caused
+// by the barrier going STALE: monitors were realigned so a side screen's top edge became the seam (Y=0),
+// but MouseFence still held the OLD barrier (Y=-6). That left a gap above the side screen that the up-move
+// slipped through. TrayApplicationContext now rebuilds the barrier on DisplaySettingsChanged so BarrierY
+// always equals the live seam. These pin the decision logic the reconfigure relies on.
+{
+    var c = New();                         // BarrierY = 0 (the live seam), gate [24,2536]
+    Move(c, 3000, 50, true);               // on a side screen whose top edge IS the seam
+    var r = Move(c, 3000, -3, true);       // push up past the seam, outside any gate
+    Check("reconfigure: correct barrier blocks the side-screen up-leak at the seam",
+        r.act == GuardAction.Block && r.by == 0 && !r.onTop, $"act={r.act} by={r.by} onTop={r.onTop}");
+}
+{
+    var c = NewGates((24, 2536)); c.BarrierY = -6; c.Reset();   // STALE barrier from a previous layout
+    Move(c, 3000, 50, true);
+    var r = Move(c, 3000, -3, true);       // y=-3 >= stale -6 -> treated as a normal move -> leaks up
+    Check("reconfigure: a STALE barrier leaks (the regression auto-reconfigure prevents)",
+        r.act == GuardAction.Pass, $"act={r.act}");
+}
+
 // ---- localization parity: every key exists in BOTH languages (no cross-language fallback) ----
 {
     var en = new HashSet<string>(Strings.EnglishKeys);
