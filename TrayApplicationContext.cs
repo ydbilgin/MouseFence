@@ -132,8 +132,18 @@ public sealed class TrayApplicationContext : ApplicationContext
             if (topSet.Contains(monitors[i].Device)) topIdx.Add(i);
         var (warn, safety) = GuardCore.AntiTrap(rects, topIdx);
 
-        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), safety);
+        // Descent routes (opt-in): derive (Top, Landing) pairs from the same UpLinks so a descent off a top's overhang
+        // clamps back onto the intended bottom. The guards (ambiguity, SF-1 vertical, X-overlap) live in the pure,
+        // unit-tested GuardCore.DeriveRoutes — this keeps Native.RECT out of GuardCore and lets the rules be tested.
+        var deviceRects = byDevice.ToDictionary(
+            kv => kv.Key,
+            kv => (kv.Value.Bounds.Left, kv.Value.Bounds.Top, kv.Value.Bounds.Right, kv.Value.Bounds.Bottom));
+        var routes = GuardCore.DeriveRoutes(
+            links.Select(lk => (lk.FromDevice, lk.ToDevice)), deviceRects, topSet);
+
+        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), safety, routes);
         _guard.DeliberateCross = _settings.DeliberateCross;
+        _guard.DescentRouting = _settings.DescentRouting;
 
         WarnIsolationIfChanged(warn.Select(i => monitors[i].Device).ToList(),
                                warn.Select(i => monitors[i].Index).ToList());

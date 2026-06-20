@@ -33,6 +33,13 @@ public sealed class GuardCore
     public bool Confine;
     public List<(int L, int T, int R, int B)> Monitors = new();
 
+    // descent routing (opt-in, default OFF): when descending out of a top monitor through its overhang onto the
+    // WRONG side screen, clamp the exit X into the LINKED bottom monitor's full X-range so the cursor lands on the
+    // intended screen. Each route pairs the top it leaves (Top) with the bottom it should fall into (Landing).
+    // Pure int value tuples (no Native.RECT here) so cond7's structural != compares by value, not reference.
+    public bool DescentRouting;
+    public List<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)> DescentRoutes = new();
+
     public int LastX, LastY;
     public bool HaveLast;
     public bool OnTop;
@@ -120,6 +127,39 @@ public sealed class GuardCore
         return (warn, gates);
     }
 
+    /// <summary>
+    /// Pure descent-route derivation (Win32-free, unit-tested). From the allowed up-crossings, derive (Top, Landing)
+    /// pairs so a descent off a top's overhang clamps back onto the intended bottom. Three guards:
+    ///  - AMBIGUITY: route a top only when it has exactly ONE distinct FromDevice (else no derivable "intended" landing).
+    ///  - SF-1 (vertical): the landing must sit genuinely below the top (Landing.T >= Top.B), else a From=side link
+    ///    would yank a center descent sideways.
+    ///  - X-OVERLAP (horizontal): the Top/Landing must share a positive X-span (a real downward seam), else a link that
+    ///    became non-overlapping after a layout change would teleport the cursor across the gap.
+    /// <paramref name="links"/> are (FromDevice, ToDevice) pairs; <paramref name="rects"/> maps device -> bounds;
+    /// <paramref name="topDevices"/> is the set of top-monitor devices.
+    /// </summary>
+    public static List<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)> DeriveRoutes(
+        IEnumerable<(string From, string To)> links,
+        IReadOnlyDictionary<string, (int L, int T, int R, int B)> rects,
+        ISet<string> topDevices)
+    {
+        var routes = new List<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)>();
+        foreach (var grp in links.Where(lk => topDevices.Contains(lk.To)).GroupBy(lk => lk.To))
+        {
+            var froms = grp.Select(lk => lk.From).Distinct().ToList();
+            if (froms.Count != 1) continue;                                  // ambiguity guard
+            if (!rects.TryGetValue(froms[0], out var landing)) continue;
+            if (!rects.TryGetValue(grp.Key, out var top)) continue;
+            if (landing.T < top.B) continue;                                 // SF-1: Landing.T >= Top.B
+            if (Math.Min(top.R, landing.R) <= Math.Max(top.L, landing.L)) continue;   // positive X-overlap
+            routes.Add((top, landing));
+        }
+        return routes;
+    }
+
+    private static bool InRect((int L, int T, int R, int B) r, int x, int y) =>
+        x >= r.L && x < r.R && y >= r.T && y < r.B;
+
     private bool TryActiveMonitor(int x, int y, out (int L, int T, int R, int B) m)
     {
         foreach (var r in Monitors)
@@ -165,6 +205,37 @@ public sealed class GuardCore
         // (A) Already above the line -> free roam; clears once the cursor descends past the line.
         if (OnTop)
         {
+            // Descent routing (opt-in): on a real descent crossing a top's LOCAL bottom edge, if the exit X lands
+            // on a different present monitor than the one linked to that top, clamp X into the linked bottom
+            // monitor's full X-range. Horizontal routing on descent only — vertical escape stays ungated. Gate the
+            // whole block behind the toggle so OFF is a true no-op and the ungated-descent path is untouched. Fire
+            // on the FIRST route whose cond2-7 ALL hold against that SAME route (never a flat Any/All split).
+            if (DescentRouting)
+            {
+                foreach (var route in DescentRoutes)
+                {
+                    if (route.Landing.R <= route.Landing.L) continue;   // defensive: a zero/negative-width landing
+                                                                        // would make the Math.Clamp below throw
+                    bool descending = y > LastY;                                             // 2
+                    bool originInTop = InRect(route.Top, LastX, LastY);                      // 3
+                    bool crossesLocalEdge = y >= route.Top.B && x >= route.Top.L && x < route.Top.R;   // 4
+                    bool outsideLanding = !InRect(route.Landing, x, y);                      // 5
+                    int landX = Math.Clamp(x, route.Landing.L, route.Landing.R - 1);
+                    bool realLanding = InRect(route.Landing, landX, y);                      // 6
+                    bool wrongMonitor = TryActiveMonitor(x, y, out var a) && a != route.Landing;   // 7
+                    if (descending && originInTop && crossesLocalEdge && outsideLanding && realLanding && wrongMonitor)
+                    {
+                        bx = landX; by = y;
+                        // Match the ungated path (line below): only leave "on top" once the cursor is at/below the
+                        // GLOBAL barrier. A shallow top (Top.B < BarrierY) can fire this route while still above the
+                        // barrier; clearing OnTop there would strip free-roam and warp the next move down to BarrierY.
+                        if (by >= BarrierY) OnTop = false;
+                        Accept(bx, by);
+                        return GuardAction.Block;   // hook applies the X correction onto the linked screen
+                    }
+                }
+            }
+
             if (y >= BarrierY) OnTop = false;
             Accept(x, y);
             return GuardAction.Pass;

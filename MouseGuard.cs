@@ -32,12 +32,20 @@ public sealed class MouseGuard : IDisposable
         set => _core.DeliberateCross = value;
     }
 
+    /// <summary>Opt-in: clamp a descent's exit X back onto the linked bottom monitor (default off).</summary>
+    public bool DescentRouting
+    {
+        get => _core.DescentRouting;
+        set => _core.DescentRouting = value;
+    }
+
     public MouseGuard() => _proc = HookCallback;
 
     /// <summary>Configure the barrier from the top monitors, the allowed crossing gates, and all monitor rects (for game mode).</summary>
     public void Configure(IEnumerable<Native.RECT> blocked, IEnumerable<(int Min, int Max)> gates,
                           IEnumerable<Native.RECT> allMonitors,
-                          IEnumerable<(int Min, int Max, int OwnerT, int OwnerB)> safetyGates)
+                          IEnumerable<(int Min, int Max, int OwnerT, int OwnerB)> safetyGates,
+                          IEnumerable<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)> descentRoutes)
     {
         var rects = blocked.ToList();
         _core.HasTop = rects.Count > 0;
@@ -45,6 +53,11 @@ public sealed class MouseGuard : IDisposable
         _core.Gates = gates.Where(g => g.Max > g.Min).ToList();
         _core.Monitors = allMonitors.Select(r => (r.Left, r.Top, r.Right, r.Bottom)).ToList();
         _core.SafetyGates = safetyGates.Where(g => g.Max > g.Min).ToList();
+        _core.DescentRoutes = descentRoutes.ToList();
+        // Re-baseline: a live reconfigure (display layout change) can move the cursor's coordinate from the old top
+        // into a newly positioned bottom/side screen while OnTop was true. Dropping the stale state forces the next
+        // move through the !HaveLast branch, which re-derives OnTop from the fresh cursor position vs the new barrier.
+        _core.Reset();
     }
 
     public void Start()

@@ -78,6 +78,7 @@ public static class Strings
     public static string RuleHint => G("RuleHint");
     public static string NoTopsHint => G("NoTopsHint");
     public static string DeliberateCrossLabel => G("DeliberateCrossLabel");
+    public static string DescentRoutingLabel => G("DescentRoutingLabel");
     public static string MenuGame => G("MenuGame");
     public static string GameHotkeyHead => G("GameHotkeyHead");
     public static string GameHotkeyHint => G("GameHotkeyHint");
@@ -141,6 +142,7 @@ public static class Strings
         ["RuleHint"] = "Pick a bottom screen, then check which top screens it may cross up into. (Empty = the primary may cross up into every top.)",
         ["NoTopsHint"] = "No top monitors detected — nothing to configure.",
         ["DeliberateCrossLabel"] = "Require a deliberate push to cross up (off = any upward move crosses)",
+        ["DescentRoutingLabel"] = "Stay in the same column when descending",
         ["MenuGame"] = "Game mode (confine cursor)",
         ["GameHotkeyHead"] = "Game mode hotkey",
         ["GameHotkeyHint"] = "Confine the cursor to its monitor (windowed/borderless games; not exclusive-fullscreen).",
@@ -203,6 +205,7 @@ public static class Strings
         ["RuleHint"] = "Bir alt ekran seç, sonra çıkabileceği üst ekranları işaretle. (Boş = ana ekran her üst ekrana çıkabilir.)",
         ["NoTopsHint"] = "Üst ekran algılanmadı — yapılandırılacak bir şey yok.",
         ["DeliberateCrossLabel"] = "Yukarı geçmek için bilinçli itiş gerekir (kapalı = her yukarı hareket geçer)",
+        ["DescentRoutingLabel"] = "İnişte imleci aynı sütunda tut",
         ["MenuGame"] = "Oyun modu (imleci hapset)",
         ["GameHotkeyHead"] = "Oyun modu kısayolu",
         ["GameHotkeyHint"] = "İmleci bulunduğu ekrana hapset (windowed/borderless oyunlar; exclusive-fullscreen hariç).",

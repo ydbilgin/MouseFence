@@ -37,10 +37,10 @@ GuardCore NewSafety(params (int Min, int Max, int OwnerT, int OwnerB)[] safety)
     return c;
 }
 
-(GuardAction act, int by, bool onTop) Move(GuardCore c, int x, int y, bool gate)
+(GuardAction act, int by, bool onTop, int bx) Move(GuardCore c, int x, int y, bool gate)
 {
-    var a = c.Decide(x, y, gate, out _, out int by);
-    return (a, by, c.OnTop);
+    var a = c.Decide(x, y, gate, out int bx, out int by);
+    return (a, by, c.OnTop, bx);
 }
 
 void Check(string name, bool ok, string detail = "")
@@ -346,6 +346,237 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
 {
     Check("topology: IsTop classifies an above-origin monitor",
         GuardCore.IsTop((-450, -1440, 2990, 0)) && !GuardCore.IsTop((0, 0, 2560, 1440)));
+}
+
+// ---- DESCENT ROUTING (opt-in): clamp a descent's exit X back onto the linked bottom monitor ----
+// Layout: wide TOP (-440,-1440,3000,0); MAIN landing (0,0,2560,1440); right side screen (2560,0,4480,1080) sits
+// under the top's overhang (X 2560..3000). Barrier = top.B = 0. Route: Top=TOP, Landing=MAIN.
+var TOP = (-440, -1440, 3000, 0);
+var MAINrect = (0, 0, 2560, 1440);
+var RIGHT = (2560, 0, 4480, 1080);
+
+// A core that is already OnTop (cross up through MAIN's column first), with an explicit monitor set.
+GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing) route,
+                    params (int L, int T, int R, int B)[] monitors)
+{
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))> { route },
+        Monitors = monitors.ToList(),
+        Gates = new List<(int Min, int Max)> { (24, 2536) } };
+    c.Reset();
+    Move(c, 1280, 0, true);
+    Move(c, 1280, -15, true);   // deliberate cross -> OnTop
+    return c;
+}
+
+// DescentRouting_OverhangIntoSide_ClampsXToLinkedLandingEdge — exit on the wrong side screen clamps to MAIN.R-1=2559.
+{
+    var c = OnTopCore((TOP, MAINrect), TOP, MAINrect, RIGHT);
+    Move(c, 2800, -100, true);             // roam over the overhang (above the right screen)
+    var r = Move(c, 2800, 10, true);       // descend: lands on RIGHT (X 2800) instead of MAIN
+    Check("DescentRouting_OverhangIntoSide_ClampsXToLinkedLandingEdge",
+        r.act == GuardAction.Block && r.bx == 2559 && r.by == 10 && !r.onTop,
+        $"act={r.act} bx={r.bx} by={r.by} onTop={r.onTop}");
+}
+// Mirror: LEFT-wide top, RIGHT screen is the landing, overhang spills onto a left screen -> clamp to landing.L=0.
+{
+    var TOPl = (-2000, -1440, 1000, 0);
+    var RIGHTl = (0, 0, 1000, 1080);       // landing
+    var LEFTl = (-2000, 0, 0, 1080);       // wrong side under the overhang
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))> { (TOPl, RIGHTl) },
+        Monitors = new List<(int, int, int, int)> { TOPl, RIGHTl, LEFTl },
+        Gates = new List<(int Min, int Max)> { (24, 976) } };
+    c.Reset();
+    Move(c, 500, 0, true); Move(c, 500, -15, true);   // OnTop
+    Move(c, -1000, -100, true);            // roam over the left overhang
+    var r = Move(c, -1000, 10, true);      // descend onto LEFT
+    Check("DescentRouting_OverhangIntoSide_ClampsXToLinkedLandingEdge (mirror left)",
+        r.act == GuardAction.Block && r.bx == 0 && !r.onTop, $"act={r.act} bx={r.bx} onTop={r.onTop}");
+}
+// DescentRouting_Disabled_PreservesUngatedDescent — scenario 9 shape with routing off.
+{
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = false,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))> { (TOP, MAINrect) },
+        Monitors = new List<(int, int, int, int)> { TOP, MAINrect, RIGHT },
+        Gates = new List<(int Min, int Max)> { (24, 2536) } };
+    c.Reset();
+    Move(c, 1280, 0, true); Move(c, 1280, -15, true);  // OnTop
+    Move(c, 2800, -100, true);
+    var r = Move(c, 2800, 10, true);        // descends freely (ungated)
+    Check("DescentRouting_Disabled_PreservesUngatedDescent",
+        r.act == GuardAction.Pass && !r.onTop, $"act={r.act} onTop={r.onTop}");
+}
+// DescentRouting_WithinLinkedLanding_PassesUnchanged — a descent already inside MAIN is not clamped.
+{
+    var c = OnTopCore((TOP, MAINrect), TOP, MAINrect, RIGHT);
+    Move(c, 1500, -100, true);
+    var r = Move(c, 1500, 10, true);        // lands inside MAIN
+    Check("DescentRouting_WithinLinkedLanding_PassesUnchanged",
+        r.act == GuardAction.Pass && !r.onTop, $"act={r.act} onTop={r.onTop}");
+}
+// DescentRouting_Void_PassesUnchanged — exit over no present monitor (cond7 false) -> ungated, fail-safe.
+{
+    var c = OnTopCore((TOP, MAINrect), TOP, MAINrect);   // RIGHT deliberately absent -> X 2800 below TOP is a void
+    Move(c, 2800, -100, true);
+    var r = Move(c, 2800, 10, true);        // exit at (2800,10): not in MAIN, not in any monitor -> void
+    Check("DescentRouting_Void_PassesUnchanged",
+        r.act == GuardAction.Pass && !r.onTop, $"act={r.act} onTop={r.onTop}");
+}
+// DescentRouting_LateralRoam_SelectsCurrentTopRoute — origin inside TOPa picks route A, not B.
+{
+    var TOPa = (0, -1440, 1200, 0); var LANDa = (0, 0, 1000, 1080);
+    var TOPb = (1200, -1440, 2400, 0); var LANDb = (1400, 0, 2400, 1080);
+    var WRONGa = (1000, 0, 1200, 1080);   // wrong screen under TOPa's right overhang
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))> { (TOPa, LANDa), (TOPb, LANDb) },
+        Monitors = new List<(int, int, int, int)> { TOPa, LANDa, TOPb, LANDb, WRONGa },
+        Gates = new List<(int Min, int Max)> { (24, 976) } };
+    c.Reset();
+    Move(c, 500, 0, true); Move(c, 500, -15, true);   // OnTop via LANDa column
+    Move(c, 1100, -100, true);              // roam to above TOPa's right overhang (origin inside TOPa)
+    var r = Move(c, 1100, 10, true);        // descend onto WRONGa -> route A clamps to LANDa R-1 = 999
+    Check("DescentRouting_LateralRoam_SelectsCurrentTopRoute",
+        r.act == GuardAction.Block && r.bx == 999 && !r.onTop, $"act={r.act} bx={r.bx}");
+}
+// DescentRouting_MixedTopBottomEdges_UsesLocalTopEdge — clamp keys off the route's local Top.B, not global BarrierY,
+// AND clearing OnTop is gated on the GLOBAL barrier (a shallow top's route must NOT strip free-roam above the line).
+// Geometry: a deeper top elsewhere makes BarrierY = 0 while TOPshallow's local B = -700 (strictly above the barrier).
+{
+    var TOPshallow = (2560, -1440, 3000, -700);   // shallow top: local B = -700, strictly ABOVE BarrierY (0)
+    var LAND2 = (2560, -700, 2900, 1080);         // landing starts at the shallow top's local edge
+    var WRONG2 = (2900, -700, 3400, 1080);        // wrong screen to the right under the shallow top's overhang
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))> { (TOPshallow, LAND2) },
+        Monitors = new List<(int, int, int, int)> { TOPshallow, LAND2, WRONG2 },
+        Gates = new List<(int Min, int Max)> { (2580, 2980) } };
+    c.Reset();
+    Move(c, 2700, -1000, true);             // first move -> OnTop (y < BarrierY)
+    Move(c, 2950, -900, true);              // roam above, origin still in TOPshallow (Y -900 >= -1440)
+    // Descend onto WRONG2 at y=-690 (past the local edge -700, but STILL ABOVE the global barrier 0):
+    // X clamps to LAND2.R-1 = 2899, and OnTop must STAY TRUE because by (-690) < BarrierY (0).
+    var r = Move(c, 2950, -690, true);
+    Check("DescentRouting_MixedTopBottomEdges_UsesLocalTopEdge (clamps X, keeps OnTop above barrier)",
+        r.act == GuardAction.Block && r.bx == 2899 && r.onTop, $"act={r.act} bx={r.bx} onTop={r.onTop}");
+    // Follow-up: a move just above the barrier must NOT be blocked/warped — free roam is intact.
+    var up = Move(c, 2900, -5, true);
+    Check("DescentRouting_MixedTopBottomEdges: free roam intact above the barrier after a shallow-top route",
+        up.act == GuardAction.Pass && up.onTop, $"act={up.act} onTop={up.onTop}");
+}
+// Deep top (Top.B == BarrierY): descending past it clamps X and DOES clear OnTop (by >= BarrierY).
+{
+    var TOPdeep = (2560, -700, 3000, 0);      // local B = 0 == BarrierY
+    var LANDd = (2560, 0, 2900, 1080);
+    var WRONGd = (2900, 0, 3400, 1080);
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))> { (TOPdeep, LANDd) },
+        Monitors = new List<(int, int, int, int)> { TOPdeep, LANDd, WRONGd },
+        Gates = new List<(int Min, int Max)> { (2580, 2980) } };
+    c.Reset();
+    Move(c, 2700, 0, true); Move(c, 2700, -15, true);  // OnTop
+    Move(c, 2950, -300, true);
+    var r = Move(c, 2950, 10, true);          // descend below the barrier -> clamp to LANDd.R-1 = 2899, OnTop cleared
+    Check("DescentRouting_DeepTop_ClampsX_AndClearsOnTopBelowBarrier",
+        r.act == GuardAction.Block && r.bx == 2899 && !r.onTop, $"act={r.act} bx={r.bx} onTop={r.onTop}");
+}
+// DescentRouting_AmbiguousMultipleFromLinks_PassesUnchanged — the tray emits no route for an ambiguous top; with no
+// route the firing loop is a no-op and descent stays ungated.
+{
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))>(),   // ambiguity guard dropped it
+        Monitors = new List<(int, int, int, int)> { TOP, MAINrect, RIGHT },
+        Gates = new List<(int Min, int Max)> { (24, 2536) } };
+    c.Reset();
+    Move(c, 1280, 0, true); Move(c, 1280, -15, true);  // OnTop
+    Move(c, 2800, -100, true);
+    var r = Move(c, 2800, 10, true);
+    Check("DescentRouting_AmbiguousMultipleFromLinks_PassesUnchanged",
+        r.act == GuardAction.Pass && !r.onTop, $"act={r.act}");
+}
+// DescentRouting_ConfineOverridesRoute — game mode's early return wins; the route is never consulted.
+{
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true, Confine = true,
+        DescentRoutes = new List<((int, int, int, int), (int, int, int, int))> { (TOP, MAINrect) },
+        Monitors = new List<(int, int, int, int)> { MAINrect, RIGHT } };
+    c.Reset();
+    Move(c, 2800, 500, true);                // baseline on RIGHT
+    var r = Move(c, 4500, 500, true);        // try to leave RIGHT (X 2560..4480) -> confine blocks; route untouched
+    Check("DescentRouting_ConfineOverridesRoute",
+        r.act == GuardAction.Block, $"act={r.act}");
+}
+// DescentRouting_SideFromDevice_NotBelowTop_NoRoute (SF-1) — a From=side link whose Landing.T < Top.B emits NO
+// route, so a center descent is NOT yanked sideways. Emulate the tray's emission rule (Landing.T >= Top.B) here.
+{
+    var sideLanding = (2560, -200, 4480, 880);       // overlaps the top's Y -> Landing.T (-200) < Top.B (0)
+    bool emitted = sideLanding.Item2 >= TOP.Item4;   // the tray's SF-1 test
+    var routes = new List<((int, int, int, int), (int, int, int, int))>();
+    if (emitted) routes.Add((TOP, sideLanding));
+    var c = new GuardCore { HasTop = true, BarrierY = 0, DescentRouting = true, DescentRoutes = routes,
+        Monitors = new List<(int, int, int, int)> { TOP, MAINrect },
+        Gates = new List<(int Min, int Max)> { (24, 2536) } };
+    c.Reset();
+    Move(c, 1280, -200, true);               // first move -> OnTop (y < BarrierY)
+    Move(c, 1280, -100, true);
+    var r = Move(c, 1280, 10, true);         // a CENTER descent into MAIN
+    Check("DescentRouting_SideFromDevice_NotBelowTop_NoRoute",
+        routes.Count == 0 && r.act == GuardAction.Pass && !r.onTop, $"routes={routes.Count} act={r.act}");
+}
+
+// ---- DESCENT ROUTE DERIVATION (pure GuardCore.DeriveRoutes): the tray's emission guards, unit-tested ----
+{
+    // Standard valid link: MAIN (from) -> TOP (to). TOP is a top device; MAIN sits below it and overlaps in X.
+    var rects = new Dictionary<string, (int, int, int, int)>
+    {
+        ["MAIN"] = (0, 0, 2560, 1440),
+        ["TOP"]  = (-440, -1440, 3000, 0),
+    };
+    var routes = GuardCore.DeriveRoutes(new[] { ("MAIN", "TOP") }, rects, new HashSet<string> { "TOP" });
+    Check("derive: a valid below-and-overlapping link emits one route",
+        routes.Count == 1 && routes[0].Top == (-440, -1440, 3000, 0) && routes[0].Landing == (0, 0, 2560, 1440),
+        $"routes={routes.Count}");
+}
+{
+    // X-OVERLAP guard (blocker): a link whose From sits entirely to the side of the top (no X-overlap) emits NO route,
+    // so an overhang descent can't teleport the cursor across the horizontal gap.
+    var rects = new Dictionary<string, (int, int, int, int)>
+    {
+        ["FAR"] = (5000, 0, 6000, 1080),       // far to the right of TOP -> no X-overlap
+        ["TOP"] = (-440, -1440, 3000, 0),
+    };
+    var routes = GuardCore.DeriveRoutes(new[] { ("FAR", "TOP") }, rects, new HashSet<string> { "TOP" });
+    Check("derive: a non-X-overlapping link emits NO route (no teleport across the gap)",
+        routes.Count == 0, $"routes={routes.Count}");
+}
+{
+    // SF-1 vertical guard: a From=side link whose Landing.T < Top.B (overlaps the top's Y band) emits NO route.
+    var rects = new Dictionary<string, (int, int, int, int)>
+    {
+        ["SIDE"] = (2560, -200, 4480, 880),    // Landing.T (-200) < Top.B (0)
+        ["TOP"]  = (-440, -1440, 3000, 0),
+    };
+    var routes = GuardCore.DeriveRoutes(new[] { ("SIDE", "TOP") }, rects, new HashSet<string> { "TOP" });
+    Check("derive: a not-genuinely-below landing (Landing.T < Top.B) emits NO route", routes.Count == 0, $"routes={routes.Count}");
+}
+{
+    // AMBIGUITY guard: a top with TWO distinct FromDevices emits NO route (no derivable intended landing).
+    var rects = new Dictionary<string, (int, int, int, int)>
+    {
+        ["A"]   = (0, 0, 1500, 1440),
+        ["B"]   = (1500, 0, 3000, 1440),
+        ["TOP"] = (-440, -1440, 3000, 0),
+    };
+    var routes = GuardCore.DeriveRoutes(new[] { ("A", "TOP"), ("B", "TOP") }, rects, new HashSet<string> { "TOP" });
+    Check("derive: an ambiguous top (multiple distinct FromDevices) emits NO route", routes.Count == 0, $"routes={routes.Count}");
+}
+{
+    // A link whose target is NOT a top device is ignored.
+    var rects = new Dictionary<string, (int, int, int, int)>
+    {
+        ["MAIN"] = (0, 0, 2560, 1440),
+        ["TOP"]  = (-440, -1440, 3000, 0),
+    };
+    var routes = GuardCore.DeriveRoutes(new[] { ("MAIN", "TOP") }, rects, new HashSet<string>());   // TOP not in top-set
+    Check("derive: a link whose target is not a top device emits NO route", routes.Count == 0, $"routes={routes.Count}");
 }
 
 // ---- localization parity: every key exists in BOTH languages (no cross-language fallback) ----
