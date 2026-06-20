@@ -26,6 +26,7 @@ public sealed class SettingsForm : Form
     private readonly TextBox _gameHotkeyBox;
     private readonly TextBox _pauseHotkeyBox;
     private readonly CheckBox _deliberateCheck;
+    private readonly CheckBox _descentCheck;
     private readonly Dictionary<string, HashSet<string>> _rules = new();
     private bool _mc, _ma, _ms, _mw;
     private Keys _key;
@@ -191,6 +192,9 @@ public sealed class SettingsForm : Form
 
         _deliberateCheck = new CheckBox { Text = Strings.DeliberateCrossLabel, Left = 12, Top = 378, Width = 416, Height = 34, Checked = s.DeliberateCross };
         tabMonitors.Controls.Add(_deliberateCheck);
+
+        _descentCheck = new CheckBox { Text = Strings.DescentRoutingLabel, Left = 12, Top = 414, Width = 416, Height = 34, Checked = s.DescentRouting };
+        tabMonitors.Controls.Add(_descentCheck);
 
         if (_bottoms.Count > 0 && _tops.Count > 0) { _fromCombo.SelectedIndex = 0; }
 
@@ -402,6 +406,7 @@ public sealed class SettingsForm : Form
             ConfineModCtrl = _gc, ConfineModAlt = _ga, ConfineModShift = _gs, ConfineModWin = _gw, ConfineHotKey = _gkey,
             PauseModCtrl = _pc, PauseModAlt = _pa, PauseModShift = _ps, PauseModWin = _pw, PauseHotKey = _pkey,
             DeliberateCross = _deliberateCheck.Checked,
+            DescentRouting = _descentCheck.Checked,
         };
 
         if (res.Mode == "Manual")
