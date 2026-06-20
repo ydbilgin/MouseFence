@@ -79,6 +79,13 @@ public static class Strings
     public static string NoTopsHint => G("NoTopsHint");
     public static string DeliberateCrossLabel => G("DeliberateCrossLabel");
     public static string DescentRoutingLabel => G("DescentRoutingLabel");
+    public static string ExportLabel => G("ExportLabel");
+    public static string ImportLabel => G("ImportLabel");
+    public static string ExportTitle => G("ExportTitle");
+    public static string ImportTitle => G("ImportTitle");
+    public static string ImportConfirm => G("ImportConfirm");
+    public static string ImportInvalid => G("ImportInvalid");
+    public static string SettingsFileFilter => G("SettingsFileFilter");
     public static string MenuGame => G("MenuGame");
     public static string GameHotkeyHead => G("GameHotkeyHead");
     public static string GameHotkeyHint => G("GameHotkeyHint");
@@ -143,6 +150,13 @@ public static class Strings
         ["NoTopsHint"] = "No top monitors detected — nothing to configure.",
         ["DeliberateCrossLabel"] = "Require a deliberate push to cross up (off = any upward move crosses)",
         ["DescentRoutingLabel"] = "Stay in the same column when descending",
+        ["ExportLabel"] = "Export…",
+        ["ImportLabel"] = "Import…",
+        ["ExportTitle"] = "Export MouseFence settings",
+        ["ImportTitle"] = "Import MouseFence settings",
+        ["ImportConfirm"] = "Replace your current settings with the imported file? The new settings are applied right away.",
+        ["ImportInvalid"] = "That file isn't a valid MouseFence settings file.",
+        ["SettingsFileFilter"] = "MouseFence settings (*.json)|*.json|All files (*.*)|*.*",
         ["MenuGame"] = "Game mode (confine cursor)",
         ["GameHotkeyHead"] = "Game mode hotkey",
         ["GameHotkeyHint"] = "Confine the cursor to its monitor (windowed/borderless games; not exclusive-fullscreen).",
@@ -206,6 +220,13 @@ public static class Strings
         ["NoTopsHint"] = "Üst ekran algılanmadı — yapılandırılacak bir şey yok.",
         ["DeliberateCrossLabel"] = "Yukarı geçmek için bilinçli itiş gerekir (kapalı = her yukarı hareket geçer)",
         ["DescentRoutingLabel"] = "İnişte imleci aynı sütunda tut",
+        ["ExportLabel"] = "Dışa aktar…",
+        ["ImportLabel"] = "İçe aktar…",
+        ["ExportTitle"] = "MouseFence ayarlarını dışa aktar",
+        ["ImportTitle"] = "MouseFence ayarlarını içe aktar",
+        ["ImportConfirm"] = "Mevcut ayarların içe aktarılan dosyayla değiştirilsin mi? Yeni ayarlar hemen uygulanır.",
+        ["ImportInvalid"] = "Bu dosya geçerli bir MouseFence ayar dosyası değil.",
+        ["SettingsFileFilter"] = "MouseFence ayarları (*.json)|*.json|Tüm dosyalar (*.*)|*.*",
         ["MenuGame"] = "Oyun modu (imleci hapset)",
         ["GameHotkeyHead"] = "Oyun modu kısayolu",
         ["GameHotkeyHint"] = "İmleci bulunduğu ekrana hapset (windowed/borderless oyunlar; exclusive-fullscreen hariç).",
