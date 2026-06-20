@@ -19,6 +19,13 @@ public sealed class Settings
     public bool ConfineModShift { get; set; } = false;
     public bool ConfineModWin { get; set; } = false;
 
+    // global pause/resume hotkey — a universal keyboard escape if the cursor ever gets trapped
+    public Keys PauseHotKey { get; set; } = Keys.P;
+    public bool PauseModCtrl { get; set; } = true;
+    public bool PauseModAlt { get; set; } = true;
+    public bool PauseModShift { get; set; } = false;
+    public bool PauseModWin { get; set; } = false;
+
     // behaviour
     public bool StartGateClosed { get; set; } = true;  // main->top crossing blocked at launch
     public bool AutoStart { get; set; } = false;       // launch with Windows
@@ -103,6 +110,27 @@ public sealed class Settings
         if (ConfineModShift) parts.Add("Shift");
         if (ConfineModWin) parts.Add("Win");
         if (ConfineHotKey != Keys.None) parts.Add(ConfineHotKey.ToString());
+        return parts.Count == 0 ? "(none)" : string.Join("+", parts);
+    }
+
+    public uint PauseModifiers()
+    {
+        uint m = 0;
+        if (PauseModCtrl) m |= Native.MOD_CONTROL;
+        if (PauseModAlt) m |= Native.MOD_ALT;
+        if (PauseModShift) m |= Native.MOD_SHIFT;
+        if (PauseModWin) m |= Native.MOD_WIN;
+        return m;
+    }
+
+    public string PauseHotKeyText()
+    {
+        var parts = new List<string>();
+        if (PauseModCtrl) parts.Add("Ctrl");
+        if (PauseModAlt) parts.Add("Alt");
+        if (PauseModShift) parts.Add("Shift");
+        if (PauseModWin) parts.Add("Win");
+        if (PauseHotKey != Keys.None) parts.Add(PauseHotKey.ToString());
         return parts.Count == 0 ? "(none)" : string.Join("+", parts);
     }
 }

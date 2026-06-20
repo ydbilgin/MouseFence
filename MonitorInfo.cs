@@ -38,5 +38,6 @@ public sealed class MonitorInfo
     }
 
     /// <summary>"Top" monitors = those that sit entirely above the primary's top edge (y &lt;= 0).</summary>
-    public static bool IsAbovePrimary(MonitorInfo m) => m.Bounds.Bottom <= 0;
+    public static bool IsAbovePrimary(MonitorInfo m) =>
+        GuardCore.IsTop((m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom));
 }

@@ -24,12 +24,15 @@ public sealed class SettingsForm : Form
 
     private readonly TabControl _tabs;
     private readonly TextBox _gameHotkeyBox;
+    private readonly TextBox _pauseHotkeyBox;
     private readonly CheckBox _deliberateCheck;
     private readonly Dictionary<string, HashSet<string>> _rules = new();
     private bool _mc, _ma, _ms, _mw;
     private Keys _key;
     private bool _gc, _ga, _gs, _gw;
     private Keys _gkey;
+    private bool _pc, _pa, _ps, _pw;
+    private Keys _pkey;
 
     public Settings Result { get; private set; }
 
@@ -42,6 +45,7 @@ public sealed class SettingsForm : Form
         _monitors = monitors;
         _mc = s.ModCtrl; _ma = s.ModAlt; _ms = s.ModShift; _mw = s.ModWin; _key = s.HotKey;
         _gc = s.ConfineModCtrl; _ga = s.ConfineModAlt; _gs = s.ConfineModShift; _gw = s.ConfineModWin; _gkey = s.ConfineHotKey;
+        _pc = s.PauseModCtrl; _pa = s.PauseModAlt; _ps = s.PauseModShift; _pw = s.PauseModWin; _pkey = s.PauseHotKey;
 
         _tops = (s.Mode == "Manual" && s.ManualMonitors.Count > 0
             ? monitors.Where(m => s.ManualMonitors.Contains(m.Device))
@@ -111,6 +115,21 @@ public sealed class SettingsForm : Form
         btnClearGame.Click += (a, b) => { _gc = _ga = _gs = _gw = false; _gkey = Keys.None; UpdateGameHotkeyText(); };
         tabGeneral.Controls.Add(_gameHotkeyBox);
         tabGeneral.Controls.Add(btnClearGame);
+        y += 44;
+        tabGeneral.Controls.Add(new Label { Text = Strings.PauseHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
+        y += 20;
+        tabGeneral.Controls.Add(new Label { Text = Strings.PauseHotkeyHint, Left = 12, Top = y, Width = 412, Height = 30, Tag = "subtle" });
+        y += 32;
+        _pauseHotkeyBox = new TextBox
+        {
+            Left = 12, Top = y, Width = 300, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
+            TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
+        };
+        _pauseHotkeyBox.KeyDown += PauseHotkeyBox_KeyDown;
+        var btnClearPause = new Button { Text = Strings.Clear, Left = 320, Top = y - 1, Width = 96, Height = 28, FlatStyle = FlatStyle.Flat };
+        btnClearPause.Click += (a, b) => { _pc = _pa = _ps = _pw = false; _pkey = Keys.None; UpdatePauseHotkeyText(); };
+        tabGeneral.Controls.Add(_pauseHotkeyBox);
+        tabGeneral.Controls.Add(btnClearPause);
 
         // ---- Appearance ----
         tabAppearance.Controls.Add(new Label { Text = Strings.LanguageLabel, AutoSize = true, Left = 12, Top = 14, Tag = "subtle" });
@@ -143,7 +162,16 @@ public sealed class SettingsForm : Form
         tabMonitors.Controls.Add(_monitorList);
 
         tabMonitors.Controls.Add(new Label { Text = Strings.RulesHead, AutoSize = true, Left = 12, Top = 172, Font = headFont, Tag = "head" });
-        tabMonitors.Controls.Add(new Label { Text = (_tops.Count == 0 ? Strings.NoTopsHint : Strings.RuleHint), Left = 12, Top = 192, Width = 416, Height = 32, Tag = "subtle" });
+        // anti-trap: if the live layout isolates a screen, surface it right here (in the same hint slot) so the
+        // user configuring monitors knows which one to realign — reuses GuardCore's pure detection.
+        string ruleHint = _tops.Count == 0 ? Strings.NoTopsHint : Strings.RuleHint;
+        var atRects = _monitors.Select(m => (m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom)).ToList();
+        var atTopIdx = new HashSet<int>();
+        for (int i = 0; i < _monitors.Count; i++) if (topSet.Contains(_monitors[i].Device)) atTopIdx.Add(i);
+        var (atWarn, _) = GuardCore.AntiTrap(atRects, atTopIdx);
+        if (atWarn.Count > 0)
+            ruleHint = Strings.IsolatedNote(string.Join(", ", atWarn.Select(i => _monitors[i].Index)));
+        tabMonitors.Controls.Add(new Label { Text = ruleHint, Left = 12, Top = 192, Width = 416, Height = 32, Tag = "subtle" });
 
         _map = new Panel { Left = 12, Top = 230, Width = 200, Height = 118, BorderStyle = BorderStyle.FixedSingle };
         _map.Paint += DrawMap;
@@ -180,6 +208,7 @@ public sealed class SettingsForm : Form
         Result = s;
         UpdateHotkeyText();
         UpdateGameHotkeyText();
+        UpdatePauseHotkeyText();
         Theming.Apply(this, SelectedTheme());
     }
 
@@ -329,6 +358,29 @@ public sealed class SettingsForm : Form
         _gameHotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
     }
 
+    private void PauseHotkeyBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        e.SuppressKeyPress = true;
+        e.Handled = true;
+        _pc = e.Control; _pa = e.Alt; _ps = e.Shift;
+        var kc = e.KeyCode;
+        if (kc is Keys.ControlKey or Keys.Menu or Keys.ShiftKey) { _pkey = Keys.None; UpdatePauseHotkeyText(); return; }
+        if (kc is Keys.LWin or Keys.RWin) { _pw = true; _pkey = Keys.None; UpdatePauseHotkeyText(); return; }
+        _pkey = kc;
+        UpdatePauseHotkeyText();
+    }
+
+    private void UpdatePauseHotkeyText()
+    {
+        var parts = new List<string>();
+        if (_pc) parts.Add("Ctrl");
+        if (_pa) parts.Add("Alt");
+        if (_ps) parts.Add("Shift");
+        if (_pw) parts.Add("Win");
+        if (_pkey != Keys.None) parts.Add(_pkey.ToString());
+        _pauseHotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
+    }
+
     private void Ok_Click(object sender, EventArgs e)
     {
         bool anyMod = _mc || _ma || _ms || _mw;
@@ -348,6 +400,7 @@ public sealed class SettingsForm : Form
             Language = _langCombo.SelectedIndex switch { 1 => "en", 2 => "tr", _ => "auto" },
             Theme = _themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" },
             ConfineModCtrl = _gc, ConfineModAlt = _ga, ConfineModShift = _gs, ConfineModWin = _gw, ConfineHotKey = _gkey,
+            PauseModCtrl = _pc, PauseModAlt = _pa, PauseModShift = _ps, PauseModWin = _pw, PauseHotKey = _pkey,
             DeliberateCross = _deliberateCheck.Checked,
         };
 
