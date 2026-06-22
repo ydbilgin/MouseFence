@@ -93,29 +93,50 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void Configure()
     {
-        var monitors = MonitorInfo.All();
+        var allMonitors = MonitorInfo.All();
+
+        // Wall-off: split the live monitors into the EXCLUDED set (whose bounds become forbidden rects) and the
+        // topology set (everything else). Keep BOTH — derive forbidden rects from one and tops/gates/AntiTrap/routes
+        // from the other; never mutate one before deriving the other (binding fix #4).
+        //
+        // SAFETY (binding fix #2): never wall the PRIMARY display and never leave zero usable monitors. Sanitize the
+        // exclude list via the SHARED pure helper (GuardCore.SanitizeExcluded) so an imported/edited settings.json
+        // can't lock the user out. The exclude identity is the STABLE per-monitor key (MonitorInfo.StableId, FIX 4),
+        // so it survives \\.\DISPLAYn renumbering. If pruning happens, warn.
+        var primaryStable = (allMonitors.FirstOrDefault(m => m.Primary) ?? allMonitors.FirstOrDefault())?.StableId;
+        var requested = new HashSet<string>(_settings.ExcludedDevices);
+        var presentStable = allMonitors.Select(m => m.StableId).ToList();
+        var excludedStable = new HashSet<string>(
+            GuardCore.SanitizeExcluded(presentStable, primaryStable, requested, out bool pruned));
+
+        // The monitors that may safely be walled off (their bounds become forbidden rects), matched by StableId.
+        var excludedMonitors = allMonitors.Where(m => excludedStable.Contains(m.StableId)).ToList();
+
+        // topology set = all monitors minus the excluded ones (so a dummy can never be a gate target, a safety-gate
+        // owner, a descent landing, or a confine target — WALL-OFF subsumes IGNORE-ONLY). Match by StableId.
+        var monitors = allMonitors.Where(m => !excludedStable.Contains(m.StableId)).ToList();
 
         var tops = (_settings.Mode == "Manual" && _settings.ManualMonitors.Count > 0
-            ? monitors.Where(m => _settings.ManualMonitors.Contains(m.Device))
+            ? monitors.Where(m => _settings.ManualMonitors.Contains(m.StableId))
             : monitors.Where(MonitorInfo.IsAbovePrimary)).ToList();
 
-        var topSet = new HashSet<string>(tops.Select(t => t.Device));
+        var topSet = new HashSet<string>(tops.Select(t => t.StableId));
         var primary = monitors.FirstOrDefault(m => m.Primary) ?? monitors.FirstOrDefault();
 
         // Allowed crossings: configured UpLinks, else default = primary -> every top monitor.
         var links = _settings.UpLinks.Count > 0
             ? _settings.UpLinks
             : (primary != null
-                ? tops.Select(t => new UpLink { FromDevice = primary.Device, ToDevice = t.Device }).ToList()
+                ? tops.Select(t => new UpLink { FromDevice = primary.StableId, ToDevice = t.StableId }).ToList()
                 : new List<UpLink>());
 
-        var byDevice = monitors.ToDictionary(m => m.Device);
+        var byStable = monitors.ToDictionary(m => m.StableId);
         var gates = new List<(int Min, int Max)>();
         foreach (var lk in links)
         {
             if (!topSet.Contains(lk.ToDevice)) continue;                 // target must be a top monitor
-            if (!byDevice.TryGetValue(lk.FromDevice, out var from)) continue;
-            if (!byDevice.TryGetValue(lk.ToDevice, out var to)) continue;
+            if (!byStable.TryGetValue(lk.FromDevice, out var from)) continue;
+            if (!byStable.TryGetValue(lk.ToDevice, out var to)) continue;
 
             int lo = Math.Max(from.Bounds.Left, to.Bounds.Left);
             int hi = Math.Min(from.Bounds.Right, to.Bounds.Right);
@@ -129,27 +150,31 @@ public sealed class TrayApplicationContext : ApplicationContext
         var rects = monitors.Select(m => (m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom)).ToList();
         var topIdx = new HashSet<int>();
         for (int i = 0; i < monitors.Count; i++)
-            if (topSet.Contains(monitors[i].Device)) topIdx.Add(i);
+            if (topSet.Contains(monitors[i].StableId)) topIdx.Add(i);
         var (warn, safety) = GuardCore.AntiTrap(rects, topIdx);
 
         // Descent routes (opt-in): derive (Top, Landing) pairs from the same UpLinks so a descent off a top's overhang
         // clamps back onto the intended bottom. The guards (ambiguity, SF-1 vertical, X-overlap) live in the pure,
         // unit-tested GuardCore.DeriveRoutes — this keeps Native.RECT out of GuardCore and lets the rules be tested.
-        var deviceRects = byDevice.ToDictionary(
+        var deviceRects = byStable.ToDictionary(
             kv => kv.Key,
             kv => (kv.Value.Bounds.Left, kv.Value.Bounds.Top, kv.Value.Bounds.Right, kv.Value.Bounds.Bottom));
         var routes = GuardCore.DeriveRoutes(
             links.Select(lk => (lk.FromDevice, lk.ToDevice)), deviceRects, topSet);
 
-        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), safety, routes);
+        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), safety, routes,
+                         excludedMonitors.Select(m => m.Bounds));
         _guard.DeliberateCross = _settings.DeliberateCross;
         _guard.DescentRouting = _settings.DescentRouting;
 
-        WarnIsolationIfChanged(warn.Select(i => monitors[i].Device).ToList(),
+        if (pruned)
+            _tray.ShowBalloonTip(5000, "MouseFence", Strings.ExcludePruned, ToolTipIcon.Warning);
+
+        WarnIsolationIfChanged(warn.Select(i => monitors[i].StableId).ToList(),
                                warn.Select(i => monitors[i].Index).ToList());
     }
 
-    // Warn (once per distinct bad layout) when a screen is isolated. Latch on the stable Device id so reordering
+    // Warn (once per distinct bad layout) when a screen is isolated. Latch on the StableId so DISPLAYn reordering
     // doesn't re-nag; show the LIVE pause-hotkey text so the user always sees the working escape key.
     private void WarnIsolationIfChanged(List<string> devices, List<int> displayIndices)
     {

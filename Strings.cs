@@ -79,6 +79,10 @@ public static class Strings
     public static string NoTopsHint => G("NoTopsHint");
     public static string DeliberateCrossLabel => G("DeliberateCrossLabel");
     public static string DescentRoutingLabel => G("DescentRoutingLabel");
+    public static string ExcludeHead => G("ExcludeHead");
+    public static string ExcludeHint => G("ExcludeHint");
+    public static string ExcludePruned => G("ExcludePruned");
+    public static string ResetLayoutLabel => G("ResetLayoutLabel");
     public static string ExportLabel => G("ExportLabel");
     public static string ImportLabel => G("ImportLabel");
     public static string ExportTitle => G("ExportTitle");
@@ -150,6 +154,10 @@ public static class Strings
         ["NoTopsHint"] = "No top monitors detected — nothing to configure.",
         ["DeliberateCrossLabel"] = "Require a deliberate push to cross up (off = any upward move crosses)",
         ["DescentRoutingLabel"] = "Stay in the same column when descending",
+        ["ExcludeHead"] = "Exclude displays (wall cursor out — for dummy/headless)",
+        ["ExcludeHint"] = "Walls the cursor out of an excluded display so it can't get lost there. The main display can't be excluded. (Display ids are machine-specific.)",
+        ["ExcludePruned"] = "Couldn't exclude a display — the main display and the last usable display are always kept.",
+        ["ResetLayoutLabel"] = "Reset layout",
         ["ExportLabel"] = "Export…",
         ["ImportLabel"] = "Import…",
         ["ExportTitle"] = "Export MouseFence settings",
@@ -220,6 +228,10 @@ public static class Strings
         ["NoTopsHint"] = "Üst ekran algılanmadı — yapılandırılacak bir şey yok.",
         ["DeliberateCrossLabel"] = "Yukarı geçmek için bilinçli itiş gerekir (kapalı = her yukarı hareket geçer)",
         ["DescentRoutingLabel"] = "İnişte imleci aynı sütunda tut",
+        ["ExcludeHead"] = "Ekranları hariç tut (imleci dışarıda tut — dummy/başsız için)",
+        ["ExcludeHint"] = "İmleci hariç tutulan ekranın dışında tutar; imleç orada kaybolmaz. Ana ekran hariç tutulamaz. (Ekran kimlikleri makineye özeldir.)",
+        ["ExcludePruned"] = "Bir ekran hariç tutulamadı — ana ekran ve son kullanılabilir ekran her zaman korunur.",
+        ["ResetLayoutLabel"] = "Düzeni sıfırla",
         ["ExportLabel"] = "Dışa aktar…",
         ["ImportLabel"] = "İçe aktar…",
         ["ExportTitle"] = "MouseFence ayarlarını dışa aktar",

@@ -28,6 +28,8 @@ public sealed class SettingsForm : Form
     private readonly TextBox _pauseHotkeyBox;
     private readonly CheckBox _deliberateCheck;
     private readonly CheckBox _descentCheck;
+    private readonly CheckedListBox _excludeList;
+    private readonly HashSet<string> _excluded = new();
     private readonly Dictionary<string, HashSet<string>> _rules = new();
     private bool _mc, _ma, _ms, _mw;
     private Keys _key;
@@ -50,15 +52,20 @@ public sealed class SettingsForm : Form
         _pc = s.PauseModCtrl; _pa = s.PauseModAlt; _ps = s.PauseModShift; _pw = s.PauseModWin; _pkey = s.PauseHotKey;
 
         _tops = (s.Mode == "Manual" && s.ManualMonitors.Count > 0
-            ? monitors.Where(m => s.ManualMonitors.Contains(m.Device))
+            ? monitors.Where(m => s.ManualMonitors.Contains(m.StableId))
             : monitors.Where(MonitorInfo.IsAbovePrimary)).ToList();
-        var topSet = new HashSet<string>(_tops.Select(t => t.Device));
-        _bottoms = monitors.Where(m => !topSet.Contains(m.Device)).ToList();
+        var topSet = new HashSet<string>(_tops.Select(t => t.StableId));
+        _bottoms = monitors.Where(m => !topSet.Contains(m.StableId)).ToList();
         foreach (var lk in s.UpLinks)
         {
             if (!_rules.TryGetValue(lk.FromDevice, out var set)) { set = new HashSet<string>(); _rules[lk.FromDevice] = set; }
             set.Add(lk.ToDevice);
         }
+        // The exclude list keys on the STABLE per-monitor id (FIX 4), so an exclusion survives \\.\DISPLAYn
+        // renumbering. Never seed the primary as excluded (it can't be walled).
+        var primaryStable = (monitors.FirstOrDefault(m => m.Primary) ?? monitors.FirstOrDefault())?.StableId;
+        foreach (var id in s.ExcludedDevices)
+            if (id != primaryStable) _excluded.Add(id);
 
         Text = Strings.SettingsTitle;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -67,15 +74,16 @@ public sealed class SettingsForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9f);
-        ClientSize = new Size(470, 540);
+        ClientSize = new Size(470, 706);
 
         var headFont = new Font("Segoe UI Semibold", 9f);
 
-        _tabs = new TabControl { Left = 12, Top = 12, Width = 446, Height = 476, DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(147, 28) };
+        _tabs = new TabControl { Left = 12, Top = 12, Width = 446, Height = 640, DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(147, 28) };
         _tabs.DrawItem += DrawTab;
         var tabGeneral = new TabPage(Strings.TabGeneral) { Padding = new Padding(10) };
         var tabAppearance = new TabPage(Strings.TabAppearance) { Padding = new Padding(10) };
         var tabMonitors = new TabPage(Strings.TabMonitors) { Padding = new Padding(10) };
+        tabMonitors.AutoScroll = true;
         _tabs.TabPages.AddRange(new[] { tabGeneral, tabAppearance, tabMonitors });
 
         // ---- General ----
@@ -154,7 +162,7 @@ public sealed class SettingsForm : Form
         foreach (var m in monitors)
         {
             int idx = _monitorList.Items.Add(MonitorLabel(m));
-            bool chk = s.Mode == "Manual" ? s.ManualMonitors.Contains(m.Device) : MonitorInfo.IsAbovePrimary(m);
+            bool chk = s.Mode == "Manual" ? s.ManualMonitors.Contains(m.StableId) : MonitorInfo.IsAbovePrimary(m);
             _monitorList.SetItemChecked(idx, chk);
         }
         _monitorList.Enabled = _modeManual.Checked;
@@ -169,7 +177,7 @@ public sealed class SettingsForm : Form
         string ruleHint = _tops.Count == 0 ? Strings.NoTopsHint : Strings.RuleHint;
         var atRects = _monitors.Select(m => (m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom)).ToList();
         var atTopIdx = new HashSet<int>();
-        for (int i = 0; i < _monitors.Count; i++) if (topSet.Contains(_monitors[i].Device)) atTopIdx.Add(i);
+        for (int i = 0; i < _monitors.Count; i++) if (topSet.Contains(_monitors[i].StableId)) atTopIdx.Add(i);
         var (atWarn, _) = GuardCore.AntiTrap(atRects, atTopIdx);
         if (atWarn.Count > 0)
             ruleHint = Strings.IsolatedNote(string.Join(", ", atWarn.Select(i => _monitors[i].Index)));
@@ -197,17 +205,43 @@ public sealed class SettingsForm : Form
         _descentCheck = new CheckBox { Text = Strings.DescentRoutingLabel, Left = 12, Top = 414, Width = 416, Height = 34, Checked = s.DescentRouting };
         tabMonitors.Controls.Add(_descentCheck);
 
+        var resetLayout = new Button { Text = Strings.ResetLayoutLabel, Left = 300, Top = 8, Width = 128, Height = 26, FlatStyle = FlatStyle.Flat };
+        resetLayout.Click += ResetLayout_Click;
+        tabMonitors.Controls.Add(resetLayout);
+
+        // ---- Exclude displays (wall the cursor out — for a dummy / headless screen it would get lost in) ----
+        tabMonitors.Controls.Add(new Label { Text = Strings.ExcludeHead, AutoSize = true, Left = 12, Top = 452, Font = headFont, Tag = "head" });
+        tabMonitors.Controls.Add(new Label { Text = Strings.ExcludeHint, Left = 12, Top = 478, Width = 416, Height = 30, Tag = "subtle" });
+        _excludeList = new CheckedListBox { Left = 12, Top = 510, Width = 416, Height = 70, CheckOnClick = true, IntegralHeight = false, BorderStyle = BorderStyle.FixedSingle, DrawMode = DrawMode.OwnerDrawFixed };
+        var primaryStableEx = (_monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault())?.StableId;
+        foreach (var m in _monitors)
+        {
+            int idx = _excludeList.Items.Add(MonitorLabel(m));
+            _excludeList.SetItemChecked(idx, _excluded.Contains(m.StableId));
+        }
+        // The primary display can never be excluded (it would lock the user out). FIX 2: render its row DISABLED/greyed
+        // (owner-drawn, no checkable glyph) so the user can SEE it isn't selectable; keep the ItemCheck refusal below
+        // as a backstop (a click that still reaches it is reverted to Unchecked). Keys are STABLE ids (FIX 4).
+        _excludeList.DrawItem += (a, e) => DrawExcludeItem(e, primaryStableEx);
+        _excludeList.ItemCheck += (a, e) =>
+        {
+            var id = _monitors[e.Index].StableId;
+            if (id == primaryStableEx) { e.NewValue = CheckState.Unchecked; return; }   // backstop
+            if (e.NewValue == CheckState.Checked) _excluded.Add(id); else _excluded.Remove(id);
+        };
+        tabMonitors.Controls.Add(_excludeList);
+
         if (_bottoms.Count > 0 && _tops.Count > 0) { _fromCombo.SelectedIndex = 0; }
 
         // ---- buttons ----
-        var cancel = new Button { Text = Strings.Cancel, Left = ClientSize.Width - 12 - 96, Top = 500, Width = 96, Height = 30, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.Cancel };
-        var ok = new Button { Text = Strings.Save, Left = cancel.Left - 104, Top = 500, Width = 96, Height = 30, FlatStyle = FlatStyle.Flat, Tag = "primary", DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = Strings.Cancel, Left = ClientSize.Width - 12 - 96, Top = 664, Width = 96, Height = 30, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.Cancel };
+        var ok = new Button { Text = Strings.Save, Left = cancel.Left - 104, Top = 664, Width = 96, Height = 30, FlatStyle = FlatStyle.Flat, Tag = "primary", DialogResult = DialogResult.OK };
         ok.Click += Ok_Click;
 
         // back up / restore the whole configuration as a single settings.json-format file (e.g. before a format/reinstall)
-        var export = new Button { Text = Strings.ExportLabel, Left = 12, Top = 500, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat };
+        var export = new Button { Text = Strings.ExportLabel, Left = 12, Top = 664, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat };
         export.Click += Export_Click;
-        var import = new Button { Text = Strings.ImportLabel, Left = export.Left + 116, Top = 500, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat };
+        var import = new Button { Text = Strings.ImportLabel, Left = export.Left + 116, Top = 664, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat };
         import.Click += Import_Click;
 
         Controls.Add(_tabs);
@@ -227,32 +261,44 @@ public sealed class SettingsForm : Form
 
     private string MonitorLabel(MonitorInfo m)
     {
-        string dev = m.Device.Replace(@"\\.\", "");
-        return $"#{m.Index}  {dev}  {m.Bounds.Width}x{m.Bounds.Height}{(m.Primary ? "  " + Strings.MainTag : "")}";
+        return GuardCore.MonitorLabel(m.Index, m.Bounds.Width, m.Bounds.Height, m.Bounds.Left, m.Bounds.Top, m.Primary, Strings.MainTag);
     }
 
-    private string SelectedFromDevice() =>
-        _fromCombo.SelectedIndex >= 0 && _fromCombo.SelectedIndex < _bottoms.Count ? _bottoms[_fromCombo.SelectedIndex].Device : null;
+    private string SelectedFromKey() =>
+        _fromCombo.SelectedIndex >= 0 && _fromCombo.SelectedIndex < _bottoms.Count ? _bottoms[_fromCombo.SelectedIndex].StableId : null;
 
     private void LoadTopsForSelectedFrom()
     {
-        string from = SelectedFromDevice();
+        string from = SelectedFromKey();
         _rules.TryGetValue(from ?? "", out var allowed);
         for (int i = 0; i < _topsCheck.Items.Count; i++)
         {
-            bool on = allowed != null && allowed.Contains(_tops[i].Device);
+            bool on = allowed != null && allowed.Contains(_tops[i].StableId);
             _topsCheck.SetItemChecked(i, on);
         }
     }
 
     private void TopsCheck_ItemCheck(object sender, ItemCheckEventArgs e)
     {
-        string from = SelectedFromDevice();
+        string from = SelectedFromKey();
         if (from == null) return;
         if (!_rules.TryGetValue(from, out var set)) { set = new HashSet<string>(); _rules[from] = set; }
-        string to = _tops[e.Index].Device;
+        string to = _tops[e.Index].StableId;
         if (e.NewValue == CheckState.Checked) set.Add(to); else set.Remove(to);
         if (_map.IsHandleCreated) _map.Invalidate();
+    }
+
+    private void ResetLayout_Click(object sender, EventArgs e)
+    {
+        _modeAuto.Checked = true;
+        _modeManual.Checked = false;
+        _monitorList.Enabled = false;
+        for (int i = 0; i < _monitorList.Items.Count; i++)
+            _monitorList.SetItemChecked(i, MonitorInfo.IsAbovePrimary(_monitors[i]));
+        _rules.Clear();
+        for (int i = 0; i < _topsCheck.Items.Count; i++)
+            _topsCheck.SetItemChecked(i, false);
+        _map.Invalidate();
     }
 
     private void DrawMap(object sender, PaintEventArgs e)
@@ -272,9 +318,9 @@ public sealed class SettingsForm : Form
         float ox = area.X + (area.Width - vw * scale) / 2f;
         float oy = area.Y + (area.Height - vh * scale) / 2f;
 
-        string from = SelectedFromDevice();
+        string from = SelectedFromKey();
         _rules.TryGetValue(from ?? "", out var allowed);
-        var topSet = new HashSet<string>(_tops.Select(m => m.Device));
+        var topSet = new HashSet<string>(_tops.Select(m => m.StableId));
 
         using var penEdge = new Pen(t.Border);
         using var fontN = new Font("Segoe UI", 7.5f);
@@ -283,16 +329,47 @@ public sealed class SettingsForm : Form
             var r = new RectangleF(ox + (m.Bounds.Left - vl) * scale, oy + (m.Bounds.Top - vt) * scale, m.Bounds.Width * scale, m.Bounds.Height * scale);
             r.Inflate(-1, -1);
             Color fill = t.Surface;
-            if (m.Device == from) fill = ControlPaint.Light(t.Accent, 0.2f);
-            else if (allowed != null && allowed.Contains(m.Device)) fill = t.Accent;
-            else if (topSet.Contains(m.Device)) fill = ControlPaint.Dark(t.Surface, 0.06f);
+            if (m.StableId == from) fill = ControlPaint.Light(t.Accent, 0.2f);
+            else if (allowed != null && allowed.Contains(m.StableId)) fill = t.Accent;
+            else if (topSet.Contains(m.StableId)) fill = ControlPaint.Dark(t.Surface, 0.06f);
             using var b = new SolidBrush(fill);
             g.FillRectangle(b, r);
             g.DrawRectangle(penEdge, r.X, r.Y, r.Width, r.Height);
-            bool brightFill = (allowed != null && allowed.Contains(m.Device));
+            bool brightFill = (allowed != null && allowed.Contains(m.StableId));
             using var tb = new SolidBrush(brightFill ? Color.White : t.Text);
             g.DrawString(m.Index.ToString(), fontN, tb, r.X + 2, r.Y + 1);
         }
+    }
+
+    // Owner-draw the exclude list (FIX 2): the primary row is greyed and its checkbox drawn DISABLED so the user can
+    // see it is not selectable; every other row draws a normal enabled checkbox reflecting its checked state.
+    private void DrawExcludeItem(DrawItemEventArgs e, string primaryStable)
+    {
+        if (e.Index < 0) return;
+        var t = SelectedTheme();
+        var m = _monitors[e.Index];
+        bool isPrimary = m.StableId == primaryStable;
+        bool selected = (e.State & DrawItemState.Selected) != 0 && !isPrimary;
+        bool isChecked = _excludeList.GetItemChecked(e.Index);
+
+        using (var bg = new SolidBrush(selected ? t.Accent : t.Surface))
+            e.Graphics.FillRectangle(bg, e.Bounds);
+
+        // Checkbox glyph, vertically centred at the left of the row.
+        int box = 14;
+        int by = e.Bounds.Top + (e.Bounds.Height - box) / 2;
+        var boxRect = new Rectangle(e.Bounds.Left + 3, by, box, box);
+        var state = isPrimary
+            ? System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedDisabled
+            : (isChecked ? System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal
+                         : System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal);
+        CheckBoxRenderer.DrawCheckBox(e.Graphics, boxRect.Location, state);
+
+        // Label: greyed (subtle) for the disabled primary row, normal/selected colour otherwise.
+        Color fg = isPrimary ? t.Subtle : (selected ? Color.White : t.Text);
+        var textRect = new Rectangle(boxRect.Right + 4, e.Bounds.Top, e.Bounds.Width - boxRect.Right - 4, e.Bounds.Height);
+        TextRenderer.DrawText(e.Graphics, _excludeList.Items[e.Index].ToString(), _excludeList.Font, textRect, fg,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
     }
 
     private Theme SelectedTheme() => Theming.Resolve(_themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" });
@@ -427,11 +504,14 @@ public sealed class SettingsForm : Form
         if (res.Mode == "Manual")
             for (int i = 0; i < _monitorList.Items.Count; i++)
                 if (_monitorList.GetItemChecked(i))
-                    res.ManualMonitors.Add(_monitors[i].Device);
+                    res.ManualMonitors.Add(_monitors[i].StableId);
 
         foreach (var kv in _rules)
             foreach (var to in kv.Value)
                 res.UpLinks.Add(new UpLink { FromDevice = kv.Key, ToDevice = to });
+
+        // Carry the walled-off displays so a Save/Export doesn't silently drop them (binding fix #5).
+        res.ExcludedDevices.AddRange(_excluded);
 
         return res;
     }
@@ -472,12 +552,15 @@ public sealed class SettingsForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         Settings imported;
+        string json;
         try
         {
-            imported = JsonSerializer.Deserialize<Settings>(File.ReadAllText(dlg.FileName));
+            json = File.ReadAllText(dlg.FileName);
+            imported = JsonSerializer.Deserialize<Settings>(json);
         }
         catch
         {
+            json = "";
             imported = null;
         }
         if (imported == null)
@@ -488,6 +571,11 @@ public sealed class SettingsForm : Form
         if (MessageBox.Show(this, Strings.ImportConfirm, "MouseFence", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
+        if (Settings.ReadVersion(json) < Settings.CurrentSettingsVersion)
+        {
+            imported.MigrateLayoutKeysToStable(_monitors);
+            imported.SettingsVersion = Settings.CurrentSettingsVersion;
+        }
         Result = imported;
         DialogResult = DialogResult.OK;   // closes the dialog; the tray saves + reconfigures via the existing path
     }
