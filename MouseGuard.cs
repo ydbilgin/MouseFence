@@ -41,11 +41,13 @@ public sealed class MouseGuard : IDisposable
 
     public MouseGuard() => _proc = HookCallback;
 
-    /// <summary>Configure the barrier from the top monitors, the allowed crossing gates, and all monitor rects (for game mode).</summary>
+    /// <summary>Configure the barrier from the top monitors, the allowed crossing gates, and all monitor rects (for game mode).
+    /// <paramref name="forbidden"/> are excluded-display bounds the cursor is walled out of (headless/dummy screens).</summary>
     public void Configure(IEnumerable<Native.RECT> blocked, IEnumerable<(int Min, int Max)> gates,
                           IEnumerable<Native.RECT> allMonitors,
                           IEnumerable<(int Min, int Max, int OwnerT, int OwnerB)> safetyGates,
-                          IEnumerable<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)> descentRoutes)
+                          IEnumerable<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)> descentRoutes,
+                          IEnumerable<Native.RECT> forbidden)
     {
         var rects = blocked.ToList();
         _core.HasTop = rects.Count > 0;
@@ -54,6 +56,8 @@ public sealed class MouseGuard : IDisposable
         _core.Monitors = allMonitors.Select(r => (r.Left, r.Top, r.Right, r.Bottom)).ToList();
         _core.SafetyGates = safetyGates.Where(g => g.Max > g.Min).ToList();
         _core.DescentRoutes = descentRoutes.ToList();
+        _core.Forbidden = forbidden.Select(r => (r.Left, r.Top, r.Right, r.Bottom))
+                                   .Where(r => r.Right > r.Left && r.Bottom > r.Top).ToList();
         // Re-baseline: a live reconfigure (display layout change) can move the cursor's coordinate from the old top
         // into a newly positioned bottom/side screen while OnTop was true. Dropping the stale state forces the next
         // move through the !HaveLast branch, which re-derives OnTop from the fresh cursor position vs the new barrier.
@@ -76,7 +80,7 @@ public sealed class MouseGuard : IDisposable
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode < 0 || (int)wParam != Native.WM_MOUSEMOVE || (!_core.HasTop && !_core.Confine))
+        if (nCode < 0 || (int)wParam != Native.WM_MOUSEMOVE || !_core.NeedsProcessing)
             return Native.CallNextHookEx(_hook, nCode, wParam, lParam);
 
         var data = Marshal.PtrToStructure<Native.MSLLHOOKSTRUCT>(lParam);

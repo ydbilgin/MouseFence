@@ -5,6 +5,10 @@ namespace MouseFence;
 
 public sealed class Settings
 {
+    public const int CurrentSettingsVersion = 2;
+
+    public int SettingsVersion { get; set; } = CurrentSettingsVersion;
+
     // hotkey
     public Keys HotKey { get; set; } = Keys.Up;
     public bool ModCtrl { get; set; } = true;
@@ -32,15 +36,24 @@ public sealed class Settings
     public bool DeliberateCross { get; set; } = true;  // true: deliberate push to cross; false: any upward move
     public bool DescentRouting { get; set; } = false;  // opt-in: clamp a descent back onto the linked bottom screen
 
-    // which monitors to block
+    // which monitors to block. Layout-dependent monitor keys are stable MonitorInfo.StableId values.
     public string Mode { get; set; } = "AutoTop";   // "AutoTop" | "Manual"
     public List<string> ManualMonitors { get; set; } = new();
+
+    // Displays to WALL OFF: the cursor can never enter these (headless/dummy screens it would get lost in).
+    // Keyed on the STABLE per-monitor id (MonitorInfo.StableId — the EDID-derived instance path) so the exclusion
+    // SURVIVES \\.\DISPLAYn renumbering when the layout changes (FIX 4). Still machine-specific, so an imported list
+    // from another PC simply lies dormant — a missing id is skipped in Configure(). Empty default => feature inert,
+    // backward-compatible (an existing settings.json lacking the key deserializes to empty; no migration needed —
+    // no ExcludedDevices has shipped yet).
+    public List<string> ExcludedDevices { get; set; } = new();
 
     // appearance / localization
     public string Language { get; set; } = "auto";   // "auto" | "en" | "tr"
     public string Theme { get; set; } = "System";    // "System" | "Light" | "Dark"
 
     // per-screen crossing rules: which bottom monitor may cross UP into which top monitor.
+    // FromDevice/ToDevice store stable MonitorInfo.StableId values; the property names stay for JSON compatibility.
     // Empty = default behaviour (the primary may cross up into every top monitor).
     public List<UpLink> UpLinks { get; set; } = new();
 
@@ -56,10 +69,63 @@ public sealed class Settings
         try
         {
             if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings();
+            {
+                var json = File.ReadAllText(FilePath);
+                var settings = JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
+                if (ReadVersion(json) < CurrentSettingsVersion)
+                {
+                    try
+                    {
+                        settings.MigrateLayoutKeysToStable(MonitorInfo.All());
+                        settings.SettingsVersion = CurrentSettingsVersion;
+                        settings.Save();
+                    }
+                    catch
+                    {
+                        // Keep the loaded settings rather than falling back to defaults; migration can retry next load.
+                    }
+                }
+                return settings;
+            }
         }
         catch { /* fall through to defaults */ }
         return new Settings();
+    }
+
+    public static int ReadVersion(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty(nameof(SettingsVersion), out var v) && v.TryGetInt32(out int n) ? n : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    public void MigrateLayoutKeysToStable(List<MonitorInfo> monitors)
+    {
+        var map = monitors
+            .GroupBy(m => m.Device)
+            .ToDictionary(g => g.Key, g => g.First().StableId, StringComparer.OrdinalIgnoreCase);
+        var migrated = GuardCore.MigrateLayoutKeysToStable(
+            ManualMonitors,
+            UpLinks.Select(lk => (lk.FromDevice, lk.ToDevice)),
+            map);
+        ManualMonitors = migrated.ManualKeys;
+        UpLinks = migrated.Links
+            .Select(lk => new UpLink { FromDevice = lk.From, ToDevice = lk.To })
+            .ToList();
+    }
+
+    public void ResetLayoutConfig()
+    {
+        var reset = GuardCore.ResetLayoutConfig();
+        Mode = reset.Mode;
+        ManualMonitors = reset.ManualKeys;
+        UpLinks = reset.Links.Select(lk => new UpLink { FromDevice = lk.From, ToDevice = lk.To }).ToList();
     }
 
     public void Save()

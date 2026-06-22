@@ -33,6 +33,16 @@ public sealed class GuardCore
     public bool Confine;
     public List<(int L, int T, int R, int B)> Monitors = new();
 
+    // Forbidden rectangles the cursor may never ENTER (e.g. a headless/dummy HDMI display the user can't see).
+    // Half-open like every other rect here: [L,R) x [T,B). Empty list => feature inert (a true no-op). The data
+    // model is intentionally a plain rect list so an Ignore-mode / per-layout profiles can reuse it later without
+    // rework (a future Ignore mode is a strict subset: it would drop these from topology but NOT clamp).
+    public List<(int L, int T, int R, int B)> Forbidden = new();
+
+    /// <summary>The hook only needs to run (and the clamp/barrier logic only matters) when at least one of these
+    /// holds. Factored so it is testable and so a dummy with NO top monitors still installs the hook to wall it off.</summary>
+    public bool NeedsProcessing => HasTop || Confine || Forbidden.Count > 0;
+
     // descent routing (opt-in, default OFF): when descending out of a top monitor through its overhang onto the
     // WRONG side screen, clamp the exit X into the LINKED bottom monitor's full X-range so the cursor lands on the
     // intended screen. Each route pairs the top it leaves (Top) with the bottom it should fall into (Landing).
@@ -157,6 +167,114 @@ public sealed class GuardCore
         return routes;
     }
 
+    /// <summary>
+    /// Pure, Win32-free exclude sanitizer (binding fix #2 / FIX 3): given the live monitor keys, the primary key,
+    /// and the requested exclude set, return the keys that may SAFELY be walled off. Two hard invariants:
+    ///   - the PRIMARY display is never excluded (walling it would lock the user out), and
+    ///   - at least ONE usable monitor always remains (never wall off every screen).
+    /// <paramref name="presentKeys"/> are the stable keys of the monitors actually present in the live layout
+    /// (in display order). A requested key absent from this list is simply dormant (an imported/stale id) and is
+    /// NOT a prune. <paramref name="pruned"/> is set true iff a PRESENT, requested key was refused (the primary, or
+    /// the keep-one rule) so the caller can warn. Result preserves the input order of <paramref name="presentKeys"/>.
+    /// Both <see cref="TrayApplicationContext"/>.Configure() and the unit tests call THIS one method.
+    /// </summary>
+    public static List<string> SanitizeExcluded(IReadOnlyList<string> presentKeys, string primaryKey,
+                                                ISet<string> requested, out bool pruned)
+    {
+        // Present, requested keys (absent ids are dormant, not a prune) — keep present order for a stable result.
+        var asked = presentKeys.Where(requested.Contains).ToList();
+        var excluded = asked.Where(k => k != primaryKey).ToList();
+        // Never leave zero usable monitors: if the request would wall off every present screen, keep the last usable.
+        if (excluded.Count >= presentKeys.Count && excluded.Count > 0)
+            excluded.RemoveAt(excluded.Count - 1);
+        // pruned only when a PRESENT, requested key was refused (primary, or the keep-one rule).
+        pruned = excluded.Count != asked.Count;
+        return excluded;
+    }
+
+    /// <summary>
+    /// Pure, Win32-free per-physical-monitor key disambiguation (ROUND-3 FIX B): given each monitor's raw stable key
+    /// plus a STABLE ordering attribute (its left, then top px), return a key per monitor that is UNIQUE across the
+    /// live layout. A raw key shared by 2+ monitors (two identical EDID panels the driver reports identically) gets a
+    /// deterministic ordinal suffix (<c>#0</c>, <c>#1</c>, ... in ascending Left, then Top) so excluding ONE physical
+    /// monitor never collapses to "every monitor with that key". A monitor whose raw key is already unique is returned
+    /// UNCHANGED (no suffix) so existing single-panel ids are stable. Result is in the SAME order as the input.
+    /// <see cref="MonitorInfo"/>.All() and the unit tests call THIS one method.
+    /// </summary>
+    public static List<string> DisambiguateKeys(IReadOnlyList<(string Key, int Left, int Top)> monitors)
+    {
+        var result = new string[monitors.Count];
+        foreach (var grp in monitors.Select((m, i) => (m, i)).GroupBy(t => t.m.Key))
+        {
+            var members = grp.ToList();
+            if (members.Count < 2)
+            {
+                result[members[0].i] = members[0].m.Key;   // unique key -> leave exactly as-is
+                continue;
+            }
+            int ord = 0;
+            foreach (var (m, i) in members.OrderBy(t => t.m.Left).ThenBy(t => t.m.Top))
+                result[i] = $"{m.Key}#{ord++}";
+        }
+        return result.ToList();
+    }
+
+    private static bool LooksLikeGdiDisplayName(string key) =>
+        key != null && key.StartsWith(@"\\.\DISPLAY", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// One-time settings migration for layout-dependent monitor keys. Old settings stored renumber-prone
+    /// <c>\\.\DISPLAYn</c> names in ManualMonitors and UpLinks; new settings store the same stable per-monitor
+    /// key used by ExcludedDevices. Present GDI names are converted through <paramref name="deviceToStable"/>;
+    /// stale GDI references are dropped instead of being allowed to retarget another live monitor.
+    /// Already-stable keys are preserved so imported machine-specific ids remain dormant if absent.
+    /// </summary>
+    public static (List<string> ManualKeys, List<(string From, string To)> Links) MigrateLayoutKeysToStable(
+        IEnumerable<string> manualKeys,
+        IEnumerable<(string From, string To)> links,
+        IReadOnlyDictionary<string, string> deviceToStable)
+    {
+        string ConvertOrNull(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return null;
+            if (deviceToStable.TryGetValue(key, out var stable)) return stable;
+            return LooksLikeGdiDisplayName(key) ? null : key;
+        }
+
+        var manual = new List<string>();
+        foreach (var key in manualKeys ?? Enumerable.Empty<string>())
+        {
+            var stable = ConvertOrNull(key);
+            if (stable != null && !manual.Contains(stable))
+                manual.Add(stable);
+        }
+
+        var migratedLinks = new List<(string From, string To)>();
+        var seenLinks = new HashSet<string>();
+        foreach (var (from, to) in links ?? Enumerable.Empty<(string From, string To)>())
+        {
+            var stableFrom = ConvertOrNull(from);
+            var stableTo = ConvertOrNull(to);
+            if (stableFrom == null || stableTo == null) continue;
+            var sig = stableFrom + "\n" + stableTo;
+            if (seenLinks.Add(sig))
+                migratedLinks.Add((stableFrom, stableTo));
+        }
+
+        return (manual, migratedLinks);
+    }
+
+    /// <summary>Reset layout-dependent configuration to the live-layout default: AutoTop with no manual picks/rules.</summary>
+    public static (string Mode, List<string> ManualKeys, List<(string From, string To)> Links) ResetLayoutConfig() =>
+        ("AutoTop", new List<string>(), new List<(string From, string To)>());
+
+    /// <summary>Deterministic UI label that avoids mixing a positional # with renumber-prone DISPLAY names.</summary>
+    public static string MonitorLabel(int ordinal, int width, int height, int left, int top, bool primary, string mainTag)
+    {
+        var suffix = primary && !string.IsNullOrEmpty(mainTag) ? "  " + mainTag : "";
+        return $"{ordinal}  {width}x{height}  @ {left},{top}{suffix}";
+    }
+
     private static bool InRect((int L, int T, int R, int B) r, int x, int y) =>
         x >= r.L && x < r.R && y >= r.T && y < r.B;
 
@@ -169,12 +287,171 @@ public sealed class GuardCore
     }
 
     /// <summary>
+    /// Pure wall-off clamp: if (x,y) lands inside ANY forbidden rect, push it back OUT to a legal pixel,
+    /// preserving the orthogonal axis (no jitter), and never landing inside another forbidden rect. Returns
+    /// true if it moved the point. GUARANTEES the returned (x,y) is outside EVERY forbidden rect (and terminates).
+    ///
+    /// ENTRY-SIDE-AWARE (binding fix #1): the move came from (LastX,LastY). When we have a last position that is
+    /// OUTSIDE the rect, exit on the edge the move ENTERED from — the rect wall the entry SEGMENT (Last -> target)
+    /// crosses FIRST (smallest valid parametric t), NOT the nearest edge of the target and NOT the larger-delta axis.
+    /// A large delta (e.g. a fast flick or OS easing teleport deep into / past the centre of the dummy) must not
+    /// "tunnel" to the far/void side and re-lose the cursor. Nearest-edge is only the fallback for !HaveLast or when
+    /// Last is itself inside the connected region (no usable entry direction).
+    ///
+    /// ADJACENT/OVERLAPPING rects (binding fix #3 / ROUND-3 FIX A): a single per-rect exit can oscillate — exiting
+    /// rect A on its nearest edge lands inside the adjacent rect B, exiting B lands back inside A, and a bounded
+    /// loop ends STILL INSIDE. So we treat the touching forbidden rects as ONE connected region (connected component
+    /// of the rect-overlap/adjacency graph) and, once an exit AXIS + SIDE is chosen, march that SAME direction to the
+    /// far edge of the WHOLE component (never reversing), landing one pixel outside the entire region. This is the
+    /// fixed point — re-scanning then finds the point outside every rect.
+    /// </summary>
+    private bool ClampOutOfForbidden(ref int x, ref int y)
+    {
+        bool moved = false;
+        // Bounded: each iteration exits one whole connected component along a fixed direction; the next iteration can
+        // only be triggered by a DIFFERENT (non-touching) component, of which there are at most Forbidden.Count. The
+        // +1 guards a final no-op verification pass. This hard-caps work so the hot path can never spin.
+        for (int pass = 0; pass <= Forbidden.Count; pass++)
+        {
+            // Find a forbidden rect the point is currently inside.
+            int hit = -1;
+            for (int i = 0; i < Forbidden.Count; i++)
+            {
+                var f = Forbidden[i];
+                if (x >= f.L && x < f.R && y >= f.T && y < f.B) { hit = i; break; }
+            }
+            if (hit < 0) break;   // outside every forbidden rect -> done
+
+            // The connected region (component) of all forbidden rects transitively touching/overlapping the hit rect.
+            var region = ConnectedRegion(hit);
+
+            // Decide which wall to exit through (axis + side), relative to the HIT rect.
+            // Default = nearest-edge of the HIT rect (smallest penetration), used for !HaveLast / Last-inside-region.
+            // Tie-order is deterministic: Left > Right > Top > Bottom (documented, intentional, not incidental).
+            var h = Forbidden[hit];
+            int dl = x - h.L, dr = h.R - x, dt = y - h.T, db = h.B - y;
+            int min = Math.Min(Math.Min(dl, dr), Math.Min(dt, db));
+            int exitAxis;   // 0 = clamp X (vertical wall), 1 = clamp Y (horizontal wall)
+            bool exitToLow; // true => exit on the LOW side (L/T), false => HIGH side (R/B)
+            if (min == dl) { exitAxis = 0; exitToLow = true; }
+            else if (min == dr) { exitAxis = 0; exitToLow = false; }
+            else if (min == dt) { exitAxis = 1; exitToLow = true; }
+            else { exitAxis = 1; exitToLow = false; }
+
+            // Entry-side override: if the move ORIGINATED OUTSIDE the whole connected region, exit back the way it
+            // came in so a big delta can't tunnel through to the far side. The exit edge is the region wall the move
+            // SEGMENT (Last -> target) crosses FIRST, NOT the axis with the larger delta. The region's combined
+            // extent along each axis is [regL,regR) x [regT,regB); treat that as the entry box. Single-axis-outside
+            // reduces to exiting that one axis. When Last is INSIDE the region there is no usable entry direction, so
+            // the nearest-edge fallback (above) stands.
+            ComponentExtent(region, out int regL, out int regT, out int regR, out int regB);
+            bool lastOutsideRegion = HaveLast && (LastX < regL || LastX >= regR || LastY < regT || LastY >= regB);
+            if (lastOutsideRegion)
+            {
+                bool lastLeft = LastX < regL, lastRight = LastX >= regR;
+                bool lastAbove = LastY < regT, lastBelow = LastY >= regB;
+                bool xOutside = lastLeft || lastRight;
+                bool yOutside = lastAbove || lastBelow;
+
+                bool useX;
+                if (xOutside && yOutside)
+                {
+                    // First-crossed wall via segment entry against the REGION box: the X wall on Last's side is the
+                    // plane wallX = lastLeft ? regL : regR; reached at tX = (wallX - LastX) / (x - LastX). Likewise Y.
+                    // A NaN/negative/out-of-range t means that wall isn't reached on this segment; guard it as
+                    // "not crossed" so the other axis wins.
+                    int wallX = lastLeft ? regL : regR;
+                    int wallY = lastAbove ? regT : regB;
+                    int denomX = x - LastX, denomY = y - LastY;
+                    double tX = denomX != 0 ? (double)(wallX - LastX) / denomX : double.PositiveInfinity;
+                    double tY = denomY != 0 ? (double)(wallY - LastY) / denomY : double.PositiveInfinity;
+                    bool validX = denomX != 0 && tX >= 0 && tX <= 1;
+                    bool validY = denomY != 0 && tY >= 0 && tY <= 1;
+
+                    if (validX && validY) useX = tX <= tY;          // smallest valid t = first crossed
+                    else if (validX) useX = true;                   // only the X wall is reached
+                    else if (validY) useX = false;                  // only the Y wall is reached
+                    else useX = Math.Abs(x - LastX) >= Math.Abs(y - LastY);   // degenerate fallback: dominant axis
+                }
+                else
+                    useX = xOutside;                                 // crossed exactly one axis
+
+                if (useX) { exitAxis = 0; exitToLow = lastLeft; }
+                else { exitAxis = 1; exitToLow = lastAbove; }
+            }
+
+            // March the chosen direction to the FAR edge of the WHOLE connected region (not just the hit rect), so an
+            // adjacent rect on the way out can never re-capture the point. This is the key ROUND-3 FIX A change: the
+            // exit target is the component's combined extent, so the result is outside every touching rect at once.
+            if (exitAxis == 0) x = exitToLow ? regL - 1 : regR;   // exit the region's vertical wall, keep Y
+            else y = exitToLow ? regT - 1 : regB;                 // exit the region's horizontal wall, keep X
+
+            moved = true;
+            // Re-scan: the new point is outside this whole component; only a SEPARATE (non-touching) component could
+            // still contain it, which the next pass handles.
+        }
+        return moved;
+    }
+
+    /// <summary>Two half-open rects touch if they overlap OR abut (share an edge) along one axis while overlapping or
+    /// abutting along the other — i.e. their CLOSED extents intersect. Adjacent dummies (sharing a seam) count as one
+    /// connected region so the clamp marches past BOTH.</summary>
+    private static bool RectsTouch((int L, int T, int R, int B) a, (int L, int T, int R, int B) b) =>
+        a.L <= b.R && b.L <= a.R && a.T <= b.B && b.T <= a.B;
+
+    /// <summary>Indices of every forbidden rect transitively touching <paramref name="seed"/> (the connected component
+    /// of the rect adjacency/overlap graph). Pure, allocation-light flood fill over <see cref="Forbidden"/>.</summary>
+    private List<int> ConnectedRegion(int seed)
+    {
+        var region = new List<int> { seed };
+        var seen = new bool[Forbidden.Count];
+        seen[seed] = true;
+        for (int qi = 0; qi < region.Count; qi++)
+        {
+            var cur = Forbidden[region[qi]];
+            for (int j = 0; j < Forbidden.Count; j++)
+                if (!seen[j] && RectsTouch(cur, Forbidden[j])) { seen[j] = true; region.Add(j); }
+        }
+        return region;
+    }
+
+    /// <summary>The combined bounding extent of a connected region (its union's outer box). Marching to this box's far
+    /// edge guarantees an exit outside every rect in the component.</summary>
+    private void ComponentExtent(List<int> region, out int l, out int t, out int r, out int b)
+    {
+        l = int.MaxValue; t = int.MaxValue; r = int.MinValue; b = int.MinValue;
+        foreach (var idx in region)
+        {
+            var f = Forbidden[idx];
+            if (f.L < l) l = f.L;
+            if (f.T < t) t = f.T;
+            if (f.R > r) r = f.R;
+            if (f.B > b) b = f.B;
+        }
+    }
+
+    /// <summary>
     /// Decide a NON-injected move to (x,y). Returns Pass or Block (caller clamps to bx,by). Mutates state.
     /// <paramref name="gatesEnabled"/> is the master toggle: when false, no crossing is allowed anywhere.
     /// </summary>
     public GuardAction Decide(int x, int y, bool gatesEnabled, out int bx, out int by)
     {
         bx = x; by = y;
+
+        // (0) Wall-off: the cursor may never ENTER an excluded display (a headless/dummy screen). Clamp the
+        //     attempted target back to a legal edge FIRST, so every downstream rule (barrier, gates, confine,
+        //     descent routing) only ever sees a position outside every forbidden rect. Runs even when there are no
+        //     top monitors and game mode is off, so a dummy with no barrier still gets walled (NeedsProcessing).
+        //     Only genuine incursions clamp: a target already outside every rect returns false here (no clamp,
+        //     falls through), so sliding ALONG a seam on the real side is never touched -> no jitter.
+        if (Forbidden.Count > 0 && ClampOutOfForbidden(ref bx, ref by))
+        {
+            // Record the clamped point as the new last position so the next move's intent is measured from where
+            // the cursor actually is. The hook applies SetCursorPos(bx,by); that re-enters as injected -> ignored.
+            Accept(bx, by);
+            return GuardAction.Block;
+        }
+        // from here on, (x,y) == (bx,by) is guaranteed outside every forbidden rect.
 
         if (!HasTop && !Confine) { Accept(x, y); return GuardAction.Pass; }
 

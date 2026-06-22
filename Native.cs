@@ -43,6 +43,26 @@ public static class Native
         public string szDevice;
     }
 
+    // EnumDisplayDevices output. Used READ-ONLY to read a monitor's stable instance path (DeviceID) so the exclude
+    // identity survives \\.\DISPLAYn renumbering. We never call ChangeDisplaySettingsEx / mutate the display config.
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DISPLAY_DEVICE
+    {
+        public int cb;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceString;
+        public uint StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceID;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceKey;
+    }
+
+    // dwFlags for EnumDisplayDevices: ask for the EDID-derived instance path in DeviceID (MONITOR\<EDID>\...).
+    public const uint EDD_GET_DEVICE_INTERFACE_NAME = 0x00000001;
+
     // ---- constants ----
     public const int WH_MOUSE_LL = 14;
     public const int WM_MOUSEMOVE = 0x0200;
@@ -94,6 +114,12 @@ public static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+
+    // READ-ONLY: enumerate display adapters (lpDevice == null) or the monitors on an adapter (lpDevice = adapter name).
+    // We use it only to read a monitor's stable DeviceID instance path; it never changes the display configuration.
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumDisplayDevices(string lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
 
     // ---- dark title bar ----
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
