@@ -1093,10 +1093,50 @@ var DUMMY = (2560, 0, 3360, 600);
     Check("side on: steep diagonal (dx10,dy100) is not a side push -> blocked", r.act == GuardAction.Block && r.bx == 2559, $"act={r.act} bx={r.bx}");
 }
 {
-    // ON: returning from a side screen INTO main is always free (origin-aware -> no trap on a side screen).
+    // ON (SYMMETRIC): a SLOW drift back from a side screen INTO main is now contained too — clamped JUST OUTSIDE main
+    // on the origin (left) side, Y kept, so the cursor stays on the side screen it came from instead of slipping onto main.
+    var c = NewSides(); Move(c, -1, 500, true, true);      // origin on the LEFT side screen, hugging main's left edge
+    var r = Move(c, 1, 500, true, true);                   // dx=2 -> drift across main's left edge into MAIN
+    Check("side on: slow side->main drift blocked, clamped to -1, Y kept",
+        r.act == GuardAction.Block && r.bx == -1 && r.by == 500, $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    // ON (SYMMETRIC, mirror RIGHT): a slow drift from the right side screen back into main clamps to MainR=2560.
+    var c = NewSides(); Move(c, 2561, 500, true, true);    // origin on the RIGHT side screen, hugging main's right edge
+    var r = Move(c, 2559, 500, true, true);                // dx=2 -> drift left across main's right edge into MAIN
+    Check("side on: slow side->main drift (right) blocked, clamped to 2560, Y kept",
+        r.act == GuardAction.Block && r.bx == 2560 && r.by == 500, $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    // ON: a DELIBERATE push back into main from a side screen still crosses — the barrier breaks on real intent
+    // (the user's "let it cross when I really want to" requirement), so the cursor is never trapped.
     var c = NewSides(); Move(c, -100, 500, true, true);    // origin on the LEFT side screen
-    var r = Move(c, 100, 500, true, true);                 // move right, back into MAIN
-    Check("side on: side->main is never blocked (no trap)", r.act == GuardAction.Pass, $"act={r.act}");
+    var r = Move(c, 100, 500, true, true);                 // dx=200 -> deliberate push into MAIN
+    Check("side on: deliberate side->main push crosses", r.act == GuardAction.Pass && r.bx == 100, $"act={r.act} bx={r.bx}");
+}
+{
+    // ON + DeliberateCross OFF: a side->main drift crosses freely too (no deliberate requirement, symmetric with OUT).
+    var c = NewSides(); c.DeliberateCross = false;
+    Move(c, -1, 500, true, true);
+    var r = Move(c, 1, 500, true, true);
+    Check("side on + deliberate OFF: side->main drift crosses", r.act == GuardAction.Pass, $"act={r.act}");
+}
+{
+    // SENSITIVITY: raising SideCrossMin stiffens the side barrier — a push that crosses at the default (dx=4) is now
+    // treated as drift and BLOCKED when the threshold is 8.
+    var c = NewSides(); c.SideCrossMin = 8;
+    Move(c, 2558, 500, true, true);
+    var r = Move(c, 2562, 500, true, true);                // dx=4 < 8 -> not deliberate enough -> blocked, clamped to 2559
+    Check("side sensitivity: dx=4 blocked when SideCrossMin=8",
+        r.act == GuardAction.Block && r.bx == 2559, $"act={r.act} bx={r.bx}");
+}
+{
+    // SENSITIVITY: the SAME dx=4 move CROSSES at the default threshold (3) — proving the knob actually changes the feel.
+    var c = NewSides();                                    // SideCrossMin defaults to 3
+    Move(c, 2558, 500, true, true);
+    var r = Move(c, 2562, 500, true, true);                // dx=4 >= 3 -> deliberate -> crosses
+    Check("side sensitivity: dx=4 crosses at default SideCrossMin=3",
+        r.act == GuardAction.Pass && r.bx == 2562, $"act={r.act} bx={r.bx}");
 }
 {
     // ON: moving further out while ALREADY on a side screen is free (only main->side is contained).

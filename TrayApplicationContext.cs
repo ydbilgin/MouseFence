@@ -187,6 +187,11 @@ public sealed class TrayApplicationContext : ApplicationContext
                          hasSides, main?.Bounds ?? default);
         _guard.DeliberateCross = _settings.DeliberateCross;
         _guard.DescentRouting = _settings.DescentRouting;
+        // Side-barrier sensitivity. Clamp defensively so a hand-edited / imported settings.json can't set a value that
+        // makes the barrier never engage (>= 1) or absurdly stiff: a 0/negative SideCrossMin would let any drift "count"
+        // as a deliberate push, defeating the whole feature.
+        _guard.SideCrossMin = Math.Max(1, _settings.SideCrossMin);
+        _guard.SideCrossSlack = Math.Max(0, _settings.SideCrossSlack);
 
         if (pruned)
             _tray.ShowBalloonTip(5000, "MouseFence", Strings.ExcludePruned, ToolTipIcon.Warning);

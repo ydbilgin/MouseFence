@@ -49,6 +49,14 @@ public sealed class Settings
     public bool DeliberateCross { get; set; } = true;  // true: deliberate push to cross; false: any upward move
     public bool DescentRouting { get; set; } = false;  // opt-in: clamp a descent back onto the linked bottom screen
 
+    // Side-barrier sensitivity (independent of the up barrier): the min horizontal px in one move that counts as a
+    // DELIBERATE side crossing, and the vertical slack allowed beyond it. Higher SideCrossMin = a firmer/stiffer side
+    // barrier (a faster horizontal flick is needed to cross, so accidental drift onto/off a side screen is caught more
+    // aggressively). Defaults match the up barrier's feel; an absent JSON key deserializes to these.
+    public const int DefaultSideCrossMin = 3;   // shared so the UI's "reset to default" button and the seed agree
+    public int SideCrossMin { get; set; } = DefaultSideCrossMin;
+    public int SideCrossSlack { get; set; } = 5;
+
     // which monitors to block. Layout-dependent monitor keys are stable MonitorInfo.StableId values.
     public string Mode { get; set; } = "AutoTop";   // "AutoTop" | "Manual"
     public List<string> ManualMonitors { get; set; } = new();

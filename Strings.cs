@@ -110,6 +110,9 @@ public static class Strings
     public static string SideHotkeyHead => G("SideHotkeyHead");
     public static string SideHotkeyHint => G("SideHotkeyHint");
     public static string StartSideContainOn => G("StartSideContainOn");
+    public static string SideSensitivityLabel => G("SideSensitivityLabel");
+    public static string SideSensitivityHint => G("SideSensitivityHint");
+    public static string DefaultLabel => G("DefaultLabel");
 
     // ---- interpolated (keep {0} out of the table) ----
     public static string TipHotkeyFail(string combo) => string.Format(G("TipHotkeyFail"), combo);
@@ -197,6 +200,9 @@ public static class Strings
         ["SideHotkeyHead"] = "Side containment hotkey",
         ["SideHotkeyHint"] = "Toggle side containment on/off — when on, a soft barrier blocks accidental drift off the MAIN screen left/right, but a deliberate push still crosses (the sideways mirror of the up barrier). Note: Ctrl+Alt+Arrow may rotate the screen on some Intel GPUs — pick another combo if so.",
         ["StartSideContainOn"] = "Start with side containment on (blocks accidental drift; push to cross)",
+        ["SideSensitivityLabel"] = "Side barrier strength",
+        ["SideSensitivityHint"] = "How hard you must flick sideways to break through the side barrier (pixels per move). Higher = a firmer barrier that catches more accidental drift; lower = easier to cross. Applies both ways (onto and off a side screen). Default is 3.",
+        ["DefaultLabel"] = "Default (3)",
         ["TipIsolated"] = "Screen {0} has no side/down exit — only UP. MouseFence auto-opened an up-escape there; align its edges, or press {1} to pause.",
         ["IsolatedNote"] = "⚠ Screen {0} is isolated (a gap in the layout). Up-crossing from it is auto-allowed so it can't trap the cursor.",
         ["TipHotkeyFail"] = "Couldn't register hotkey: {0} — another app may be using it.",
@@ -283,6 +289,9 @@ public static class Strings
         ["SideHotkeyHead"] = "Yan kilit kısayolu",
         ["SideHotkeyHint"] = "Yan kilidi aç/kapat — açıkken ANA ekrandan SAĞA/SOLA kazara kaymayı engelleyen yumuşak bir bariyer kurar, ama kasıtlı bir itiş yine de geçer (yukarı bariyerin yana uyarlanmış hâli). Not: Ctrl+Alt+Ok bazı Intel ekran kartlarında ekranı döndürebilir — öyleyse başka kombinasyon seçin.",
         ["StartSideContainOn"] = "Açılışta yan kilit açık başlasın (kazara kaymayı engelle; geçmek için it)",
+        ["SideSensitivityLabel"] = "Yan bariyer gücü",
+        ["SideSensitivityHint"] = "Yan bariyeri kırmak için yana ne kadar sert itmen gerektiği (hareket başına piksel). Yüksek = daha sert bariyer, daha çok kazara kaymayı yakalar; düşük = daha kolay geçilir. Her iki yönde de geçerli (yan ekrana çıkış ve yan ekrandan dönüş). Varsayılan 3.",
+        ["DefaultLabel"] = "Varsayılan (3)",
         ["TipIsolated"] = "{0} numaralı ekranın yana/aşağı çıkışı yok — yalnızca YUKARI. MouseFence oradan yukarı çıkışı otomatik açtı; kenarlarını hizala veya duraklatmak için {1} tuşuna bas.",
         ["IsolatedNote"] = "⚠ {0} numaralı ekran yalıtılmış (yerleşimde boşluk). Kapana kısmaması için oradan yukarı geçiş otomatik açıldı.",
         ["TipHotkeyFail"] = "Kısayol kaydedilemedi: {0} — başka bir uygulama kullanıyor olabilir.",

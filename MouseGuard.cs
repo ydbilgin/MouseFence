@@ -37,6 +37,22 @@ public sealed class MouseGuard : IDisposable
         set => _core.DeliberateCross = value;
     }
 
+    /// <summary>Side-barrier sensitivity: the min horizontal px in one move to count as a deliberate side crossing
+    /// (higher = a firmer side barrier). Independent of the up-barrier so it can be tuned on its own.</summary>
+    public int SideCrossMin
+    {
+        get => _core.SideCrossMin;
+        set => _core.SideCrossMin = value;
+    }
+
+    /// <summary>Side-barrier vertical slack: how much vertical wobble a deliberate side push may carry beyond its
+    /// horizontal component before it stops counting as a sideways crossing.</summary>
+    public int SideCrossSlack
+    {
+        get => _core.SideCrossSlack;
+        set => _core.SideCrossSlack = value;
+    }
+
     /// <summary>Opt-in: clamp a descent's exit X back onto the linked bottom monitor (default off).</summary>
     public bool DescentRouting
     {

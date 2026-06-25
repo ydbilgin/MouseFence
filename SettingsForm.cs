@@ -28,6 +28,7 @@ public sealed class SettingsForm : Form
     private readonly TextBox _pauseHotkeyBox;
     private readonly TextBox _sideHotkeyBox;
     private readonly CheckBox _startSideActive;
+    private readonly NumericUpDown _sideSensNum;
     private readonly CheckBox _deliberateCheck;
     private readonly CheckBox _descentCheck;
     private readonly CheckedListBox _excludeList;
@@ -164,6 +165,18 @@ public sealed class SettingsForm : Form
         y += 36;
         _startSideActive = new CheckBox { Text = Strings.StartSideContainOn, Left = 12, Top = y, Width = 412, Height = 22, Checked = s.StartSideContainOn };
         tabGeneral.Controls.Add(_startSideActive);
+        y += 28;
+        tabGeneral.Controls.Add(new Label { Text = Strings.SideSensitivityLabel, AutoSize = true, Left = 12, Top = y + 4, Tag = "subtle" });
+        // The min horizontal px/move that counts as a deliberate side push — higher = a firmer barrier. Clamp the
+        // seeded value into the control's range so an out-of-range imported setting can't throw on construction.
+        _sideSensNum = new NumericUpDown { Left = 150, Top = y, Width = 70, Height = 26, Minimum = 1, Maximum = 200, Value = Math.Clamp(s.SideCrossMin, 1, 200) };
+        tabGeneral.Controls.Add(_sideSensNum);
+        // One-click reset back to the shipped default (3), so a user who over-tightens the barrier can always recover it.
+        var btnDefaultSide = new Button { Text = Strings.DefaultLabel, Left = 228, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
+        btnDefaultSide.Click += (a, b) => _sideSensNum.Value = Settings.DefaultSideCrossMin;
+        tabGeneral.Controls.Add(btnDefaultSide);
+        y += 30;
+        tabGeneral.Controls.Add(new Label { Text = Strings.SideSensitivityHint, Left = 12, Top = y, Width = 412, Height = 44, Tag = "subtle" });
 
         // ---- Appearance ----
         tabAppearance.Controls.Add(new Label { Text = Strings.LanguageLabel, AutoSize = true, Left = 12, Top = 14, Tag = "subtle" });
@@ -552,6 +565,8 @@ public sealed class SettingsForm : Form
             PauseModCtrl = _pc, PauseModAlt = _pa, PauseModShift = _ps, PauseModWin = _pw, PauseHotKey = _pkey,
             SideModCtrl = _sc, SideModAlt = _sa, SideModShift = _ss, SideModWin = _sw, SideHotKey = _skey,
             StartSideContainOn = _startSideActive.Checked,
+            SideCrossMin = (int)_sideSensNum.Value,
+            SideCrossSlack = _orig.SideCrossSlack,   // not surfaced in the UI — preserve whatever was loaded/imported
             DeliberateCross = _deliberateCheck.Checked,
             DescentRouting = _descentCheck.Checked,
         };
