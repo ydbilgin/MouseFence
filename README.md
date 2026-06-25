@@ -33,7 +33,7 @@ On a multi‑monitor setup the cursor slips onto screens you didn't mean to reac
 - 🚧 **One‑way "up" barrier** — the cursor can't drift up into a monitor mounted above the main row by accident.
 - 🎛️ **Per‑screen crossing rules** — choose exactly which bottom screen may cross up into which top screen (great for layouts with several monitors above). Empty = the primary may cross up into every top.
 - 🔒 **Side screens stay put** — a screen with no rule can never cross up; the empty "void" corners above side screens stop trapping the cursor.
-- ↔️ **Side containment** — the same soft barrier on your main screen's **left/right** edges: the cursor won't drift onto a side monitor by accident, but a deliberate sideways push still crosses. Toggle with **Ctrl + Alt + →**; on by default.
+- ↔️ **Side containment** — the same soft barrier on your main screen's **left/right** edges, working **both ways**: the cursor won't drift onto a side monitor *or* slip back onto your main screen by accident, but a deliberate sideways push always crosses. Tune its **strength** in Settings (how hard you must flick to break through). Toggle with **Ctrl + Alt + →**; on by default.
 - 🎯 **Deliberate crossing (optional)** — by default a crossing takes an intentional push up **or** sideways (fast slides and jitter never leak through); turn it off in Settings to let any move across a barrier cross like a normal monitor edge.
 - 🎮 **Game mode** — a hotkey that confines the cursor to whichever monitor it's on (so it can't escape a windowed/borderless game).
 - 🔦 **Identify screens** — a button in Settings flashes a big number on each monitor (★ on the primary) so you can tell which physical screen is which while setting up rules.
@@ -82,7 +82,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 Open **Settings…** from the tray. Three tabs:
 
-- **General** — the up‑crossing, side‑containment, game‑mode and pause hotkeys; start states (up‑crossing closed, side containment on); deliberate‑crossing toggle; start with Windows; and an **Identify** button that flashes a number on each screen.
+- **General** — the up‑crossing, side‑containment, game‑mode and pause hotkeys; start states (up‑crossing closed, side containment on); the **side barrier strength** (how hard you must flick to cross sideways); deliberate‑crossing toggle; start with Windows; and an **Identify** button that flashes a number on each screen.
 - **Appearance** — language (Automatic / English / Türkçe) and theme (Follow system / Light / Dark).
 - **Monitors** — which monitors count as "top" (auto‑detect or manual), and the **crossing rules**: pick a bottom screen, then check which top screens it may cross up into. A read‑only mini diagram shows your layout.
 

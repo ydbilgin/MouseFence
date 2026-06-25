@@ -20,6 +20,13 @@ public sealed class GuardCore
     public int CrossSlack = 5;     // allowed horizontal beyond the vertical component
     public bool DeliberateCross = true;   // true: a deliberate push is required; false: any upward move crosses
 
+    // Side-barrier sensitivity, kept INDEPENDENT of the up-barrier's CrossMinUp/CrossSlack so the user can dial the
+    // side barrier's stiffness on its own: the min horizontal px in one move to count as a DELIBERATE side crossing,
+    // and the vertical slack allowed beyond it. A HIGHER SideCrossMin = a firmer side barrier (a faster horizontal
+    // flick is needed to cross, so accidental drift is caught more aggressively). Defaults match the up-barrier feel.
+    public int SideCrossMin = 3;
+    public int SideCrossSlack = 5;
+
     public bool HasTop;
     public int BarrierY;
     public List<(int Min, int Max)> Gates = new();   // inset X-ranges where crossing up is allowed
@@ -33,12 +40,13 @@ public sealed class GuardCore
     public bool Confine;
     public List<(int L, int T, int R, int B)> Monitors = new();
 
-    // Side containment (horizontal mirror of the up-barrier): a SOFT barrier that stops accidental drift out of the
-    // MAIN screen LEFT or RIGHT into a side screen. The barrier lines are the main screen's left/right edges
-    // (MainL/MainR); containment applies ONLY while the move STARTS on the main screen, so returning from a side
-    // screen back into main is always free — the cursor can never be trapped on a side screen. Toggled by
-    // sideContain (passed to Decide): ON = block drift but a deliberate horizontal push still crosses (same
-    // DeliberateCross rule as up); OFF = free. MainT/MainB bound the main screen's own Y-band (origin test).
+    // Side containment (horizontal mirror of the up-barrier): a SOFT, SYMMETRIC barrier on the MAIN screen's left/right
+    // edges (MainL/MainR). It stops accidental drift in BOTH directions across those edges — OUT of main onto a side
+    // screen, AND back IN from a side screen onto main — while a DELIBERATE horizontal push always crosses either way.
+    // It is origin-aware (the OUT rule only fires for moves that START on main; the IN rule only for moves that start
+    // on a side screen and land genuinely ON main), so a within-side move is never touched. Because it is soft (a real
+    // push always crosses) plus the toggle/pause hotkeys exist, the cursor can never be trapped on either side. Toggled
+    // by sideContain (passed to Decide): ON = block drift; OFF = free. MainT/MainB bound main's own Y-band (origin/landing test).
     public bool HasSides;
     public int MainL, MainR, MainT, MainB;
 
@@ -498,22 +506,23 @@ public sealed class GuardCore
             return GuardAction.Pass;
         }
 
-        // (S) Side containment: a SOFT barrier that stops the cursor from ACCIDENTALLY drifting out of the MAIN
-        // screen LEFT/RIGHT into a side screen — the horizontal mirror of the up-barrier's feel. Only when the move
-        // STARTS on the main screen (origin-aware) so a side->main return is never blocked and the cursor can't be
-        // trapped on a side screen. When containment is ON, a slow drift / steep diagonal is blocked but a DELIBERATE
-        // horizontal push still crosses (same DeliberateCross rule as up); when OFF the side is free. On a block we
-        // clamp X back into the main screen AND keep the up-barrier honoured on the same move (a diagonal that also
-        // goes above the line must not slip up at the clamped edge — that edge is outside the inset up-gate anyway),
-        // so a corner move can't escape on either axis.
+        // (S) Side containment: a SOFT, SYMMETRIC barrier with the up-barrier's feel. It stops the cursor from
+        // ACCIDENTALLY drifting BOTH ways across the MAIN screen's left/right edge — OUT of main onto a side screen,
+        // AND back IN from a side screen onto main (the "my mouse keeps slipping back to the main screen" case). Either
+        // way a slow drift / steep diagonal is blocked while a DELIBERATE horizontal push still crosses — using the
+        // side barrier's OWN tunable threshold (SideCrossMin/SideCrossSlack) so its stiffness can be dialled apart from
+        // the up barrier. It is never a hard lock: a real push always crosses and the toggle/pause hotkeys remain, so
+        // the cursor can't be trapped on either side. When OFF the side is fully free.
         if (HasSides)
         {
             bool startedOnMain = LastX >= MainL && LastX < MainR && LastY >= MainT && LastY < MainB;
+            int sideDx = Math.Abs(x - LastX);
+            int sideDy = Math.Abs(y - LastY);
+            bool sideIntent = DeliberateCross ? (sideDx >= SideCrossMin && sideDy <= sideDx + SideCrossSlack) : sideDx > 0;
+
+            // Direction OUT (main -> side): the move starts on main and its target leaves main horizontally.
             if (startedOnMain && (x < MainL || x >= MainR))
             {
-                int sideDx = Math.Abs(x - LastX);
-                int sideDy = Math.Abs(y - LastY);
-                bool sideIntent = DeliberateCross ? (sideDx >= CrossMinUp && sideDy <= sideDx + CrossSlack) : sideDx > 0;
                 if (sideContain && !sideIntent)
                 {
                     bx = Math.Clamp(x, MainL, MainR - 1);   // never leave main horizontally
@@ -531,6 +540,29 @@ public sealed class GuardCore
                     return GuardAction.Block;
                 }
                 // allowed: fall through so the up-barrier still governs the vertical component of the crossing.
+            }
+            // Direction IN (side -> main): the move starts OFF main (outside its X-span, i.e. on a side screen) and its
+            // target lands genuinely ON main (inside main's full rect). Block an accidental drift back onto main; a
+            // deliberate push crosses. Clamp X back JUST OUTSIDE main on the side we came from, keeping Y, so the cursor
+            // stays on the side screen — origin-aware, so only this exact re-entry is gated, never a within-side move.
+            else if (!startedOnMain && (LastX < MainL || LastX >= MainR)
+                     && x >= MainL && x < MainR && y >= MainT && y < MainB)
+            {
+                if (sideContain && !sideIntent)
+                {
+                    bx = LastX < MainL ? MainL - 1 : MainR;   // hold one pixel outside main, on the origin side
+                    by = y;
+                    // Void correction: if that pixel isn't on any real monitor (a gap between main and the side screen),
+                    // pull the point back onto the origin side screen so the cursor still lands on a real pixel.
+                    if (!TryActiveMonitor(bx, by, out _) && TryActiveMonitor(LastX, LastY, out var origin))
+                    {
+                        bx = Math.Clamp(bx, origin.L, origin.R - 1);
+                        by = Math.Clamp(by, origin.T, origin.B - 1);
+                    }
+                    Accept(bx, by);
+                    return GuardAction.Block;
+                }
+                // allowed: fall through (the move lands on main; the up-barrier / onTop logic governs from here).
             }
         }
 
