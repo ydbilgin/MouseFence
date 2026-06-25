@@ -67,6 +67,11 @@ public static class Strings
     public static string GatePausedMenu => G("GatePausedMenu");
     public static string TipOpen => G("TipOpen");
     public static string TipClosed => G("TipClosed");
+    public static string SideContainOnMenu => G("SideContainOnMenu");
+    public static string SideContainOffMenu => G("SideContainOffMenu");
+    public static string SideGatePausedMenu => G("SideGatePausedMenu");
+    public static string TipSideOn => G("TipSideOn");
+    public static string TipSideOff => G("TipSideOff");
 
     // ---- tabs + crossing rules ----
     public static string TabGeneral => G("TabGeneral");
@@ -83,6 +88,8 @@ public static class Strings
     public static string ExcludeHint => G("ExcludeHint");
     public static string ExcludePruned => G("ExcludePruned");
     public static string ResetLayoutLabel => G("ResetLayoutLabel");
+    public static string IdentifyLabel => G("IdentifyLabel");
+    public static string IdentifyHint => G("IdentifyHint");
     public static string ExportLabel => G("ExportLabel");
     public static string ImportLabel => G("ImportLabel");
     public static string ExportTitle => G("ExportTitle");
@@ -100,6 +107,9 @@ public static class Strings
     public static string TipPaused => G("TipPaused");
     public static string TipResumed => G("TipResumed");
     public static string NoneRegistered => G("NoneRegistered");
+    public static string SideHotkeyHead => G("SideHotkeyHead");
+    public static string SideHotkeyHint => G("SideHotkeyHint");
+    public static string StartSideContainOn => G("StartSideContainOn");
 
     // ---- interpolated (keep {0} out of the table) ----
     public static string TipHotkeyFail(string combo) => string.Format(G("TipHotkeyFail"), combo);
@@ -108,6 +118,8 @@ public static class Strings
     public static string TrayClosed(string combo) => string.Format(G("TrayClosed"), combo);
     public static string TipIsolated(string screens, string hotkey) => string.Format(G("TipIsolated"), screens, hotkey);
     public static string IsolatedNote(string screens) => string.Format(G("IsolatedNote"), screens);
+    public static string TipIntelRotation(string keys) => string.Format(G("TipIntelRotation"), keys);
+    public static string TipIntelDefaults(string up, string side) => string.Format(G("TipIntelDefaults"), up, side);
 
     private static readonly Dictionary<string, string> En = new()
     {
@@ -144,6 +156,11 @@ public static class Strings
         ["GatePausedMenu"] = "Crossing up (paused)",
         ["TipOpen"] = "Crossing up is OPEN 🔓  (only the allowed screens)",
         ["TipClosed"] = "Crossing up is CLOSED 🔒",
+        ["SideContainOnMenu"] = "Side containment: ON — click to disable",
+        ["SideContainOffMenu"] = "Side containment: OFF — click to enable",
+        ["SideGatePausedMenu"] = "Side containment (paused)",
+        ["TipSideOn"] = "Side containment ON 🛡️  (blocks drift onto a side screen — push to cross)",
+        ["TipSideOff"] = "Side containment OFF 🔓  (cursor moves to side screens freely)",
         ["TabGeneral"] = "General",
         ["TabAppearance"] = "Appearance",
         ["TabMonitors"] = "Monitors",
@@ -152,12 +169,14 @@ public static class Strings
         ["AllowedTopsLabel"] = "May cross up into",
         ["RuleHint"] = "Pick a bottom screen, then check which top screens it may cross up into. (Empty = the primary may cross up into every top.)",
         ["NoTopsHint"] = "No top monitors detected — nothing to configure.",
-        ["DeliberateCrossLabel"] = "Require a deliberate push to cross up (off = any upward move crosses)",
+        ["DeliberateCrossLabel"] = "Require a deliberate push to cross up / sideways (off = any move across a barrier crosses)",
         ["DescentRoutingLabel"] = "Stay in the same column when descending",
         ["ExcludeHead"] = "Exclude displays (wall cursor out — for dummy/headless)",
         ["ExcludeHint"] = "Walls the cursor out of an excluded display so it can't get lost there. The main display can't be excluded. (Display ids are machine-specific.)",
         ["ExcludePruned"] = "Couldn't exclude a display — the main display and the last usable display are always kept.",
         ["ResetLayoutLabel"] = "Reset layout",
+        ["IdentifyLabel"] = "Identify",
+        ["IdentifyHint"] = "Flash each monitor's number on screen so you can tell which is which (won't show over an exclusive-fullscreen game).",
         ["ExportLabel"] = "Export…",
         ["ImportLabel"] = "Import…",
         ["ExportTitle"] = "Export MouseFence settings",
@@ -175,12 +194,17 @@ public static class Strings
         ["TipPaused"] = "MouseFence: PAUSED — barrier off",
         ["TipResumed"] = "MouseFence: resumed — barrier on",
         ["NoneRegistered"] = "(not registered)",
+        ["SideHotkeyHead"] = "Side containment hotkey",
+        ["SideHotkeyHint"] = "Toggle side containment on/off — when on, a soft barrier blocks accidental drift off the MAIN screen left/right, but a deliberate push still crosses (the sideways mirror of the up barrier). Note: Ctrl+Alt+Arrow may rotate the screen on some Intel GPUs — pick another combo if so.",
+        ["StartSideContainOn"] = "Start with side containment on (blocks accidental drift; push to cross)",
         ["TipIsolated"] = "Screen {0} has no side/down exit — only UP. MouseFence auto-opened an up-escape there; align its edges, or press {1} to pause.",
         ["IsolatedNote"] = "⚠ Screen {0} is isolated (a gap in the layout). Up-crossing from it is auto-allowed so it can't trap the cursor.",
         ["TipHotkeyFail"] = "Couldn't register hotkey: {0} — another app may be using it.",
         ["TrayPaused"] = "MouseFence: PAUSED ({0})",
         ["TrayOpen"] = "MouseFence: main→top OPEN ({0})",
         ["TrayClosed"] = "MouseFence: main→top CLOSED ({0})",
+        ["TipIntelRotation"] = "Intel graphics detected: the {0} hotkey can rotate the screen (Ctrl+Alt+Arrow). Open Settings to add Shift or change it.",
+        ["TipIntelDefaults"] = "Intel graphics detected — added Shift to the arrow hotkeys to dodge screen rotation (toggle up: {0}, side: {1}).",
     };
 
     private static readonly Dictionary<string, string> Tr = new()
@@ -218,6 +242,11 @@ public static class Strings
         ["GatePausedMenu"] = "Yukarı geçiş (duraklatıldı)",
         ["TipOpen"] = "Yukarı geçiş AÇIK 🔓  (yalnızca izinli ekranlar)",
         ["TipClosed"] = "Yukarı geçiş KAPALI 🔒",
+        ["SideContainOnMenu"] = "Yan kilit: AÇIK — kapatmak için tıkla",
+        ["SideContainOffMenu"] = "Yan kilit: KAPALI — açmak için tıkla",
+        ["SideGatePausedMenu"] = "Yan kilit (duraklatıldı)",
+        ["TipSideOn"] = "Yan kilit AÇIK 🛡️  (yan ekrana kazara kaymayı engeller — geçmek için itin)",
+        ["TipSideOff"] = "Yan kilit KAPALI 🔓  (imleç yan ekranlara serbestçe geçer)",
         ["TabGeneral"] = "Genel",
         ["TabAppearance"] = "Görünüm",
         ["TabMonitors"] = "Ekranlar",
@@ -226,12 +255,14 @@ public static class Strings
         ["AllowedTopsLabel"] = "Çıkabileceği üst ekranlar",
         ["RuleHint"] = "Bir alt ekran seç, sonra çıkabileceği üst ekranları işaretle. (Boş = ana ekran her üst ekrana çıkabilir.)",
         ["NoTopsHint"] = "Üst ekran algılanmadı — yapılandırılacak bir şey yok.",
-        ["DeliberateCrossLabel"] = "Yukarı geçmek için bilinçli itiş gerekir (kapalı = her yukarı hareket geçer)",
+        ["DeliberateCrossLabel"] = "Yukarı / yana geçmek için bilinçli itiş gerekir (kapalı = bariyere doğru her hareket geçer)",
         ["DescentRoutingLabel"] = "İnişte imleci aynı sütunda tut",
         ["ExcludeHead"] = "Ekranları hariç tut (imleci dışarıda tut — dummy/başsız için)",
         ["ExcludeHint"] = "İmleci hariç tutulan ekranın dışında tutar; imleç orada kaybolmaz. Ana ekran hariç tutulamaz. (Ekran kimlikleri makineye özeldir.)",
         ["ExcludePruned"] = "Bir ekran hariç tutulamadı — ana ekran ve son kullanılabilir ekran her zaman korunur.",
         ["ResetLayoutLabel"] = "Düzeni sıfırla",
+        ["IdentifyLabel"] = "Tanımla",
+        ["IdentifyHint"] = "Hangi ekranın hangisi olduğunu görmek için her monitörün numarasını ekranda flaşlatır (tam ekran oyunun üzerinde görünmez).",
         ["ExportLabel"] = "Dışa aktar…",
         ["ImportLabel"] = "İçe aktar…",
         ["ExportTitle"] = "MouseFence ayarlarını dışa aktar",
@@ -249,11 +280,16 @@ public static class Strings
         ["TipPaused"] = "MouseFence: DURAKLATILDI — bariyer kapalı",
         ["TipResumed"] = "MouseFence: devam etti — bariyer açık",
         ["NoneRegistered"] = "(kaydedilmedi)",
+        ["SideHotkeyHead"] = "Yan kilit kısayolu",
+        ["SideHotkeyHint"] = "Yan kilidi aç/kapat — açıkken ANA ekrandan SAĞA/SOLA kazara kaymayı engelleyen yumuşak bir bariyer kurar, ama kasıtlı bir itiş yine de geçer (yukarı bariyerin yana uyarlanmış hâli). Not: Ctrl+Alt+Ok bazı Intel ekran kartlarında ekranı döndürebilir — öyleyse başka kombinasyon seçin.",
+        ["StartSideContainOn"] = "Açılışta yan kilit açık başlasın (kazara kaymayı engelle; geçmek için it)",
         ["TipIsolated"] = "{0} numaralı ekranın yana/aşağı çıkışı yok — yalnızca YUKARI. MouseFence oradan yukarı çıkışı otomatik açtı; kenarlarını hizala veya duraklatmak için {1} tuşuna bas.",
         ["IsolatedNote"] = "⚠ {0} numaralı ekran yalıtılmış (yerleşimde boşluk). Kapana kısmaması için oradan yukarı geçiş otomatik açıldı.",
         ["TipHotkeyFail"] = "Kısayol kaydedilemedi: {0} — başka bir uygulama kullanıyor olabilir.",
         ["TrayPaused"] = "MouseFence: DURAKLATILDI ({0})",
         ["TrayOpen"] = "MouseFence: ana→üst AÇIK ({0})",
         ["TrayClosed"] = "MouseFence: ana→üst KAPALI ({0})",
+        ["TipIntelRotation"] = "Intel ekran kartı algılandı: {0} kısayolu ekranı döndürebilir (Ctrl+Alt+ok). Ayarlar'dan Shift ekleyin veya değiştirin.",
+        ["TipIntelDefaults"] = "Intel ekran kartı algılandı — ekran dönmesini önlemek için ok kısayollarına Shift eklendi (üst geçiş: {0}, yan: {1}).",
     };
 }

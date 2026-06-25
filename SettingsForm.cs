@@ -26,9 +26,12 @@ public sealed class SettingsForm : Form
     private readonly TabControl _tabs;
     private readonly TextBox _gameHotkeyBox;
     private readonly TextBox _pauseHotkeyBox;
+    private readonly TextBox _sideHotkeyBox;
+    private readonly CheckBox _startSideActive;
     private readonly CheckBox _deliberateCheck;
     private readonly CheckBox _descentCheck;
     private readonly CheckedListBox _excludeList;
+    private readonly ToolTip _tips = new();
     private readonly HashSet<string> _excluded = new();
     private readonly Dictionary<string, HashSet<string>> _rules = new();
     private bool _mc, _ma, _ms, _mw;
@@ -37,6 +40,8 @@ public sealed class SettingsForm : Form
     private Keys _gkey;
     private bool _pc, _pa, _ps, _pw;
     private Keys _pkey;
+    private bool _sc, _sa, _ss, _sw;
+    private Keys _skey;
 
     public Settings Result { get; private set; }
 
@@ -50,6 +55,7 @@ public sealed class SettingsForm : Form
         _mc = s.ModCtrl; _ma = s.ModAlt; _ms = s.ModShift; _mw = s.ModWin; _key = s.HotKey;
         _gc = s.ConfineModCtrl; _ga = s.ConfineModAlt; _gs = s.ConfineModShift; _gw = s.ConfineModWin; _gkey = s.ConfineHotKey;
         _pc = s.PauseModCtrl; _pa = s.PauseModAlt; _ps = s.PauseModShift; _pw = s.PauseModWin; _pkey = s.PauseHotKey;
+        _sc = s.SideModCtrl; _sa = s.SideModAlt; _ss = s.SideModShift; _sw = s.SideModWin; _skey = s.SideHotKey;
 
         _tops = (s.Mode == "Manual" && s.ManualMonitors.Count > 0
             ? monitors.Where(m => s.ManualMonitors.Contains(m.StableId))
@@ -140,6 +146,24 @@ public sealed class SettingsForm : Form
         btnClearPause.Click += (a, b) => { _pc = _pa = _ps = _pw = false; _pkey = Keys.None; UpdatePauseHotkeyText(); };
         tabGeneral.Controls.Add(_pauseHotkeyBox);
         tabGeneral.Controls.Add(btnClearPause);
+        y += 44;
+        tabGeneral.Controls.Add(new Label { Text = Strings.SideHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
+        y += 20;
+        tabGeneral.Controls.Add(new Label { Text = Strings.SideHotkeyHint, Left = 12, Top = y, Width = 412, Height = 30, Tag = "subtle" });
+        y += 32;
+        _sideHotkeyBox = new TextBox
+        {
+            Left = 12, Top = y, Width = 300, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
+            TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
+        };
+        _sideHotkeyBox.KeyDown += SideHotkeyBox_KeyDown;
+        var btnClearSide = new Button { Text = Strings.Clear, Left = 320, Top = y - 1, Width = 96, Height = 28, FlatStyle = FlatStyle.Flat };
+        btnClearSide.Click += (a, b) => { _sc = _sa = _ss = _sw = false; _skey = Keys.None; UpdateSideHotkeyText(); };
+        tabGeneral.Controls.Add(_sideHotkeyBox);
+        tabGeneral.Controls.Add(btnClearSide);
+        y += 36;
+        _startSideActive = new CheckBox { Text = Strings.StartSideContainOn, Left = 12, Top = y, Width = 412, Height = 22, Checked = s.StartSideContainOn };
+        tabGeneral.Controls.Add(_startSideActive);
 
         // ---- Appearance ----
         tabAppearance.Controls.Add(new Label { Text = Strings.LanguageLabel, AutoSize = true, Left = 12, Top = 14, Tag = "subtle" });
@@ -205,6 +229,11 @@ public sealed class SettingsForm : Form
         _descentCheck = new CheckBox { Text = Strings.DescentRoutingLabel, Left = 12, Top = 414, Width = 416, Height = 34, Checked = s.DescentRouting };
         tabMonitors.Controls.Add(_descentCheck);
 
+        var identify = new Button { Text = Strings.IdentifyLabel, Left = 168, Top = 8, Width = 124, Height = 26, FlatStyle = FlatStyle.Flat };
+        identify.Click += (a, b) => IdentifyOverlay.Flash(_monitors, SelectedTheme(), this);
+        _tips.SetToolTip(identify, Strings.IdentifyHint);
+        tabMonitors.Controls.Add(identify);
+
         var resetLayout = new Button { Text = Strings.ResetLayoutLabel, Left = 300, Top = 8, Width = 128, Height = 26, FlatStyle = FlatStyle.Flat };
         resetLayout.Click += ResetLayout_Click;
         tabMonitors.Controls.Add(resetLayout);
@@ -256,6 +285,7 @@ public sealed class SettingsForm : Form
         UpdateHotkeyText();
         UpdateGameHotkeyText();
         UpdatePauseHotkeyText();
+        UpdateSideHotkeyText();
         Theming.Apply(this, SelectedTheme());
     }
 
@@ -471,6 +501,29 @@ public sealed class SettingsForm : Form
         _pauseHotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
     }
 
+    private void SideHotkeyBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        e.SuppressKeyPress = true;
+        e.Handled = true;
+        _sc = e.Control; _sa = e.Alt; _ss = e.Shift;
+        var kc = e.KeyCode;
+        if (kc is Keys.ControlKey or Keys.Menu or Keys.ShiftKey) { _skey = Keys.None; UpdateSideHotkeyText(); return; }
+        if (kc is Keys.LWin or Keys.RWin) { _sw = true; _skey = Keys.None; UpdateSideHotkeyText(); return; }
+        _skey = kc;
+        UpdateSideHotkeyText();
+    }
+
+    private void UpdateSideHotkeyText()
+    {
+        var parts = new List<string>();
+        if (_sc) parts.Add("Ctrl");
+        if (_sa) parts.Add("Alt");
+        if (_ss) parts.Add("Shift");
+        if (_sw) parts.Add("Win");
+        if (_skey != Keys.None) parts.Add(_skey.ToString());
+        _sideHotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
+    }
+
     private void Ok_Click(object sender, EventArgs e)
     {
         bool anyMod = _mc || _ma || _ms || _mw;
@@ -497,6 +550,8 @@ public sealed class SettingsForm : Form
             Theme = _themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" },
             ConfineModCtrl = _gc, ConfineModAlt = _ga, ConfineModShift = _gs, ConfineModWin = _gw, ConfineHotKey = _gkey,
             PauseModCtrl = _pc, PauseModAlt = _pa, PauseModShift = _ps, PauseModWin = _pw, PauseHotKey = _pkey,
+            SideModCtrl = _sc, SideModAlt = _sa, SideModShift = _ss, SideModWin = _sw, SideHotKey = _skey,
+            StartSideContainOn = _startSideActive.Checked,
             DeliberateCross = _deliberateCheck.Checked,
             DescentRouting = _descentCheck.Checked,
         };

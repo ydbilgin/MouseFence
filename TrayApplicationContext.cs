@@ -17,6 +17,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly HotKeyWindow _hotkey = new();
     private readonly HotKeyWindow _confineHotkey = new();
     private readonly HotKeyWindow _pauseHotkey = new();   // universal keyboard escape from any trap
+    private readonly HotKeyWindow _sideHotkey = new();    // toggle main->side (left/right) containment
 
     // Re-apply the barrier when the monitor layout changes (arrangement / resolution / dock / undock),
     // so the gates and barrier line always track the live displays without a restart. The OS event can
@@ -26,6 +27,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _reconfigTimer;
 
     private readonly ToolStripMenuItem _gateItem;
+    private readonly ToolStripMenuItem _sideItem;
     private readonly ToolStripMenuItem _pauseItem;
     private readonly ToolStripMenuItem _gameItem;
     private readonly ToolStripMenuItem _settingsItem;
@@ -49,6 +51,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _iconPaused = MakeIcon(Color.FromArgb(150, 150, 150));
 
         _gateItem = new ToolStripMenuItem("", null, (s, e) => ToggleGate());
+        _sideItem = new ToolStripMenuItem("", null, (s, e) => ToggleSide());
         _pauseItem = new ToolStripMenuItem("", null, (s, e) => TogglePause());
         _gameItem = new ToolStripMenuItem("", null, (s, e) => ToggleGame());
         _settingsItem = new ToolStripMenuItem("", null, (s, e) => OpenSettings());
@@ -56,6 +59,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_gateItem);
+        menu.Items.Add(_sideItem);
         menu.Items.Add(_gameItem);
         menu.Items.Add(_pauseItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -68,10 +72,12 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hotkey.HotKeyPressed += ToggleGate;
         _confineHotkey.HotKeyPressed += ToggleGame;
         _pauseHotkey.HotKeyPressed += TogglePause;
+        _sideHotkey.HotKeyPressed += ToggleSide;
 
         RegisterHotkey();   // before Configure() so _pauseRegistered is known for the first isolation warning
         Configure();
         _guard.GateOpen = !_settings.StartGateClosed;
+        _guard.SideContain = _settings.StartSideContainOn;
         _guard.Start();
 
         _ = _uiSync.Handle;   // force the marshaling window handle onto this (UI) thread
@@ -81,6 +87,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         RebuildMenuText();
         UpdateUi();
+        WarnIntelRotation();
     }
 
     // OS fires this when the display arrangement/resolution changes; marshal to the UI thread and debounce
@@ -162,8 +169,22 @@ public sealed class TrayApplicationContext : ApplicationContext
         var routes = GuardCore.DeriveRoutes(
             links.Select(lk => (lk.FromDevice, lk.ToDevice)), deviceRects, topSet);
 
+        // Side containment: the cursor is contained within the MAIN (primary) screen horizontally. Only engage when
+        // a real side screen flanks the main left/right (else the feature is inert — Windows already blocks the void),
+        // so single-monitor / top-only layouts don't install the hook needlessly. The barrier lines are main's edges.
+        var main = primary;
+        bool hasSides = false;
+        if (main != null)
+        {
+            var mainRect = (main.Bounds.Left, main.Bounds.Top, main.Bounds.Right, main.Bounds.Bottom);
+            hasSides = monitors.Any(m => m.StableId != main.StableId &&
+                (GuardCore.Adjacent(mainRect, (m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom), Dir.Left) ||
+                 GuardCore.Adjacent(mainRect, (m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom), Dir.Right)));
+        }
+
         _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), safety, routes,
-                         excludedMonitors.Select(m => m.Bounds));
+                         excludedMonitors.Select(m => m.Bounds),
+                         hasSides, main?.Bounds ?? default);
         _guard.DeliberateCross = _settings.DeliberateCross;
         _guard.DescentRouting = _settings.DescentRouting;
 
@@ -198,6 +219,9 @@ public sealed class TrayApplicationContext : ApplicationContext
             _tray.ShowBalloonTip(3000, "MouseFence", Strings.TipHotkeyFail(_settings.HotKeyText()), ToolTipIcon.Warning);
         if (!_confineHotkey.Register(_settings.ConfineModifiers(), (uint)_settings.ConfineHotKey))
             _tray.ShowBalloonTip(3000, "MouseFence", Strings.TipHotkeyFail(_settings.ConfineHotKeyText()), ToolTipIcon.Warning);
+        bool sideSet = _settings.SideHotKey != Keys.None && _settings.SideModifiers() != 0;
+        if (sideSet && !_sideHotkey.Register(_settings.SideModifiers(), (uint)_settings.SideHotKey))
+            _tray.ShowBalloonTip(3000, "MouseFence", Strings.TipHotkeyFail(_settings.SideHotKeyText()), ToolTipIcon.Warning);
         _pauseRegistered = _pauseHotkey.Register(_settings.PauseModifiers(), (uint)_settings.PauseHotKey);
         bool pauseSet = _settings.PauseHotKey != Keys.None && _settings.PauseModifiers() != 0;
         if (pauseSet && !_pauseRegistered)   // only nag if a key was set but couldn't register (not when cleared)
@@ -227,6 +251,14 @@ public sealed class TrayApplicationContext : ApplicationContext
             _tray.ShowBalloonTip(1000, "MouseFence", _guard.GateOpen ? Strings.TipOpen : Strings.TipClosed, ToolTipIcon.Info);
     }
 
+    private void ToggleSide()
+    {
+        _guard.SideContain = !_guard.SideContain;
+        UpdateUi();
+        if (_guard.Enabled)
+            _tray.ShowBalloonTip(1000, "MouseFence", _guard.SideContain ? Strings.TipSideOn : Strings.TipSideOff, ToolTipIcon.Info);
+    }
+
     private void TogglePause()
     {
         if (_guard.Enabled) _guard.Stop();
@@ -247,6 +279,8 @@ public sealed class TrayApplicationContext : ApplicationContext
             _tray.Text = Strings.TrayPaused(hk);
             _gateItem.Text = Strings.GatePausedMenu;
             _gateItem.Enabled = false;
+            _sideItem.Text = Strings.SideGatePausedMenu;
+            _sideItem.Enabled = false;
             _gameItem.Enabled = false;
             _pauseItem.Text = Strings.MenuResume;
             _pauseItem.Checked = true;
@@ -254,6 +288,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         }
 
         _gateItem.Enabled = true;
+        _sideItem.Enabled = true;
         _pauseItem.Text = Strings.MenuPause;
         _pauseItem.Checked = false;
 
@@ -262,6 +297,11 @@ public sealed class TrayApplicationContext : ApplicationContext
         _tray.Text = open ? Strings.TrayOpen(hk) : Strings.TrayClosed(hk);
         _gateItem.Text = open ? Strings.GateOpenMenu : Strings.GateClosedMenu;
         _gateItem.Checked = open;
+
+        bool sideOn = _guard.SideContain;
+        _sideItem.Text = sideOn ? Strings.SideContainOnMenu : Strings.SideContainOffMenu;
+        _sideItem.Checked = sideOn;
+
         _gameItem.Checked = _guard.Confine;
         _gameItem.Enabled = true;
     }
@@ -274,6 +314,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hotkey.Unregister();
         _confineHotkey.Unregister();
         _pauseHotkey.Unregister();
+        _sideHotkey.Unregister();
         _settings = f.Result;
         _settings.Save();
         Strings.Use(_settings.Language);
@@ -282,6 +323,40 @@ public sealed class TrayApplicationContext : ApplicationContext
         Configure();
         RebuildMenuText();
         UpdateUi();
+        WarnIntelRotation();
+    }
+
+    // Intel GPU drivers bind Ctrl+Alt+Arrow to screen rotation, clashing with MouseFence's arrow hotkeys. On a fresh
+    // Intel install we already added Shift to the defaults (Settings.AddShiftToArrowHotkeys) -> show an info balloon
+    // explaining it; otherwise (e.g. a user/imported config that still uses Ctrl+Alt+Arrow) warn and name the clashing
+    // hotkeys so the user can fix them. No-op when no Intel adapter is present.
+    private void WarnIntelRotation()
+    {
+        bool intel;
+        try { intel = Native.HasIntelGpu(); }
+        catch { intel = false; }
+        if (!intel) return;
+
+        if (_settings.IntelDefaultsApplied)
+        {
+            _tray.ShowBalloonTip(8000, "MouseFence",
+                Strings.TipIntelDefaults(_settings.HotKeyText(), _settings.SideHotKeyText()), ToolTipIcon.Info);
+            return;
+        }
+
+        var conflicts = new List<string>();
+        if (GuardCore.IsArrowRotationHotkey((int)_settings.HotKey, _settings.ModCtrl, _settings.ModAlt, _settings.ModShift, _settings.ModWin))
+            conflicts.Add(_settings.HotKeyText());
+        if (GuardCore.IsArrowRotationHotkey((int)_settings.SideHotKey, _settings.SideModCtrl, _settings.SideModAlt, _settings.SideModShift, _settings.SideModWin))
+            conflicts.Add(_settings.SideHotKeyText());
+        if (GuardCore.IsArrowRotationHotkey((int)_settings.ConfineHotKey, _settings.ConfineModCtrl, _settings.ConfineModAlt, _settings.ConfineModShift, _settings.ConfineModWin))
+            conflicts.Add(_settings.ConfineHotKeyText());
+        if (GuardCore.IsArrowRotationHotkey((int)_settings.PauseHotKey, _settings.PauseModCtrl, _settings.PauseModAlt, _settings.PauseModShift, _settings.PauseModWin))
+            conflicts.Add(_settings.PauseHotKeyText());
+
+        if (conflicts.Count > 0)
+            _tray.ShowBalloonTip(8000, "MouseFence",
+                Strings.TipIntelRotation(string.Join(", ", conflicts)), ToolTipIcon.Warning);
     }
 
     private void ExitApp()
@@ -295,6 +370,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hotkey.Dispose();
         _confineHotkey.Dispose();
         _pauseHotkey.Dispose();
+        _sideHotkey.Dispose();
         DisposeIcon(ref _iconClosed);
         DisposeIcon(ref _iconOpen);
         DisposeIcon(ref _iconPaused);

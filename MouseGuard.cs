@@ -18,6 +18,11 @@ public sealed class MouseGuard : IDisposable
     /// <summary>Master toggle: when true the configured crossing gates are active; when false all crossing is blocked.</summary>
     public bool GateOpen { get; set; }
 
+    /// <summary>Side-containment toggle: when true a soft barrier blocks accidental drift out of the MAIN screen
+    /// left/right (a deliberate horizontal push still crosses); when false the side is free. The horizontal mirror
+    /// of the up-barrier's feel (<see cref="GateOpen"/>).</summary>
+    public bool SideContain { get; set; }
+
     /// <summary>Game mode: confine the cursor to whichever monitor it is currently on.</summary>
     public bool Confine
     {
@@ -47,7 +52,8 @@ public sealed class MouseGuard : IDisposable
                           IEnumerable<Native.RECT> allMonitors,
                           IEnumerable<(int Min, int Max, int OwnerT, int OwnerB)> safetyGates,
                           IEnumerable<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)> descentRoutes,
-                          IEnumerable<Native.RECT> forbidden)
+                          IEnumerable<Native.RECT> forbidden,
+                          bool hasSides, Native.RECT mainBounds)
     {
         var rects = blocked.ToList();
         _core.HasTop = rects.Count > 0;
@@ -58,6 +64,9 @@ public sealed class MouseGuard : IDisposable
         _core.DescentRoutes = descentRoutes.ToList();
         _core.Forbidden = forbidden.Select(r => (r.Left, r.Top, r.Right, r.Bottom))
                                    .Where(r => r.Right > r.Left && r.Bottom > r.Top).ToList();
+        _core.HasSides = hasSides;
+        _core.MainL = mainBounds.Left; _core.MainR = mainBounds.Right;
+        _core.MainT = mainBounds.Top; _core.MainB = mainBounds.Bottom;
         // Re-baseline: a live reconfigure (display layout change) can move the cursor's coordinate from the old top
         // into a newly positioned bottom/side screen while OnTop was true. Dropping the stale state forces the next
         // move through the !HaveLast branch, which re-derives OnTop from the fresh cursor position vs the new barrier.
@@ -89,7 +98,7 @@ public sealed class MouseGuard : IDisposable
         if ((data.flags & (Native.LLMHF_INJECTED | Native.LLMHF_LOWER_IL_INJECTED)) != 0)
             return Native.CallNextHookEx(_hook, nCode, wParam, lParam);
 
-        if (_core.Decide(data.pt.X, data.pt.Y, GateOpen, out int bx, out int by) == GuardAction.Block)
+        if (_core.Decide(data.pt.X, data.pt.Y, GateOpen, SideContain, out int bx, out int by) == GuardAction.Block)
         {
             Native.SetCursorPos(bx, by);   // re-enters as injected, which we ignore
             return (IntPtr)1;              // swallow the original move
