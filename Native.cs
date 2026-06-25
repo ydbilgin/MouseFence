@@ -74,6 +74,12 @@ public static class Native
 
     public const uint MONITORINFOF_PRIMARY = 0x1;
 
+    // Extended window styles for the click-through "Identify" overlay: TRANSPARENT = mouse passes through;
+    // NOACTIVATE = never steals focus; TOOLWINDOW = stays out of Alt-Tab. (LAYERED is added by Form.Opacity.)
+    public const int WS_EX_TRANSPARENT = 0x00000020;
+    public const int WS_EX_TOOLWINDOW = 0x00000080;
+    public const int WS_EX_NOACTIVATE = 0x08000000;
+
     // ---- delegates ----
     public delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
     public delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref RECT lprcMonitor, IntPtr dwData);
@@ -120,6 +126,26 @@ public static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool EnumDisplayDevices(string lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
+
+    /// <summary>True if any display ADAPTER reports an Intel GPU. Intel's graphics driver binds Ctrl+Alt+Arrow to
+    /// screen ROTATION, which clashes with MouseFence's arrow hotkeys — callers use this to warn / pick a safe default.
+    /// READ-ONLY adapter enumeration (lpDevice == null reads adapter names into DeviceString); never mutates config.</summary>
+    public static bool HasIntelGpu()
+    {
+        try
+        {
+            for (uint i = 0; i < 64; i++)   // hard cap: there is never anywhere near this many adapters
+            {
+                var dd = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+                if (!EnumDisplayDevices(null, i, ref dd, 0)) break;
+                if (dd.DeviceString != null &&
+                    dd.DeviceString.IndexOf("Intel", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+        }
+        catch { /* detection is best-effort; absence of a warning is acceptable */ }
+        return false;
+    }
 
     // ---- dark title bar ----
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;

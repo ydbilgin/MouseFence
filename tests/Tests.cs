@@ -46,10 +46,25 @@ GuardCore NewForbidden(params (int L, int T, int R, int B)[] forbidden)
     return c;
 }
 
-(GuardAction act, int by, bool onTop, int bx) Move(GuardCore c, int x, int y, bool gate)
+// side defaults to true (containment ON), but every non-side core has HasSides=false so the side branch never
+// runs there regardless — existing scenarios are unaffected.
+(GuardAction act, int by, bool onTop, int bx) Move(GuardCore c, int x, int y, bool gate, bool side = true)
 {
-    var a = c.Decide(x, y, gate, out int bx, out int by);
+    var a = c.Decide(x, y, gate, side, out int bx, out int by);
     return (a, by, c.OnTop, bx);
+}
+
+// MAIN = (0,0,2560,1440) with side screens present -> HasSides on. Up-barrier at Y 0, gate [24,2536] (as elsewhere).
+// Monitors is populated (main + a left + a right side screen) so the block path's void-check (TryActiveMonitor)
+// has a real layout to test against.
+GuardCore NewSides()
+{
+    var c = new GuardCore { HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) },
+        HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
+        Monitors = new List<(int L, int T, int R, int B)>
+            { (0, 0, 2560, 1440), (-1920, 0, 0, 1080), (2560, 0, 4480, 1080) } };
+    c.Reset();
+    return c;
 }
 
 void Check(string name, bool ok, string detail = "")
@@ -1035,6 +1050,161 @@ var DUMMY = (2560, 0, 3360, 600);
         label1 == label2 && label1.Contains("2") && label1.Contains("2560x1440")
         && label1.Contains("@ 0,0") && label1.Contains("[MAIN]") && !label1.Contains("DISPLAY") && !label1.Contains("#"),
         label1);
+}
+
+// ---- SIDE CONTAINMENT (soft barrier, horizontal mirror of the up-barrier) ----
+// side=true => containment ON (a slow drift / steep diagonal off MAIN is blocked, but a deliberate horizontal push
+// still crosses). side=false => containment OFF (the cursor leaves MAIN sideways FREELY, no restriction).
+{
+    // NeedsProcessing flips on with only HasSides set (the hook must install for side-only layouts).
+    var c = new GuardCore { HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440 };
+    Check("side: NeedsProcessing is true with only HasSides set", c.NeedsProcessing, "NeedsProcessing");
+}
+{
+    // ON + deliberate horizontal push to the RIGHT: the crossing is honoured (soft barrier lets intent through).
+    var c = NewSides(); Move(c, 2000, 500, true, true);
+    var r = Move(c, 2700, 500, true, true);
+    Check("side on: deliberate push right crosses", r.act == GuardAction.Pass && r.bx == 2700, $"act={r.act} bx={r.bx}");
+}
+{
+    // ON + deliberate horizontal push to the LEFT: crosses.
+    var c = NewSides(); Move(c, 500, 500, true, true);
+    var r = Move(c, -200, 500, true, true);
+    Check("side on: deliberate push left crosses", r.act == GuardAction.Pass && r.bx == -200, $"act={r.act} bx={r.bx}");
+}
+{
+    // ON + slow RIGHT drift (dx < CrossMinUp): accidental -> blocked, clamped to MainR-1, Y kept.
+    var c = NewSides(); Move(c, 2559, 500, true, true);
+    var r = Move(c, 2561, 500, true, true);                // dx=2 -> drift, not a deliberate push
+    Check("side on: slow right drift blocked, clamped to 2559, Y kept",
+        r.act == GuardAction.Block && r.bx == 2559 && r.by == 500 && !r.onTop, $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    // ON + slow LEFT drift: blocked, clamped to MainL=0.
+    var c = NewSides(); Move(c, 1, 500, true, true);
+    var r = Move(c, -1, 500, true, true);                  // dx=2 -> drift
+    Check("side on: slow left drift blocked, clamped to 0, Y kept",
+        r.act == GuardAction.Block && r.bx == 0 && r.by == 500, $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    // ON but a STEEP diagonal (mostly vertical) past the edge is NOT a deliberate side push -> blocked.
+    var c = NewSides(); Move(c, 2555, 500, true, true);
+    var r = Move(c, 2565, 600, true, true);                // dx=10, dy=100 -> not deliberate sideways
+    Check("side on: steep diagonal (dx10,dy100) is not a side push -> blocked", r.act == GuardAction.Block && r.bx == 2559, $"act={r.act} bx={r.bx}");
+}
+{
+    // ON: returning from a side screen INTO main is always free (origin-aware -> no trap on a side screen).
+    var c = NewSides(); Move(c, -100, 500, true, true);    // origin on the LEFT side screen
+    var r = Move(c, 100, 500, true, true);                 // move right, back into MAIN
+    Check("side on: side->main is never blocked (no trap)", r.act == GuardAction.Pass, $"act={r.act}");
+}
+{
+    // ON: moving further out while ALREADY on a side screen is free (only main->side is contained).
+    var c = NewSides(); Move(c, -100, 500, true, true);
+    var r = Move(c, -300, 500, true, true);
+    Check("side on: roaming within a side screen is free", r.act == GuardAction.Pass, $"act={r.act}");
+}
+{
+    // ON: a slow up-left corner DRIFT is contained on BOTH axes — clamp X into main AND clamp Y to the up-barrier,
+    // so the cursor can't escape at the corner.
+    var c = NewSides(); Move(c, 1, 1, true, true);
+    var r = Move(c, -1, -1, true, true);                   // dx=2,dy=2 -> drift crossing left & up
+    Check("side on: up-left corner drift contained on both axes (bx=0, by=0)",
+        r.act == GuardAction.Block && r.bx == 0 && r.by == 0, $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    // ON must NOT interfere with a legitimate up-crossing through the top gate (straight up the centre).
+    var c = NewSides(); Move(c, 1280, 0, true, true);
+    var r = Move(c, 1280, -15, true, true);
+    Check("side on: a centre up-gate crossing still works (no interference)", r.act == GuardAction.Pass && r.onTop, $"act={r.act} onTop={r.onTop}");
+}
+{
+    // ON + DeliberateCross OFF: any horizontal exit crosses (no deliberate requirement).
+    var c = NewSides(); c.DeliberateCross = false;
+    Move(c, 2000, 500, true, true);
+    var r = Move(c, 2700, 510, true, true);
+    Check("side on + deliberate OFF: any sideways move crosses", r.act == GuardAction.Pass, $"act={r.act}");
+}
+{
+    // ON: a purely vertical move inside main (no horizontal exit) is untouched by side containment.
+    var c = NewSides(); Move(c, 1280, 500, true, true);
+    var r = Move(c, 1280, 800, true, true);
+    Check("side on: a purely vertical move inside main passes", r.act == GuardAction.Pass, $"act={r.act}");
+}
+{
+    // COUNCIL FIX (cx): a side screen TALLER than main. A steep diagonal drift whose Y lands BELOW main's bottom
+    // would, with a naive `by=y`, leave the cursor in the void (no monitor) at the clamped X. The void-check
+    // must pull Y back onto the main band so the cursor lands on a real pixel ON main.
+    var c = new GuardCore { HasTop = false, BarrierY = 0, HasSides = true,
+        MainL = 0, MainR = 1000, MainT = 0, MainB = 800,
+        Monitors = new List<(int L, int T, int R, int B)> { (0, 0, 1000, 800), (1000, 0, 2000, 1000) } };
+    c.Reset();
+    Move(c, 990, 790, true, true);                  // origin on main, near its bottom-right corner
+    var r = Move(c, 1010, 900, true, true);         // dx=20,dy=110 steep -> blocked; Y=900 (> main bottom 800) is void
+    Check("side on: taller side screen -> blocked drift stays on main (void corrected)",
+        r.act == GuardAction.Block && r.bx == 999 && r.by == 799, $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    // COUNCIL CRITIC REGRESSION GUARD: a screen stacked BELOW main. A steep down-right diagonal drift must keep its Y
+    // (a legal descent into the below screen) — the void-check must NOT yank Y up to main's bottom, because
+    // the clamped-X point IS on the below screen.
+    var c = new GuardCore { HasTop = false, BarrierY = 0, HasSides = true,
+        MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
+        Monitors = new List<(int L, int T, int R, int B)> { (0, 0, 2560, 1440), (0, 1440, 2560, 2880) } };
+    c.Reset();
+    Move(c, 2500, 1400, true, true);                // origin on main, near bottom-right
+    var r = Move(c, 2565, 1700, true, true);        // dx=65,dy=300 steep -> blocked; X exits, Y descends into below
+    Check("side on: descent into a below-main screen keeps Y (no over-clamp regression)",
+        r.act == GuardAction.Block && r.bx == 2559 && r.by == 1700, $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    // COUNCIL GAP (Opus #4): an up-cross at the INSIDE edge of the gate (x stays within main) is NOT swallowed
+    // by the side block even with containment ON — proving side containment doesn't eat a legitimate up-crossing.
+    var c = NewSides(); Move(c, 30, 0, true, true);    // x=30 is inside the gate [24,2536] AND inside main
+    var r = Move(c, 30, -15, true, true);
+    Check("side on: a near-edge up-gate crossing (x stays in main) still crosses", r.act == GuardAction.Pass && r.onTop, $"act={r.act} onTop={r.onTop}");
+}
+{
+    // COUNCIL GAP (cx): game-mode Confine takes precedence over side containment (its branch returns first).
+    var c = new GuardCore { HasTop = false, Confine = true, HasSides = true,
+        MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
+        Monitors = new List<(int L, int T, int R, int B)> { (0, 0, 2560, 1440), (2560, 0, 4480, 1080) } };
+    c.Reset();
+    Move(c, 1000, 500, true, true);                 // baseline on main
+    var r = Move(c, 3000, 500, true, true);         // leave main -> Confine blocks (clamps to main's right edge)
+    Check("confine precedence: game mode handles the block before side containment", r.act == GuardAction.Block, $"act={r.act}");
+}
+{
+    // OFF: with containment disabled the cursor leaves MAIN sideways FREELY — even a slow drift that WOULD be
+    // blocked when ON now passes with no clamp.
+    var c = NewSides(); Move(c, 2559, 500, true, false);
+    var r = Move(c, 2561, 500, true, false);               // dx=2 drift -> free because containment is OFF
+    Check("side off: sideways drift passes freely (no containment)",
+        r.act == GuardAction.Pass && r.bx == 2561, $"act={r.act} bx={r.bx}");
+}
+
+// ---- INTEL ROTATION HOTKEY CLASH (Ctrl+Alt+Arrow): pure detection used to warn / pick a safe default ----
+// VK codes: Left 0x25, Up 0x26, Right 0x27, Down 0x28; a non-arrow like 'G' = 0x47.
+{
+    bool up    = GuardCore.IsArrowRotationHotkey(0x26, ctrl: true, alt: true, shift: false, win: false);
+    bool down  = GuardCore.IsArrowRotationHotkey(0x28, true, true, false, false);
+    bool left  = GuardCore.IsArrowRotationHotkey(0x25, true, true, false, false);
+    bool right = GuardCore.IsArrowRotationHotkey(0x27, true, true, false, false);
+    Check("intel: Ctrl+Alt+{Up,Down,Left,Right} all detected as rotation clashes", up && down && left && right,
+        $"up={up} down={down} left={left} right={right}");
+}
+{
+    // Adding Shift (the safe default) or Win clears the clash — that's exactly how the fix dodges rotation.
+    Check("intel: Ctrl+Alt+Shift+Right is NOT a clash (the safe remap)",
+        !GuardCore.IsArrowRotationHotkey(0x27, true, true, shift: true, win: false));
+    Check("intel: Ctrl+Alt+Win+Right is NOT a clash",
+        !GuardCore.IsArrowRotationHotkey(0x27, true, true, false, win: true));
+}
+{
+    // A non-arrow key, or missing Ctrl/Alt, is never an Intel rotation clash.
+    Check("intel: a non-arrow key (G) is not a clash", !GuardCore.IsArrowRotationHotkey(0x47, true, true, false, false));
+    Check("intel: missing Ctrl is not a clash", !GuardCore.IsArrowRotationHotkey(0x26, false, true, false, false));
+    Check("intel: missing Alt is not a clash", !GuardCore.IsArrowRotationHotkey(0x26, true, false, false, false));
 }
 
 // ---- localization parity: every key exists in BOTH languages (no cross-language fallback) ----

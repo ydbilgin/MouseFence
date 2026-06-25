@@ -30,8 +30,21 @@ public sealed class Settings
     public bool PauseModShift { get; set; } = false;
     public bool PauseModWin { get; set; } = false;
 
+    // side-containment hotkey — toggles blocking the cursor from leaving the MAIN screen LEFT/RIGHT into a
+    // side screen (the horizontal mirror of the up-barrier). Default Ctrl+Alt+Right.
+    public Keys SideHotKey { get; set; } = Keys.Right;
+    public bool SideModCtrl { get; set; } = true;
+    public bool SideModAlt { get; set; } = true;
+    public bool SideModShift { get; set; } = false;
+    public bool SideModWin { get; set; } = false;
+
     // behaviour
     public bool StartGateClosed { get; set; } = true;  // main->top crossing blocked at launch
+    // Default ON (true): side containment is a SOFT barrier — it only blocks accidental drift out of the main screen
+    // sideways; a deliberate horizontal push always crosses, so shipping it on costs the user nothing but stops the
+    // pixel-creep onto a side monitor. An absent JSON key deserializes to this default; toggle off via the tray menu
+    // or the Ctrl+Alt+Right hotkey for fully free side movement.
+    public bool StartSideContainOn { get; set; } = true;  // start with the soft side barrier engaged?
     public bool AutoStart { get; set; } = false;       // launch with Windows
     public bool DeliberateCross { get; set; } = true;  // true: deliberate push to cross; false: any upward move
     public bool DescentRouting { get; set; } = false;  // opt-in: clamp a descent back onto the linked bottom screen
@@ -56,6 +69,11 @@ public sealed class Settings
     // FromDevice/ToDevice store stable MonitorInfo.StableId values; the property names stay for JSON compatibility.
     // Empty = default behaviour (the primary may cross up into every top monitor).
     public List<UpLink> UpLinks { get; set; } = new();
+
+    // Transient (not persisted): set when a fresh install on an Intel GPU had Shift added to its arrow hotkeys,
+    // so the tray can show an info balloon explaining the safe defaults.
+    [JsonIgnore]
+    public bool IntelDefaultsApplied { get; private set; }
 
     [JsonIgnore]
     public static string Dir =>
@@ -89,7 +107,24 @@ public sealed class Settings
             }
         }
         catch { /* fall through to defaults */ }
-        return new Settings();
+
+        // Fresh install (no settings file yet): on an Intel GPU, the Ctrl+Alt+Arrow defaults clash with the driver's
+        // screen-rotation hotkeys, so add Shift to keep the directional arrow but dodge rotation.
+        var fresh = new Settings();
+        try { if (Native.HasIntelGpu()) fresh.AddShiftToArrowHotkeys(); }
+        catch { /* detection is best-effort */ }
+        return fresh;
+    }
+
+    /// <summary>On an Intel GPU, the Ctrl+Alt+Arrow defaults (up-barrier + side containment) collide with the driver's
+    /// screen-rotation hotkeys. Add Shift to any arrow-rotation hotkey so it keeps the arrow but no longer rotates the
+    /// screen. Sets <see cref="IntelDefaultsApplied"/> if anything changed (for the tray's info balloon).</summary>
+    public void AddShiftToArrowHotkeys()
+    {
+        bool changed = false;
+        if (GuardCore.IsArrowRotationHotkey((int)HotKey, ModCtrl, ModAlt, ModShift, ModWin)) { ModShift = true; changed = true; }
+        if (GuardCore.IsArrowRotationHotkey((int)SideHotKey, SideModCtrl, SideModAlt, SideModShift, SideModWin)) { SideModShift = true; changed = true; }
+        IntelDefaultsApplied = changed;
     }
 
     public static int ReadVersion(string json)
@@ -198,6 +233,27 @@ public sealed class Settings
         if (PauseModShift) parts.Add("Shift");
         if (PauseModWin) parts.Add("Win");
         if (PauseHotKey != Keys.None) parts.Add(PauseHotKey.ToString());
+        return parts.Count == 0 ? "(none)" : string.Join("+", parts);
+    }
+
+    public uint SideModifiers()
+    {
+        uint m = 0;
+        if (SideModCtrl) m |= Native.MOD_CONTROL;
+        if (SideModAlt) m |= Native.MOD_ALT;
+        if (SideModShift) m |= Native.MOD_SHIFT;
+        if (SideModWin) m |= Native.MOD_WIN;
+        return m;
+    }
+
+    public string SideHotKeyText()
+    {
+        var parts = new List<string>();
+        if (SideModCtrl) parts.Add("Ctrl");
+        if (SideModAlt) parts.Add("Alt");
+        if (SideModShift) parts.Add("Shift");
+        if (SideModWin) parts.Add("Win");
+        if (SideHotKey != Keys.None) parts.Add(SideHotKey.ToString());
         return parts.Count == 0 ? "(none)" : string.Join("+", parts);
     }
 }

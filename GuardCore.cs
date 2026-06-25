@@ -33,6 +33,15 @@ public sealed class GuardCore
     public bool Confine;
     public List<(int L, int T, int R, int B)> Monitors = new();
 
+    // Side containment (horizontal mirror of the up-barrier): a SOFT barrier that stops accidental drift out of the
+    // MAIN screen LEFT or RIGHT into a side screen. The barrier lines are the main screen's left/right edges
+    // (MainL/MainR); containment applies ONLY while the move STARTS on the main screen, so returning from a side
+    // screen back into main is always free — the cursor can never be trapped on a side screen. Toggled by
+    // sideContain (passed to Decide): ON = block drift but a deliberate horizontal push still crosses (same
+    // DeliberateCross rule as up); OFF = free. MainT/MainB bound the main screen's own Y-band (origin test).
+    public bool HasSides;
+    public int MainL, MainR, MainT, MainB;
+
     // Forbidden rectangles the cursor may never ENTER (e.g. a headless/dummy HDMI display the user can't see).
     // Half-open like every other rect here: [L,R) x [T,B). Empty list => feature inert (a true no-op). The data
     // model is intentionally a plain rect list so an Ignore-mode / per-layout profiles can reuse it later without
@@ -41,7 +50,7 @@ public sealed class GuardCore
 
     /// <summary>The hook only needs to run (and the clamp/barrier logic only matters) when at least one of these
     /// holds. Factored so it is testable and so a dummy with NO top monitors still installs the hook to wall it off.</summary>
-    public bool NeedsProcessing => HasTop || Confine || Forbidden.Count > 0;
+    public bool NeedsProcessing => HasTop || Confine || Forbidden.Count > 0 || HasSides;
 
     // descent routing (opt-in, default OFF): when descending out of a top monitor through its overhang onto the
     // WRONG side screen, clamp the exit X into the LINKED bottom monitor's full X-range so the cursor lands on the
@@ -268,6 +277,15 @@ public sealed class GuardCore
     public static (string Mode, List<string> ManualKeys, List<(string From, string To)> Links) ResetLayoutConfig() =>
         ("AutoTop", new List<string>(), new List<(string From, string To)>());
 
+    /// <summary>
+    /// True if a hotkey is EXACTLY Ctrl+Alt+Arrow (no Shift, no Win) — the combo Intel GPU drivers bind to screen
+    /// ROTATION, so MouseFence should warn or pick a safe default. <paramref name="vk"/> is the Win32 virtual-key code
+    /// (which equals <c>(int)System.Windows.Forms.Keys</c> for the arrows: Left 0x25, Up 0x26, Right 0x27, Down 0x28).
+    /// Pure + WinForms-free so it is unit-tested without pulling in WinForms.
+    /// </summary>
+    public static bool IsArrowRotationHotkey(int vk, bool ctrl, bool alt, bool shift, bool win) =>
+        ctrl && alt && !shift && !win && (vk == 0x25 || vk == 0x26 || vk == 0x27 || vk == 0x28);
+
     /// <summary>Deterministic UI label that avoids mixing a positional # with renumber-prone DISPLAY names.</summary>
     public static string MonitorLabel(int ordinal, int width, int height, int left, int top, bool primary, string mainTag)
     {
@@ -432,9 +450,12 @@ public sealed class GuardCore
 
     /// <summary>
     /// Decide a NON-injected move to (x,y). Returns Pass or Block (caller clamps to bx,by). Mutates state.
-    /// <paramref name="gatesEnabled"/> is the master toggle: when false, no crossing is allowed anywhere.
+    /// <paramref name="gatesEnabled"/> is the up-barrier master toggle: when false, no upward crossing is allowed.
+    /// <paramref name="sideContain"/> is the side-containment toggle: when true a soft barrier blocks accidental
+    /// drift out of the MAIN screen left/right (a deliberate horizontal push still crosses); when false the side is
+    /// free (see <see cref="HasSides"/>).
     /// </summary>
-    public GuardAction Decide(int x, int y, bool gatesEnabled, out int bx, out int by)
+    public GuardAction Decide(int x, int y, bool gatesEnabled, bool sideContain, out int bx, out int by)
     {
         bx = x; by = y;
 
@@ -453,7 +474,7 @@ public sealed class GuardCore
         }
         // from here on, (x,y) == (bx,by) is guaranteed outside every forbidden rect.
 
-        if (!HasTop && !Confine) { Accept(x, y); return GuardAction.Pass; }
+        if (!HasTop && !Confine && !HasSides) { Accept(x, y); return GuardAction.Pass; }
 
         if (!HaveLast)
         {
@@ -475,6 +496,42 @@ public sealed class GuardCore
             }
             Accept(x, y);
             return GuardAction.Pass;
+        }
+
+        // (S) Side containment: a SOFT barrier that stops the cursor from ACCIDENTALLY drifting out of the MAIN
+        // screen LEFT/RIGHT into a side screen — the horizontal mirror of the up-barrier's feel. Only when the move
+        // STARTS on the main screen (origin-aware) so a side->main return is never blocked and the cursor can't be
+        // trapped on a side screen. When containment is ON, a slow drift / steep diagonal is blocked but a DELIBERATE
+        // horizontal push still crosses (same DeliberateCross rule as up); when OFF the side is free. On a block we
+        // clamp X back into the main screen AND keep the up-barrier honoured on the same move (a diagonal that also
+        // goes above the line must not slip up at the clamped edge — that edge is outside the inset up-gate anyway),
+        // so a corner move can't escape on either axis.
+        if (HasSides)
+        {
+            bool startedOnMain = LastX >= MainL && LastX < MainR && LastY >= MainT && LastY < MainB;
+            if (startedOnMain && (x < MainL || x >= MainR))
+            {
+                int sideDx = Math.Abs(x - LastX);
+                int sideDy = Math.Abs(y - LastY);
+                bool sideIntent = DeliberateCross ? (sideDx >= CrossMinUp && sideDy <= sideDx + CrossSlack) : sideDx > 0;
+                if (sideContain && !sideIntent)
+                {
+                    bx = Math.Clamp(x, MainL, MainR - 1);   // never leave main horizontally
+                    by = y;                                  // keep the vertical component by default
+                    // Compose the up-barrier: a diagonal that also goes above the line must not slip UP at the clamped
+                    // edge (that edge is outside the inset up-gate anyway). MainT == BarrierY here because main is the
+                    // Windows primary (its top-left is the desktop origin 0,0), so this never lifts a legal point.
+                    if (HasTop && by < BarrierY) by = BarrierY;
+                    // Y-void correction ONLY: if clamping X left the point on NO real monitor (e.g. a side screen
+                    // TALLER than main, or a corner beyond every screen), pull Y back onto the main band so the cursor
+                    // lands on a real pixel. We must NOT clamp Y unconditionally — a down-diagonal toward a screen
+                    // stacked BELOW main is a legal descent and must keep its Y (the clamped-X point is on that screen).
+                    if (!TryActiveMonitor(bx, by, out _)) by = Math.Clamp(by, MainT, MainB - 1);
+                    Accept(bx, by);
+                    return GuardAction.Block;
+                }
+                // allowed: fall through so the up-barrier still governs the vertical component of the crossing.
+            }
         }
 
         if (!HasTop) { Accept(x, y); return GuardAction.Pass; }
