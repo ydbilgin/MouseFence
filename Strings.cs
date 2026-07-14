@@ -36,15 +36,23 @@ public static class Strings
     public static string Subtitle => G("Subtitle");
     public static string HotkeyHead => G("HotkeyHead");
     public static string HotkeyHint => G("HotkeyHint");
+    public static string GeneralIntro => G("GeneralIntro");
     public static string HotkeyPressKeys => G("HotkeyPressKeys");
     public static string Clear => G("Clear");
     public static string StartupHead => G("StartupHead");
     public static string StartGateClosed => G("StartGateClosed");
+    public static string StartGateClosedTip => G("StartGateClosedTip");
     public static string StartWithWindows => G("StartWithWindows");
+    public static string StartWithWindowsTip => G("StartWithWindowsTip");
     public static string AppearanceHead => G("AppearanceHead");
+    public static string AppearanceIntro => G("AppearanceIntro");
     public static string LanguageLabel => G("LanguageLabel");
+    public static string LanguageTip => G("LanguageTip");
     public static string ThemeLabel => G("ThemeLabel");
+    public static string ThemeTip => G("ThemeTip");
     public static string LangAuto => G("LangAuto");
+    public static string LangEnglish => G("LangEnglish");
+    public static string LangTurkish => G("LangTurkish");
     public static string ThemeSystem => G("ThemeSystem");
     public static string ThemeLight => G("ThemeLight");
     public static string ThemeDark => G("ThemeDark");
@@ -78,18 +86,25 @@ public static class Strings
     public static string TabAppearance => G("TabAppearance");
     public static string TabMonitors => G("TabMonitors");
     public static string DisplaysTab => G("DisplaysTab");
+    public static string DisplayMapHead => G("DisplayMapHead");
     public static string IdentifyAll => G("IdentifyAll");
     public static string MapHint => G("MapHint");
     public static string LegendMain => G("LegendMain");
     public static string LegendKeptOut => G("LegendKeptOut");
+    public static string MonitorNameHead => G("MonitorNameHead");
+    public static string MonitorNameHint => G("MonitorNameHint");
+    public static string MonitorNamePlaceholder => G("MonitorNamePlaceholder");
     public static string KeepOutHead => G("KeepOutHead");
     public static string MainAlwaysAvailable => G("MainAlwaysAvailable");
     public static string AdvancedHead => G("AdvancedHead");
+    public static string AdvancedHint => G("AdvancedHint");
     public static string TopSelectionHead => G("TopSelectionHead");
+    public static string TopSelectionHint => G("TopSelectionHint");
     public static string TopModeAuto => G("TopModeAuto");
     public static string TopModeManual => G("TopModeManual");
     public static string NotAbovePrimary => G("NotAbovePrimary");
     public static string CrossingPathsHead => G("CrossingPathsHead");
+    public static string CrossingPathsHint => G("CrossingPathsHint");
     public static string CrossingDefault => G("CrossingDefault");
     public static string CrossingCustom => G("CrossingCustom");
     public static string BehaviorHead => G("BehaviorHead");
@@ -101,7 +116,9 @@ public static class Strings
     public static string RuleHint => G("RuleHint");
     public static string NoTopsHint => G("NoTopsHint");
     public static string DeliberateCrossLabel => G("DeliberateCrossLabel");
+    public static string DeliberateCrossHint => G("DeliberateCrossHint");
     public static string DescentRoutingLabel => G("DescentRoutingLabel");
+    public static string DescentRoutingHint => G("DescentRoutingHint");
     public static string ExcludeHead => G("ExcludeHead");
     public static string ExcludeHint => G("ExcludeHint");
     public static string ExcludePruned => G("ExcludePruned");
@@ -128,9 +145,15 @@ public static class Strings
     public static string SideHotkeyHead => G("SideHotkeyHead");
     public static string SideHotkeyHint => G("SideHotkeyHint");
     public static string StartSideContainOn => G("StartSideContainOn");
+    public static string StartSideContainTip => G("StartSideContainTip");
+    public static string SideTuningHead => G("SideTuningHead");
+    public static string SideTuningHint => G("SideTuningHint");
     public static string SideSensitivityLabel => G("SideSensitivityLabel");
     public static string SideSensitivityHint => G("SideSensitivityHint");
     public static string DefaultLabel => G("DefaultLabel");
+    public static string SideSlackLabel => G("SideSlackLabel");
+    public static string SideSlackHint => G("SideSlackHint");
+    public static string DefaultSlackLabel => G("DefaultSlackLabel");
 
     // ---- interpolated (keep {0} out of the table) ----
     public static string TipHotkeyFail(string combo) => string.Format(G("TipHotkeyFail"), combo);
@@ -148,15 +171,23 @@ public static class Strings
         ["Subtitle"] = "Cursor barrier settings",
         ["HotkeyHead"] = "Toggle hotkey",
         ["HotkeyHint"] = "Click the box, then press your key combo.",
+        ["GeneralIntro"] = "Choose the keyboard shortcuts and how MouseFence starts.",
         ["HotkeyPressKeys"] = "(press keys)",
         ["Clear"] = "Clear",
         ["StartupHead"] = "Startup",
         ["StartGateClosed"] = "Start with main → top crossing closed",
+        ["StartGateClosedTip"] = "When MouseFence starts, upward crossing stays blocked until you open it with the toggle hotkey.",
         ["StartWithWindows"] = "Start with Windows",
+        ["StartWithWindowsTip"] = "Launch MouseFence automatically after you sign in to Windows.",
         ["AppearanceHead"] = "Appearance",
+        ["AppearanceIntro"] = "Choose the language and colors used by the settings window and tray menu.",
         ["LanguageLabel"] = "Language",
+        ["LanguageTip"] = "Automatic follows the Windows display language; English and Turkish override it.",
         ["ThemeLabel"] = "Theme",
+        ["ThemeTip"] = "Follow the Windows app theme, or always use the light or dark MouseFence theme.",
         ["LangAuto"] = "Automatic",
+        ["LangEnglish"] = "English",
+        ["LangTurkish"] = "Turkish",
         ["ThemeSystem"] = "Follow system",
         ["ThemeLight"] = "Light",
         ["ThemeDark"] = "Dark",
@@ -186,18 +217,25 @@ public static class Strings
         ["TabAppearance"] = "Appearance",
         ["TabMonitors"] = "Monitors",
         ["DisplaysTab"] = "Displays",
+        ["DisplayMapHead"] = "Your display layout",
         ["IdentifyAll"] = "Identify all",
         ["MapHint"] = "Click to flash a screen. MouseFence numbers may differ from Windows.",
         ["LegendMain"] = "★ Main",
         ["LegendKeptOut"] = "▧ Kept out",
+        ["MonitorNameHead"] = "Name the selected display",
+        ["MonitorNameHint"] = "The name stays with this physical display even if Windows renumbers it. Clear the field to remove it.",
+        ["MonitorNamePlaceholder"] = "Name this display…",
         ["KeepOutHead"] = "Keep the cursor OUT of these screens:",
         ["MainAlwaysAvailable"] = "Main — always available",
         ["AdvancedHead"] = "Advanced",
+        ["AdvancedHint"] = "Rarely changed layout, crossing-path, and side-barrier controls.",
         ["TopSelectionHead"] = "Which screens count as top (blocked)",
+        ["TopSelectionHint"] = "Automatic is best for most layouts; use Manual only when an upper display needs special treatment.",
         ["TopModeAuto"] = "Automatically use displays above Main",
         ["TopModeManual"] = "Choose upper displays manually",
         ["NotAbovePrimary"] = "Not above Main",
         ["CrossingPathsHead"] = "Crossing paths",
+        ["CrossingPathsHint"] = "Choose which lower screens may move upward into which upper screens.",
         ["CrossingDefault"] = "Default paths — Main can move into every upper display",
         ["CrossingCustom"] = "Custom paths",
         ["BehaviorHead"] = "Behavior",
@@ -209,13 +247,15 @@ public static class Strings
         ["RuleHint"] = "Pick a bottom screen, then check which top screens it may cross up into. (Empty = the primary may cross up into every top.)",
         ["NoTopsHint"] = "No top monitors detected — nothing to configure.",
         ["DeliberateCrossLabel"] = "Require a deliberate push to cross up / sideways (off = any move across a barrier crosses)",
+        ["DeliberateCrossHint"] = "On requires a clear push through a soft barrier; off lets any movement across an open path pass.",
         ["DescentRoutingLabel"] = "Stay in the same column when descending",
+        ["DescentRoutingHint"] = "When a linked upper screen overhangs another display, guide downward movement back to its linked lower screen.",
         ["ExcludeHead"] = "Exclude displays (wall cursor out — for dummy/headless)",
         ["ExcludeHint"] = "Walls the cursor out of an excluded display so it can't get lost there. The main display can't be excluded. (Display ids are machine-specific.)",
         ["ExcludePruned"] = "Couldn't exclude a display — the main display and the last usable display are always kept.",
         ["ResetLayoutLabel"] = "Reset layout",
         ["IdentifyLabel"] = "Identify",
-        ["IdentifyHint"] = "Flash each monitor's number on screen so you can tell which is which (won't show over an exclusive-fullscreen game).",
+        ["IdentifyHint"] = "Flash each monitor's MouseFence number and name on screen (won't show over an exclusive-fullscreen game).",
         ["ExportLabel"] = "Export…",
         ["ImportLabel"] = "Import…",
         ["ExportTitle"] = "Export MouseFence settings",
@@ -236,9 +276,15 @@ public static class Strings
         ["SideHotkeyHead"] = "Side containment hotkey",
         ["SideHotkeyHint"] = "Toggle side containment on/off — when on, a soft barrier blocks accidental drift off the MAIN screen left/right, but a deliberate push still crosses (the sideways mirror of the up barrier). Note: Ctrl+Alt+Arrow may rotate the screen on some Intel GPUs — pick another combo if so.",
         ["StartSideContainOn"] = "Start with side containment on (blocks accidental drift; push to cross)",
-        ["SideSensitivityLabel"] = "Side barrier strength",
+        ["StartSideContainTip"] = "Engage the soft left/right barrier at launch; a deliberate sideways push can still cross it.",
+        ["SideTuningHead"] = "Side barrier tuning",
+        ["SideTuningHint"] = "Adjust only if sideways crossing feels too easy, too hard, or rejects diagonal pushes.",
+        ["SideSensitivityLabel"] = "Push strength (higher = firmer)",
         ["SideSensitivityHint"] = "How hard you must flick sideways to break through the side barrier (pixels per move). Higher = a firmer barrier that catches more accidental drift; lower = easier to cross. Applies both ways (onto and off a side screen). Default is 3.",
         ["DefaultLabel"] = "Default (3)",
+        ["SideSlackLabel"] = "Diagonal allowance (higher = more diagonal)",
+        ["SideSlackHint"] = "Extra vertical movement allowed during a sideways push. Higher accepts more diagonal motion; lower requires a straighter push. Default is 5.",
+        ["DefaultSlackLabel"] = "Default (5)",
         ["TipIsolated"] = "Screen {0} has no side/down exit — only UP. MouseFence auto-opened an up-escape there; align its edges, or press {1} to pause.",
         ["IsolatedNote"] = "⚠ Screen {0} is isolated (a gap in the layout). Up-crossing from it is auto-allowed so it can't trap the cursor.",
         ["TipHotkeyFail"] = "Couldn't register hotkey: {0} — another app may be using it.",
@@ -255,15 +301,23 @@ public static class Strings
         ["Subtitle"] = "İmleç bariyeri ayarları",
         ["HotkeyHead"] = "Geçiş kısayolu",
         ["HotkeyHint"] = "Kutuya tıklayın, sonra tuş kombinasyonuna basın.",
+        ["GeneralIntro"] = "Klavye kısayollarını ve MouseFence'in nasıl başlayacağını seçin.",
         ["HotkeyPressKeys"] = "(tuşlara basın)",
         ["Clear"] = "Temizle",
         ["StartupHead"] = "Başlangıç",
         ["StartGateClosed"] = "Açılışta ana → üst geçiş kapalı başlasın",
+        ["StartGateClosedTip"] = "MouseFence başladığında, geçiş kısayoluyla açana kadar yukarı geçiş engelli kalır.",
         ["StartWithWindows"] = "Windows ile birlikte başlat",
+        ["StartWithWindowsTip"] = "Windows oturumunu açtığınızda MouseFence'i otomatik başlatır.",
         ["AppearanceHead"] = "Görünüm",
+        ["AppearanceIntro"] = "Ayarlar penceresi ve tepsi menüsünde kullanılacak dili ve renkleri seçin.",
         ["LanguageLabel"] = "Dil",
+        ["LanguageTip"] = "Otomatik seçeneği Windows görüntüleme dilini izler; İngilizce ve Türkçe bunu geçersiz kılar.",
         ["ThemeLabel"] = "Tema",
+        ["ThemeTip"] = "Windows uygulama temasını izleyin veya MouseFence'i her zaman açık ya da koyu kullanın.",
         ["LangAuto"] = "Otomatik",
+        ["LangEnglish"] = "İngilizce",
+        ["LangTurkish"] = "Türkçe",
         ["ThemeSystem"] = "Sisteme uy",
         ["ThemeLight"] = "Açık",
         ["ThemeDark"] = "Koyu",
@@ -293,18 +347,25 @@ public static class Strings
         ["TabAppearance"] = "Görünüm",
         ["TabMonitors"] = "Ekranlar",
         ["DisplaysTab"] = "Ekranlar",
+        ["DisplayMapHead"] = "Ekran yerleşiminiz",
         ["IdentifyAll"] = "Tümünü tanımla",
         ["MapHint"] = "Flaş için ekrana tıklayın. Numaralar Windows'tan farklı olabilir.",
         ["LegendMain"] = "★ Ana",
         ["LegendKeptOut"] = "▧ Dışarıda tutulur",
+        ["MonitorNameHead"] = "Seçili ekrana ad ver",
+        ["MonitorNameHint"] = "Windows ekranı yeniden numaralandırsa bile ad bu fiziksel ekranla kalır. Silmek için alanı boşaltın.",
+        ["MonitorNamePlaceholder"] = "Bu ekrana ad ver…",
         ["KeepOutHead"] = "İmleci şu ekranların DIŞINDA tut:",
         ["MainAlwaysAvailable"] = "Ana — her zaman kullanılabilir",
         ["AdvancedHead"] = "Gelişmiş",
+        ["AdvancedHint"] = "Nadiren değiştirilen düzen, geçiş yolu ve yan bariyer denetimleri.",
         ["TopSelectionHead"] = "Hangi ekranlar üst (engellenen) sayılır",
+        ["TopSelectionHint"] = "Çoğu düzen için Otomatik en iyisidir; yalnızca bir üst ekran özel işlem gerektiriyorsa Elle seçin.",
         ["TopModeAuto"] = "Ana ekranın üstündeki ekranları otomatik kullan",
         ["TopModeManual"] = "Üst ekranları elle seç",
         ["NotAbovePrimary"] = "Ana ekranın üstünde değil",
         ["CrossingPathsHead"] = "Geçiş yolları",
+        ["CrossingPathsHint"] = "Hangi alt ekranlardan hangi üst ekranlara yukarı geçilebileceğini seçin.",
         ["CrossingDefault"] = "Varsayılan yollar — Ana, her üst ekrana geçebilir",
         ["CrossingCustom"] = "Özel yollar",
         ["BehaviorHead"] = "Davranış",
@@ -316,13 +377,15 @@ public static class Strings
         ["RuleHint"] = "Bir alt ekran seç, sonra çıkabileceği üst ekranları işaretle. (Boş = ana ekran her üst ekrana çıkabilir.)",
         ["NoTopsHint"] = "Üst ekran algılanmadı — yapılandırılacak bir şey yok.",
         ["DeliberateCrossLabel"] = "Yukarı / yana geçmek için bilinçli itiş gerekir (kapalı = bariyere doğru her hareket geçer)",
+        ["DeliberateCrossHint"] = "Açıkken yumuşak bariyeri aşmak için belirgin bir itiş gerekir; kapalıyken açık yoldan geçen her hareket kabul edilir.",
         ["DescentRoutingLabel"] = "İnişte imleci aynı sütunda tut",
+        ["DescentRoutingHint"] = "Bağlı bir üst ekran başka bir ekranın üzerine taşıyorsa, aşağı hareketi bağlı alt ekrana geri yönlendirir.",
         ["ExcludeHead"] = "Ekranları hariç tut (imleci dışarıda tut — dummy/başsız için)",
         ["ExcludeHint"] = "İmleci hariç tutulan ekranın dışında tutar; imleç orada kaybolmaz. Ana ekran hariç tutulamaz. (Ekran kimlikleri makineye özeldir.)",
         ["ExcludePruned"] = "Bir ekran hariç tutulamadı — ana ekran ve son kullanılabilir ekran her zaman korunur.",
         ["ResetLayoutLabel"] = "Düzeni sıfırla",
         ["IdentifyLabel"] = "Tanımla",
-        ["IdentifyHint"] = "Hangi ekranın hangisi olduğunu görmek için her monitörün numarasını ekranda flaşlatır (tam ekran oyunun üzerinde görünmez).",
+        ["IdentifyHint"] = "Her monitörün MouseFence numarasını ve adını ekranda flaşlatır (tam ekran oyunun üzerinde görünmez).",
         ["ExportLabel"] = "Dışa aktar…",
         ["ImportLabel"] = "İçe aktar…",
         ["ExportTitle"] = "MouseFence ayarlarını dışa aktar",
@@ -343,9 +406,15 @@ public static class Strings
         ["SideHotkeyHead"] = "Yan kilit kısayolu",
         ["SideHotkeyHint"] = "Yan kilidi aç/kapat — açıkken ANA ekrandan SAĞA/SOLA kazara kaymayı engelleyen yumuşak bir bariyer kurar, ama kasıtlı bir itiş yine de geçer (yukarı bariyerin yana uyarlanmış hâli). Not: Ctrl+Alt+Ok bazı Intel ekran kartlarında ekranı döndürebilir — öyleyse başka kombinasyon seçin.",
         ["StartSideContainOn"] = "Açılışta yan kilit açık başlasın (kazara kaymayı engelle; geçmek için it)",
-        ["SideSensitivityLabel"] = "Yan bariyer gücü",
+        ["StartSideContainTip"] = "Açılışta yumuşak sağ/sol bariyeri etkinleştirir; bilinçli bir yana itiş yine geçebilir.",
+        ["SideTuningHead"] = "Yan bariyer ayarı",
+        ["SideTuningHint"] = "Yana geçiş fazla kolay, fazla zor geliyorsa veya çapraz itişleri reddediyorsa ayarlayın.",
+        ["SideSensitivityLabel"] = "İtiş gücü (yüksek = daha sert)",
         ["SideSensitivityHint"] = "Yan bariyeri kırmak için yana ne kadar sert itmen gerektiği (hareket başına piksel). Yüksek = daha sert bariyer, daha çok kazara kaymayı yakalar; düşük = daha kolay geçilir. Her iki yönde de geçerli (yan ekrana çıkış ve yan ekrandan dönüş). Varsayılan 3.",
         ["DefaultLabel"] = "Varsayılan (3)",
+        ["SideSlackLabel"] = "Çapraz hareket payı (yüksek = daha çapraz)",
+        ["SideSlackHint"] = "Yana itiş sırasında izin verilen ek dikey hareket. Yüksek değer daha çapraz hareketi kabul eder; düşük değer daha düz bir itiş ister. Varsayılan 5.",
+        ["DefaultSlackLabel"] = "Varsayılan (5)",
         ["TipIsolated"] = "{0} numaralı ekranın yana/aşağı çıkışı yok — yalnızca YUKARI. MouseFence oradan yukarı çıkışı otomatik açtı; kenarlarını hizala veya duraklatmak için {1} tuşuna bas.",
         ["IsolatedNote"] = "⚠ {0} numaralı ekran yalıtılmış (yerleşimde boşluk). Kapana kısmaması için oradan yukarı geçiş otomatik açıldı.",
         ["TipHotkeyFail"] = "Kısayol kaydedilemedi: {0} — başka bir uygulama kullanıyor olabilir.",

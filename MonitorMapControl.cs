@@ -15,6 +15,7 @@ internal sealed class MonitorMapControl : Control
     private HashSet<string> _excluded = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _tops = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _allowed = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, string> _names = new(StringComparer.OrdinalIgnoreCase);
     private Theme _theme = Theme.Light;
     private string _selectedStableId;
     private string _hoveredStableId;
@@ -75,6 +76,16 @@ internal sealed class MonitorMapControl : Control
         Invalidate();
     }
 
+    public void SetNames(IReadOnlyDictionary<string, string> names)
+    {
+        _names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (names != null)
+            foreach (var pair in names)
+                if (!string.IsNullOrEmpty(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+                    _names[pair.Key] = pair.Value.Trim();
+        Invalidate();
+    }
+
     public void SetState(IEnumerable<string> excluded, IEnumerable<string> tops, string fromStableId,
         IEnumerable<string> allowed, bool customPaths)
     {
@@ -125,13 +136,38 @@ internal sealed class MonitorMapControl : Control
                 e.Graphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
 
             string number = m.Primary ? $"{m.Index} ★" : m.Index.ToString();
-            float fontSize = Math.Clamp(Math.Min(rect.Height * 0.42f,
-                rect.Width / Math.Max(1f, number.Length * 0.72f)), 8f, 44f);
-            using var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Point);
             Color text = isAllowed ? _theme.AccentText : _theme.Text;
-            TextRenderer.DrawText(e.Graphics, number, font, rect, text,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
-                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+            string name = NameFor(m);
+            bool showName = name.Length > 0 && rect.Width >= 72 && rect.Height >= 38;
+            if (showName)
+            {
+                int numberHeight = Math.Max(20, (int)(rect.Height * 0.58f));
+                var numberRect = new Rectangle(rect.X + 2, rect.Y + 1, Math.Max(0, rect.Width - 4), numberHeight);
+                var nameRect = new Rectangle(rect.X + 4, numberRect.Bottom - 2,
+                    Math.Max(0, rect.Width - 8), Math.Max(0, rect.Bottom - numberRect.Bottom));
+                float numberSize = Math.Clamp(Math.Min(numberRect.Height * 0.46f,
+                    numberRect.Width / Math.Max(1f, number.Length * 0.72f)), 8f, 34f);
+                float nameSize = Math.Clamp(Math.Min(nameRect.Height * 0.48f,
+                    nameRect.Width / Math.Max(1f, name.Length * 0.58f)), 7f, 13f);
+                using var numberFont = new Font("Segoe UI", numberSize, FontStyle.Bold, GraphicsUnit.Point);
+                using var nameFont = new Font("Segoe UI", nameSize, FontStyle.Regular, GraphicsUnit.Point);
+                TextRenderer.DrawText(e.Graphics, number, numberFont, numberRect, text,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(e.Graphics, name, nameFont, nameRect, text,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                    TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            }
+            else
+            {
+                float fontSize = Math.Clamp(Math.Min(rect.Height * 0.42f,
+                    rect.Width / Math.Max(1f, number.Length * 0.72f)), 8f, 44f);
+                using var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Point);
+                TextRenderer.DrawText(e.Graphics, number, font, rect, text,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            }
         }
 
         ControlPaint.DrawBorder(e.Graphics, ClientRectangle, _theme.Border, ButtonBorderStyle.Solid);
@@ -194,8 +230,11 @@ internal sealed class MonitorMapControl : Control
     private string Detail(MonitorInfo m)
     {
         string main = m.Primary ? $" • {Strings.MainTag.Trim('[', ']')}" : "";
-        return $"{m.Bounds.Width}x{m.Bounds.Height} • @ {m.Bounds.Left},{m.Bounds.Top} • {m.Device}{main}";
+        string title = NameFor(m) is { Length: > 0 } name ? $"{m.Index} — {name}" : m.Index.ToString();
+        return $"{title} • {m.Bounds.Width}x{m.Bounds.Height} • @ {m.Bounds.Left},{m.Bounds.Top} • {m.Device}{main}";
     }
+
+    private string NameFor(MonitorInfo m) => Settings.MonitorNameFor(_names, m?.StableId);
 
     private static bool Same(string a, string b) =>
         string.Equals(a, b, StringComparison.OrdinalIgnoreCase);

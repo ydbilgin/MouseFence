@@ -342,10 +342,12 @@ public sealed class GuardCore
     }
 
     /// <summary>Short, human-facing monitor label; position and device details belong in the map tooltip.</summary>
-    public static string MonitorLabel(int ordinal, int width, int height, bool primary, string mainTag)
+    public static string MonitorLabel(int ordinal, int width, int height, bool primary, string mainTag,
+                                      string monitorName = null)
     {
+        var name = string.IsNullOrWhiteSpace(monitorName) ? "" : "  •  " + monitorName.Trim();
         var suffix = primary && !string.IsNullOrEmpty(mainTag) ? "  " + mainTag : "";
-        return $"{ordinal}  •  {width}x{height}{suffix}";
+        return $"{ordinal}{name}  •  {width}x{height}{suffix}";
     }
 
     private static bool InRect((int L, int T, int R, int B) r, int x, int y) =>
@@ -353,23 +355,32 @@ public sealed class GuardCore
 
     private bool TryActiveMonitor(int x, int y, out (int L, int T, int R, int B) m)
     {
-        foreach (var r in Monitors)
-            if (x >= r.L && x < r.R && y >= r.T && y < r.B) { m = r; return true; }
+        // Extended-desktop monitors normally do not overlap, but clone/driver edge cases can. Pick by geometry rather
+        // than enumeration order so the same rectangles always yield the same active monitor.
+        bool found = false;
         m = default;
-        return false;
+        foreach (var r in Monitors)
+        {
+            if (!InRect(r, x, y)) continue;
+            if (!found || CompareRect(r, m) < 0) { m = r; found = true; }
+        }
+        return found;
     }
 
     /// <summary>
-    /// Pure wall-off clamp: if (x,y) lands inside ANY forbidden rect, push it back OUT to a legal pixel,
-    /// preserving the orthogonal axis (no jitter), and never landing inside another forbidden rect. Returns
-    /// true if it moved the point. GUARANTEES the returned (x,y) is outside EVERY forbidden rect (and terminates).
+    /// Pure wall-off clamp: if (x,y) lands inside ANY forbidden rect, push it back OUT to a legal pixel on one of
+    /// <see cref="Monitors"/> (the usable, non-excluded screens). Preserve the orthogonal axis when that screen has
+    /// such a pixel; otherwise use its nearest edge pixel. Returns true if it moved the point. With a configured
+    /// usable monitor list, GUARANTEES the result is outside EVERY forbidden rect AND on a usable monitor.
     ///
     /// ENTRY-SIDE-AWARE (binding fix #1): the move came from (LastX,LastY). When we have a last position that is
     /// OUTSIDE the rect, exit on the edge the move ENTERED from — the rect wall the entry SEGMENT (Last -> target)
     /// crosses FIRST (smallest valid parametric t), NOT the nearest edge of the target and NOT the larger-delta axis.
     /// A large delta (e.g. a fast flick or OS easing teleport deep into / past the centre of the dummy) must not
-    /// "tunnel" to the far/void side and re-lose the cursor. Nearest-edge is only the fallback for !HaveLast or when
-    /// Last is itself inside the connected region (no usable entry direction).
+    /// "tunnel" to the far/void side and re-lose the cursor. When Last is a legal usable pixel outside the connected
+    /// region, that exact monitor owns the entry and is preferred over every other exit. With no usable entry direction
+    /// (!HaveLast, Last inside the region, or Last not on a usable monitor), the nearest usable monitor wins. Equal-
+    /// distance ties use L,T,R,B geometry order.
     ///
     /// ADJACENT/OVERLAPPING rects (binding fix #3 / ROUND-3 FIX A): a single per-rect exit can oscillate — exiting
     /// rect A on its nearest edge lands inside the adjacent rect B, exiting B lands back inside A, and a bounded
@@ -418,7 +429,7 @@ public sealed class GuardCore
             // reduces to exiting that one axis. When Last is INSIDE the region there is no usable entry direction, so
             // the nearest-edge fallback (above) stands.
             ComponentExtent(region, out int regL, out int regT, out int regR, out int regB);
-            bool lastOutsideRegion = HaveLast && (LastX < regL || LastX >= regR || LastY < regT || LastY >= regB);
+            bool lastOutsideRegion = HaveLast && !RegionContains(region, LastX, LastY);
             if (lastOutsideRegion)
             {
                 bool lastLeft = LastX < regL, lastRight = LastX >= regR;
@@ -446,11 +457,56 @@ public sealed class GuardCore
                     else if (validY) useX = false;                  // only the Y wall is reached
                     else useX = Math.Abs(x - LastX) >= Math.Abs(y - LastY);   // degenerate fallback: dominant axis
                 }
-                else
+                else if (xOutside || yOutside)
                     useX = xOutside;                                 // crossed exactly one axis
+                else
+                    useX = exitAxis == 0;                            // outside a non-rectangular region hole
 
                 if (useX) { exitAxis = 0; exitToLow = lastLeft; }
                 else { exitAxis = 1; exitToLow = lastAbove; }
+            }
+
+            // MONITOR-AWARE RESOLUTION. The old geometry-only exit below can be outside every dummy yet still be a
+            // desktop void (the reporter case was x=4479,y=1400 below the real neighbour). If Last is a legal usable
+            // point outside this region, return to THAT monitor: it is the unambiguous entry-side owner. Otherwise
+            // choose the nearest legal usable monitor. Candidate generation is finite (monitor/forbidden boundaries),
+            // and ties are geometry-ordered, so this is deterministic and cannot oscillate between adjacent dummies.
+            if (Monitors.Count > 0)
+            {
+                (int L, int T, int R, int B) entryMonitor = default;
+                bool usableEntry = lastOutsideRegion
+                    && TryActiveMonitor(LastX, LastY, out entryMonitor)
+                    && !InsideForbidden(LastX, LastY);
+                if (usableEntry)
+                {
+                    int preferredAxis = PreferredAxis(entryMonitor, x, y, exitAxis);
+                    // WALL FEEL: clamp only the CROSSING axis to the neighbour's edge; on the ORTHOGONAL axis keep the
+                    // cursor's ENTRY coordinate (LastX/LastY), not the attempted target. Otherwise a target produced by
+                    // Windows' "ease cursor movement between displays" (a large one-frame teleport deep into the dummy)
+                    // drags the cursor to that eased height, so hitting the seam looks like a ~600px vertical JUMP
+                    // instead of the cursor simply stopping at the edge. preferredAxis 0 = X is the wall (keep LastY);
+                    // 1 = Y is the wall (keep LastX).
+                    int desiredX = preferredAxis == 0 ? x : LastX;
+                    int desiredY = preferredAxis == 1 ? y : LastY;
+                    if (TryLegalPointOnMonitor(entryMonitor, desiredX, desiredY, preferredAxis,
+                                               out int entryX, out int entryY, out _))
+                    {
+                        x = entryX;
+                        y = entryY;
+                        return true;
+                    }
+                }
+
+                if (TryNearestLegalMonitorPoint(x, y, out int legalX, out int legalY))
+                {
+                    x = legalX;
+                    y = legalY;
+                    return true;
+                }
+                // A valid extended-desktop configuration always has a usable pixel: exclusion sanitization keeps a
+                // real monitor and normal monitor rectangles do not overlap. If malformed synthetic data covers every
+                // usable pixel with Forbidden, no legal point exists mathematically; retain the bounded geometric
+                // fallback below rather than suppressing the move or freezing the cursor.
             }
 
             // March the chosen direction to the FAR edge of the WHOLE connected region (not just the hit rect), so an
@@ -464,6 +520,135 @@ public sealed class GuardCore
             // still contain it, which the next pass handles.
         }
         return moved;
+    }
+
+    private bool InsideForbidden(int x, int y)
+    {
+        foreach (var f in Forbidden)
+            if (InRect(f, x, y)) return true;
+        return false;
+    }
+
+    private bool RegionContains(List<int> region, int x, int y)
+    {
+        foreach (int index in region)
+            if (InRect(Forbidden[index], x, y)) return true;
+        return false;
+    }
+
+    /// <summary>Choose which coordinate is orthogonal to the entry wall. If the target lies outside the source
+    /// monitor on only one axis, that axis is necessarily the crossing axis; diagonal/corner cases keep the region's
+    /// deterministic entry-axis decision.</summary>
+    private static int PreferredAxis((int L, int T, int R, int B) source, int targetX, int targetY, int regionAxis)
+    {
+        bool outsideX = targetX < source.L || targetX >= source.R;
+        bool outsideY = targetY < source.T || targetY >= source.B;
+        if (outsideX != outsideY) return outsideX ? 0 : 1;
+        return regionAxis;
+    }
+
+    /// <summary>
+    /// Find the closest legal pixel on one usable monitor without enumerating pixels. Axis-aligned rectangle
+    /// subtraction changes only at monitor/forbidden edges, so the desired coordinate plus L/R-1/T/B-1 and every
+    /// forbidden outside edge (L-1/R/T-1/B) form a complete finite candidate grid. For an entry-side clamp,
+    /// <paramref name="preferredAxis"/> is 0 (X wall) or 1 (Y wall): minimize movement on the orthogonal coordinate
+    /// first, then the wall coordinate. A value of -1 selects ordinary squared distance for nearest-monitor fallback.
+    /// </summary>
+    private bool TryLegalPointOnMonitor((int L, int T, int R, int B) monitor,
+                                        int desiredX, int desiredY, int preferredAxis,
+                                        out int bestX, out int bestY, out decimal bestDistance)
+    {
+        bestX = bestY = 0;
+        bestDistance = decimal.MaxValue;
+        if (monitor.R <= monitor.L || monitor.B <= monitor.T) return false;
+
+        var xs = new SortedSet<int>();
+        var ys = new SortedSet<int>();
+        void AddX(long value) => xs.Add((int)Math.Clamp(value, monitor.L, (long)monitor.R - 1));
+        void AddY(long value) => ys.Add((int)Math.Clamp(value, monitor.T, (long)monitor.B - 1));
+
+        AddX(desiredX); AddX(monitor.L); AddX((long)monitor.R - 1);
+        AddY(desiredY); AddY(monitor.T); AddY((long)monitor.B - 1);
+        foreach (var f in Forbidden)
+        {
+            AddX((long)f.L - 1); AddX(f.R);
+            AddY((long)f.T - 1); AddY(f.B);
+        }
+
+        bool found = false;
+        long bestFirst = long.MaxValue, bestSecond = long.MaxValue;
+        foreach (int candidateX in xs)
+        foreach (int candidateY in ys)
+        {
+            if (InsideForbidden(candidateX, candidateY)) continue;
+
+            long dx = Math.Abs((long)candidateX - desiredX);
+            long dy = Math.Abs((long)candidateY - desiredY);
+            decimal distance = (decimal)dx * dx + (decimal)dy * dy;
+            long first = preferredAxis switch { 0 => dy, 1 => dx, _ => 0 };
+            long second = preferredAxis switch { 0 => dx, 1 => dy, _ => 0 };
+
+            bool better = !found;
+            if (!better && preferredAxis >= 0)
+                better = first < bestFirst
+                      || first == bestFirst && (second < bestSecond
+                      || second == bestSecond && (candidateX < bestX
+                      || candidateX == bestX && candidateY < bestY));
+            else if (!better)
+                better = distance < bestDistance
+                      || distance == bestDistance && (candidateX < bestX
+                      || candidateX == bestX && candidateY < bestY);
+
+            if (!better) continue;
+            found = true;
+            bestX = candidateX;
+            bestY = candidateY;
+            bestDistance = distance;
+            bestFirst = first;
+            bestSecond = second;
+        }
+        return found;
+    }
+
+    /// <summary>Nearest usable-monitor fallback. Distance is measured from the attempted target to the nearest legal
+    /// pixel. Equal distances select the monitor with the lexicographically smaller (L,T,R,B), then smaller X,Y;
+    /// input list order is never a tie-break, so identical calls are deterministic.</summary>
+    private bool TryNearestLegalMonitorPoint(int desiredX, int desiredY, out int bestX, out int bestY)
+    {
+        bestX = bestY = 0;
+        bool found = false;
+        decimal bestDistance = decimal.MaxValue;
+        (int L, int T, int R, int B) bestMonitor = default;
+
+        foreach (var monitor in Monitors)
+        {
+            if (!TryLegalPointOnMonitor(monitor, desiredX, desiredY, -1,
+                                        out int candidateX, out int candidateY, out decimal distance))
+                continue;
+
+            int rectOrder = found ? CompareRect(monitor, bestMonitor) : -1;
+            bool better = !found || distance < bestDistance
+                       || distance == bestDistance && (rectOrder < 0
+                       || rectOrder == 0 && (candidateX < bestX
+                       || candidateX == bestX && candidateY < bestY));
+            if (!better) continue;
+            found = true;
+            bestDistance = distance;
+            bestMonitor = monitor;
+            bestX = candidateX;
+            bestY = candidateY;
+        }
+        return found;
+    }
+
+    private static int CompareRect((int L, int T, int R, int B) a, (int L, int T, int R, int B) b)
+    {
+        int c = a.L.CompareTo(b.L);
+        if (c != 0) return c;
+        c = a.T.CompareTo(b.T);
+        if (c != 0) return c;
+        c = a.R.CompareTo(b.R);
+        return c != 0 ? c : a.B.CompareTo(b.B);
     }
 
     /// <summary>Two half-open rects touch if they overlap OR abut (share an edge) along one axis while overlapping or
@@ -521,36 +706,27 @@ public sealed class GuardCore
         //     Only genuine incursions clamp: a target already outside every rect returns false here (no clamp,
         //     falls through), so sliding ALONG a seam on the real side is never touched -> no jitter.
         if (Forbidden.Count > 0 && ClampOutOfForbidden(ref bx, ref by))
-        {
-            // Record the clamped point as the new last position so the next move's intent is measured from where
-            // the cursor actually is. The hook applies SetCursorPos(bx,by); that re-enters as injected -> ignored.
-            Accept(bx, by);
-            return GuardAction.Block;
-        }
+            return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
         // from here on, (x,y) == (bx,by) is guaranteed outside every forbidden rect.
 
-        if (!HasTop && !Confine && !HasSides) { Accept(x, y); return GuardAction.Pass; }
+        if (!HasTop && !Confine && !HasSides)
+            return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
 
         if (!HaveLast)
-        {
-            Accept(x, y);
-            OnTop = HasTop && y < BarrierY;
-            return GuardAction.Pass;
-        }
+            return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
 
         // Game mode: confine the cursor to the monitor it is currently on (overrides the up-barrier).
         if (Confine)
         {
             if (TryActiveMonitor(LastX, LastY, out var m))
             {
-                if (x >= m.L && x < m.R && y >= m.T && y < m.B) { Accept(x, y); return GuardAction.Pass; }
+                if (x >= m.L && x < m.R && y >= m.T && y < m.B)
+                    return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
                 bx = Math.Clamp(x, m.L, m.R - 1);
                 by = Math.Clamp(y, m.T, m.B - 1);
-                Accept(bx, by);
-                return GuardAction.Block;
+                return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
             }
-            Accept(x, y);
-            return GuardAction.Pass;
+            return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
         }
 
         // (S) Side containment: a SOFT, SYMMETRIC barrier with the up-barrier's feel. It stops the cursor from
@@ -583,8 +759,7 @@ public sealed class GuardCore
                     // lands on a real pixel. We must NOT clamp Y unconditionally — a down-diagonal toward a screen
                     // stacked BELOW main is a legal descent and must keep its Y (the clamped-X point is on that screen).
                     if (!TryActiveMonitor(bx, by, out _)) by = Math.Clamp(by, MainT, MainB - 1);
-                    Accept(bx, by);
-                    return GuardAction.Block;
+                    return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
                 }
                 // allowed: fall through so the up-barrier still governs the vertical component of the crossing.
             }
@@ -606,14 +781,14 @@ public sealed class GuardCore
                         bx = Math.Clamp(bx, origin.L, origin.R - 1);
                         by = Math.Clamp(by, origin.T, origin.B - 1);
                     }
-                    Accept(bx, by);
-                    return GuardAction.Block;
+                    return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
                 }
                 // allowed: fall through (the move lands on main; the up-barrier / onTop logic governs from here).
             }
         }
 
-        if (!HasTop) { Accept(x, y); return GuardAction.Pass; }
+        if (!HasTop)
+            return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
 
         // (A) Already above the line -> free roam; clears once the cursor descends past the line.
         if (OnTop)
@@ -643,23 +818,19 @@ public sealed class GuardCore
                         // GLOBAL barrier. A shallow top (Top.B < BarrierY) can fire this route while still above the
                         // barrier; clearing OnTop there would strip free-roam and warp the next move down to BarrierY.
                         if (by >= BarrierY) OnTop = false;
-                        Accept(bx, by);
-                        return GuardAction.Block;   // hook applies the X correction onto the linked screen
+                        // The hook applies the X correction onto the linked screen.
+                        return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
                     }
                 }
             }
 
             if (y >= BarrierY) OnTop = false;
-            Accept(x, y);
-            return GuardAction.Pass;
+            return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
         }
 
         // (B) On the bottom row, staying at/below the line -> normal move.
         if (y >= BarrierY)
-        {
-            Accept(x, y);
-            return GuardAction.Pass;
-        }
+            return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
 
         // (C) Upward crossing attempt. Honour only a deliberate push that BOTH starts and ends inside the SAME
         // gate (origin-aware -> a side-screen diagonal can't sneak through another column). A configured user
@@ -674,14 +845,54 @@ public sealed class GuardCore
         if ((inUserGate || inSafetyGate) && intent)
         {
             OnTop = true;
-            Accept(x, y);
-            return GuardAction.Pass;
+            return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
         }
 
         // Block: clamp down to the barrier line, keep X so horizontal sliding stays smooth.
         bx = x; by = BarrierY;
-        Accept(bx, by);
-        return GuardAction.Block;
+        return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
+    }
+
+    /// <summary>
+    /// The single exit for every decision. A valid target is preserved exactly. A Pass target in a desktop void resolves
+    /// to the globally nearest legal pixel, preserving the move's natural direction. A Block clamp in a void first
+    /// resolves onto the usable monitor that owned the move's last legal point; this keeps exclusion-wall and other
+    /// anti-tunnel clamps on their entry side. With no usable entry monitor, Block also uses the globally nearest legal
+    /// pixel. Both paths use finite boundary candidates and geometry-only tie-breaks.
+    /// </summary>
+    private GuardAction FinishDecision(GuardAction action, int attemptedX, int attemptedY, ref int bx, ref int by)
+    {
+        int finalX = action == GuardAction.Block ? bx : attemptedX;
+        int finalY = action == GuardAction.Block ? by : attemptedY;
+
+        if (Monitors.Count > 0 && (!TryActiveMonitor(finalX, finalY, out _) || InsideForbidden(finalX, finalY)))
+        {
+            bool resolved = false;
+            int legalX = 0, legalY = 0;
+
+            if (action == GuardAction.Block && HaveLast
+                && TryActiveMonitor(LastX, LastY, out var entryMonitor) && !InsideForbidden(LastX, LastY))
+                resolved = TryLegalPointOnMonitor(entryMonitor, finalX, finalY, -1,
+                                                  out legalX, out legalY, out _);
+
+            if (!resolved)
+                resolved = TryNearestLegalMonitorPoint(finalX, finalY, out legalX, out legalY);
+
+            if (resolved)
+            {
+                bx = finalX = legalX;
+                by = finalY = legalY;
+                action = GuardAction.Block;
+            }
+        }
+
+        // Derive free-roam from where the cursor actually lands, never the off-screen attempted Y or an earlier branch.
+        // This both clears state after a correction below the barrier and restores it after a correction onto a top.
+        if (!HaveLast) OnTop = HasTop && finalY < BarrierY;
+        else if (HasTop) OnTop = finalY < BarrierY;
+
+        Accept(finalX, finalY);
+        return action;
     }
 
     private void Accept(int x, int y)

@@ -47,6 +47,28 @@ GuardCore NewForbidden(params (int L, int T, int R, int B)[] forbidden)
     return c;
 }
 
+GuardCore NewMonitorAwareWall(
+    IEnumerable<(int L, int T, int R, int B)> monitors,
+    params (int L, int T, int R, int B)[] forbidden)
+{
+    var c = NewForbidden(forbidden);
+    c.Monitors = monitors.ToList();
+    return c;
+}
+
+bool InRect((int L, int T, int R, int B) rect, int x, int y) =>
+    x >= rect.L && x < rect.R && y >= rect.T && y < rect.B;
+
+bool IsLegalWallResult(GuardCore c, int x, int y) =>
+    c.Monitors.Any(m => InRect(m, x, y)) && !c.Forbidden.Any(f => InRect(f, x, y));
+
+void SetLast(GuardCore c, int x, int y)
+{
+    c.LastX = x;
+    c.LastY = y;
+    c.HaveLast = true;
+}
+
 // side defaults to true (containment ON), but every non-side core has HasSides=false so the side branch never
 // runs there regardless — existing scenarios are unaffected.
 (GuardAction act, int by, bool onTop, int bx) Move(GuardCore c, int x, int y, bool gate, bool side = true)
@@ -56,14 +78,13 @@ GuardCore NewForbidden(params (int L, int T, int R, int B)[] forbidden)
 }
 
 // MAIN = (0,0,2560,1440) with side screens present -> HasSides on. Up-barrier at Y 0, gate [24,2536] (as elsewhere).
-// Monitors is populated (main + a left + a right side screen) so the block path's void-check (TryActiveMonitor)
-// has a real layout to test against.
+// Monitors is populated (main + left/right + top) so every tested target has the same real layout as HasTop.
 GuardCore NewSides()
 {
     var c = new GuardCore { HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) },
         HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
         Monitors = new List<(int L, int T, int R, int B)>
-            { (0, 0, 2560, 1440), (-1920, 0, 0, 1080), (2560, 0, 4480, 1080) } };
+            { (0, 0, 2560, 1440), (-1920, 0, 0, 1080), (2560, 0, 4480, 1080), (-440, -1440, 3000, 0) } };
     c.Reset();
     return c;
 }
@@ -83,6 +104,200 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     var r = Move(c, 3600, -20, true);
     Check("right-screen void: up into void is blocked & clamped to Y=0",
         r.act == GuardAction.Block && r.by == 0 && !r.onTop, $"act={r.act} by={r.by} onTop={r.onTop}");
+}
+
+// Owner's exact July 2026 layout with the 800x600 dummy DISCONNECTED. The right monitor starts at Y=58,
+// while the ultrawide above ends at X=2952. Thus X>2952,Y<58 is a real desktop void. These are intentionally
+// monitor-aware assertions: every returned cursor point (Pass target or Block clamp) must lie on a usable monitor.
+{
+    var monitors = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+    };
+    var c = new GuardCore
+    {
+        HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) },
+        HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
+        Monitors = monitors,
+    };
+    SetLast(c, 4478, 59);                              // on Samsung, one pixel below its top-right corner
+    var r = Move(c, 4485, -10, true, true);            // up/right beyond it; old up-clamp was (4485,0), a void
+    Check("void invariant: reporter right-corner up-block lands on a usable monitor",
+        IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})");
+}
+{
+    var monitors = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+    };
+    var c = new GuardCore { HasTop = true, BarrierY = 0, Monitors = monitors };
+    SetLast(c, 4478, 59);
+    var r = Move(c, 4479, 50, true);                   // shallow OS/easing target above Samsung, below global barrier
+    Check("void invariant: reporter shallow right-corner Pass target is contained on-screen",
+        IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})");
+}
+
+// Exact reporter seam-void repro: free-roam across the top overhang, descend through X[2560,2952),Y[0,58),
+// then try upward twice at the same outside-gate X. Descent must choose Samsung below, not bounce to TOP.Y=-1.
+// The repeated up attempts are legitimately gated at X=2700; moving back into the gate must still allow re-entry,
+// proving the cursor is not stranded above the barrier with stale OnTop=false.
+{
+    (int L, int T, int R, int B) top = (-488, -1440, 2952, 0);
+    (int L, int T, int R, int B) main = (0, 0, 2560, 1440);
+    (int L, int T, int R, int B) samsung = (2560, 58, 4480, 1138);
+    var monitors = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), top, main, samsung,
+    };
+    var c = new GuardCore
+    {
+        HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) },
+        Monitors = monitors,
+    };
+    SetLast(c, 1000, 0);
+    var crossUp = Move(c, 1000, -10, true);
+    var roamRight = Move(c, 2700, -10, true);
+    var descend = Move(c, 2700, 30, true);
+    var upAgain = Move(c, 2700, -100, true);
+    var upAgain2 = Move(c, 2700, -200, true);
+    var returnToGate = Move(c, 2500, 58, true);
+    var crossUpAgain = Move(c, 2500, -100, true);
+
+    Check("seam-void descent: nearest legal landing is down on Samsung, never TOP.Y=-1",
+        descend.act == GuardAction.Block && descend.bx == 2700 && descend.by == samsung.T && !descend.onTop
+        && InRect(samsung, descend.bx, descend.by),
+        $"act={descend.act} point=({descend.bx},{descend.by}) onTop={descend.onTop}");
+    Check("seam-void descent: repeated outside-gate up attempts do not recreate the stale TOP.Y=-1 fixpoint",
+        upAgain.act == GuardAction.Block && upAgain.bx == 2700 && upAgain.by == samsung.T && !upAgain.onTop
+        && upAgain2.act == GuardAction.Block && upAgain2.bx == 2700 && upAgain2.by == samsung.T && !upAgain2.onTop,
+        $"up1={upAgain.act}/({upAgain.bx},{upAgain.by})/{upAgain.onTop} "
+        + $"up2={upAgain2.act}/({upAgain2.bx},{upAgain2.by})/{upAgain2.onTop}");
+    Check("seam-void descent: cursor can return to the gate and regain consistent top free-roam",
+        returnToGate.act == GuardAction.Pass && !returnToGate.onTop
+        && crossUpAgain.act == GuardAction.Pass && crossUpAgain.bx == 2500 && crossUpAgain.by == -100
+        && crossUpAgain.onTop && InRect(top, crossUpAgain.bx, crossUpAgain.by),
+        $"return={returnToGate.act}/({returnToGate.bx},{returnToGate.by})/{returnToGate.onTop} "
+        + $"cross={crossUpAgain.act}/({crossUpAgain.bx},{crossUpAgain.by})/{crossUpAgain.onTop}");
+    var sequence = new[] { crossUp, roamRight, descend, upAgain, upAgain2, returnToGate, crossUpAgain };
+    Check("seam-void descent: every result in the reproduced sequence lands on a usable monitor",
+        sequence.All(r => IsLegalWallResult(c, r.bx, r.by)),
+        string.Join("; ", sequence.Select(r => $"{r.act}/({r.bx},{r.by})/{r.onTop}")));
+}
+
+// The reporter's far-left BenQ edge was already healthy. A legal move onto its outermost pixel must remain an exact
+// Pass (the universal guard must not create a gratuitous clamp just because this layout also has right-side voids).
+{
+    var monitors = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+    };
+    var c = new GuardCore { HasTop = true, BarrierY = 0, Monitors = monitors };
+    SetLast(c, -1919, 500);
+    var r = Move(c, -1920, 500, true);
+    Check("void invariant: reporter left-screen outer edge remains an unchanged legal Pass",
+        r.act == GuardAction.Pass && r.bx == -1920 && r.by == 500 && IsLegalWallResult(c, r.bx, r.by),
+        $"act={r.act} point=({r.bx},{r.by})");
+}
+
+// Generalized up-overhang: the lower display is wider and starts below the global barrier. Keeping X while clamping
+// to BarrierY would land in the empty strip; entry-side resolution must return to that same lower display.
+{
+    var c = new GuardCore
+    {
+        HasTop = true, BarrierY = 0,
+        Monitors = new List<(int L, int T, int R, int B)> { (0, -100, 100, 0), (-50, 20, 150, 120) },
+    };
+    SetLast(c, 140, 21);
+    var r = Move(c, 140, -10, false);
+    Check("void invariant: wider lower-monitor overhang up-block stays on its entry display",
+        r.act == GuardAction.Block && r.bx == 140 && r.by == 20 && IsLegalWallResult(c, r.bx, r.by),
+        $"act={r.act} point=({r.bx},{r.by})");
+}
+
+// Generalized side gap: the old side-in clamp is MainR (inside the gap). It must resolve back onto the side display.
+{
+    var c = new GuardCore
+    {
+        HasSides = true, MainL = 0, MainR = 100, MainT = 0, MainB = 100, SideCrossMin = 50,
+        Monitors = new List<(int L, int T, int R, int B)> { (0, 0, 100, 100), (120, 0, 220, 100) },
+    };
+    SetLast(c, 120, 50);
+    var r = Move(c, 99, 50, true, true);
+    Check("void invariant: side-in containment across a gap lands on the origin side display",
+        r.act == GuardAction.Block && r.bx == 120 && r.by == 50 && IsLegalWallResult(c, r.bx, r.by),
+        $"act={r.act} point=({r.bx},{r.by})");
+}
+
+// One portrait monitor at a negative origin, no baseline: even a point beyond every screen resolves to its nearest
+// usable pixel. This exercises the Pass-to-Block safety net without relying on any barrier branch.
+{
+    var c = new GuardCore
+    {
+        Monitors = new List<(int L, int T, int R, int B)> { (-300, -500, -100, 100) },
+    };
+    var r = Move(c, 900, 900, true);
+    Check("void invariant: 1 portrait negative-origin monitor contains a corner beyond every screen",
+        r.act == GuardAction.Block && r.bx == -101 && r.by == 99 && IsLegalWallResult(c, r.bx, r.by),
+        $"act={r.act} point=({r.bx},{r.by})");
+}
+
+// Two monitors with a gap and negative coordinates: equal inputs must resolve identically even if enumeration order
+// is reversed. Geometry, never list order or floating point, breaks ties.
+{
+    var monitors = new List<(int L, int T, int R, int B)> { (-300, -100, -200, 100), (0, -100, 100, 100) };
+    (GuardAction act, int x, int y) Run(IEnumerable<(int L, int T, int R, int B)> layout)
+    {
+        var c = new GuardCore { Monitors = layout.ToList() };
+        var r = Move(c, -100, 0, true);                    // centered in the 100px gap: exact distance tie
+        return (r.act, r.bx, r.by);
+    }
+    var a = Run(monitors);
+    var b = Run(monitors.AsEnumerable().Reverse());
+    var checkCore = new GuardCore { Monitors = monitors };
+    Check("void invariant: 2-monitor gap tie is legal and independent of monitor enumeration",
+        a == b && a.act == GuardAction.Block && IsLegalWallResult(checkCore, a.x, a.y),
+        $"forward={a} reverse={b}");
+}
+
+// Eight-monitor deterministic stress: portrait screens, negative origins, gaps, side containment, barrier blocks,
+// valid passes, and far-off corners. Completing both 512-move runs proves bounded termination; every result is legal.
+{
+    var monitors = new List<(int L, int T, int R, int B)>
+    {
+        (-420, -300, -300, 100), (-220, -180, 100, 0), (0, 0, 200, 140),
+        (-200, 20, 0, 140), (220, 30, 420, 150), (0, 160, 140, 360),
+        (500, -80, 580, 180), (-520, 220, -260, 300),
+    };
+    List<(GuardAction act, int x, int y)> Run(IEnumerable<(int L, int T, int R, int B)> layout, out bool legal)
+    {
+        var c = new GuardCore
+        {
+            HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (20, 180) },
+            HasSides = true, MainL = 0, MainR = 200, MainT = 0, MainB = 140,
+            Monitors = layout.ToList(), SideCrossMin = 9, SideCrossSlack = 4,
+        };
+        SetLast(c, 100, 70);
+        var output = new List<(GuardAction act, int x, int y)>();
+        legal = true;
+        for (int i = 0; i < 512; i++)
+        {
+            int x = -700 + (i * 137 % 1501);
+            int y = -420 + (i * 83 % 901);
+            var r = Move(c, x, y, (i & 1) == 0, (i % 3) != 0);
+            legal &= IsLegalWallResult(c, r.bx, r.by);
+            output.Add((r.act, r.bx, r.by));
+        }
+        return output;
+    }
+    var forward = Run(monitors, out bool forwardLegal);
+    var reverse = Run(monitors.AsEnumerable().Reverse(), out bool reverseLegal);
+    Check("void invariant: 8-monitor mixed-layout stress terminates, stays legal, and is deterministic",
+        forwardLegal && reverseLegal && forward.SequenceEqual(reverse)
+        && forward.Any(r => r.act == GuardAction.Block) && forward.Any(r => r.act == GuardAction.Pass),
+        $"forwardLegal={forwardLegal} reverseLegal={reverseLegal} same={forward.SequenceEqual(reverse)}");
 }
 
 // 2) DISPLAY2 over the top monitor overlap (X 2560..3000): up is blocked.
@@ -440,13 +655,20 @@ GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int
     Check("DescentRouting_WithinLinkedLanding_PassesUnchanged",
         r.act == GuardAction.Pass && !r.onTop, $"act={r.act} onTop={r.onTop}");
 }
-// DescentRouting_Void_PassesUnchanged — exit over no present monitor (cond7 false) -> ungated, fail-safe.
+// A descent-routing target in a void still misses cond7, but the universal final guard must contain it on-screen.
+// With no lower monitor under this overhang, the nearest real landing is TOP.Y=-1, so OnTop must be restored from
+// that resolved landing; otherwise the next upward free-roam move would be treated as a fresh gated crossing.
 {
     var c = OnTopCore((TOP, MAINrect), TOP, MAINrect);   // RIGHT deliberately absent -> X 2800 below TOP is a void
     Move(c, 2800, -100, true);
     var r = Move(c, 2800, 10, true);        // exit at (2800,10): not in MAIN, not in any monitor -> void
-    Check("DescentRouting_Void_PassesUnchanged",
-        r.act == GuardAction.Pass && !r.onTop, $"act={r.act} onTop={r.onTop}");
+    Check("DescentRouting_Void_IsContainedOnScreen",
+        r.act == GuardAction.Block && r.by == -1 && r.onTop && IsLegalWallResult(c, r.bx, r.by),
+        $"act={r.act} point=({r.bx},{r.by}) onTop={r.onTop}");
+    var up = Move(c, 2800, -100, true);
+    Check("DescentRouting_Void_ResolvedAboveBarrier_KeepsTopFreeRoam",
+        up.act == GuardAction.Pass && up.bx == 2800 && up.by == -100 && up.onTop,
+        $"act={up.act} point=({up.bx},{up.by}) onTop={up.onTop}");
 }
 // DescentRouting_LateralRoam_SelectsCurrentTopRoute — origin inside TOPa picks route A, not B.
 {
@@ -832,6 +1054,192 @@ var DUMMY = (2560, 0, 3360, 600);
         r.act == GuardAction.Block && r.bx == 99 && r.by == 150, $"act={r.act} bx={r.bx} by={r.by}");
 }
 
+// 9-MONITOR-AWARE) A geometric exit is not sufficient: every wall-off result must also be a pixel on a USABLE
+// monitor. These scenarios are deliberately shaped so the pre-fix clamp's entry/nearest edge lands in a desktop
+// void. They are pure GuardCore checks; injected mouse input cannot exercise the low-level hook correctly.
+
+// Reporter repro, exact live geometry. The pre-fix result was (4479,1400): outside the dummy but below monitor 4.
+{
+    var monitors = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+    };
+    var monitor4 = monitors[3];
+    var c = NewMonitorAwareWall(monitors, (4480, 845, 5280, 1445));
+    SetLast(c, 4470, 1000);
+    var r = Move(c, 4900, 1400, true);
+    Check("wall-off monitor-aware: reporter teleport returns to monitor 4, never the void below it",
+        r.act == GuardAction.Block && r.bx < 4480 && InRect(monitor4, r.bx, r.by) && IsLegalWallResult(c, r.bx, r.by),
+        $"act={r.act} bx={r.bx} by={r.by} onM4={InRect(monitor4, r.bx, r.by)} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+
+// Wall FEEL regression: hitting the dummy seam from monitor 4 must NOT jump the cursor vertically to the OS-eased
+// target height — it must stop at monitor 4's right edge at ~the ENTRY height. Live-captured symptom this guards:
+// (4476,290) -> (4479,902), a ~600px downward jump that read as "still broken" even though the cursor stayed on-screen.
+{
+    var monitors = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+    };
+    var monitor4 = monitors[3];
+    var c = NewMonitorAwareWall(monitors, (4480, 845, 5280, 1445));
+    SetLast(c, 4476, 290);
+    var r = Move(c, 4900, 902, true);   // Windows-eased deep target into the dummy
+    Check("wall-off monitor-aware: seam hit keeps entry height (no ~600px vertical jump)",
+        r.act == GuardAction.Block && r.bx < 4480 && InRect(monitor4, r.bx, r.by) && Math.Abs(r.by - 290) <= 5
+            && IsLegalWallResult(c, r.bx, r.by),
+        $"act={r.act} bx={r.bx} by={r.by} (want bx=4479, by~290, on monitor 4)");
+}
+
+// A taller dummy on each side of a smaller usable neighbour. Each deep target is beyond the neighbour on the
+// orthogonal axis, so preserving that target coordinate would land in a void; the clamp must adjust it on-screen.
+{
+    var real = (L: 0, T: 0, R: 100, B: 100);
+    var c = NewMonitorAwareWall(new[] { real }, (100, -50, 200, 150));
+    SetLast(c, 90, 90);
+    var r = Move(c, 190, 140, true);
+    Check("wall-off monitor-aware: dummy RIGHT -> entry-side usable neighbour (orthogonal clamp)",
+        r.act == GuardAction.Block && InRect(real, r.bx, r.by) && r.bx == 99 && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+{
+    var real = (L: 100, T: 0, R: 200, B: 100);
+    var c = NewMonitorAwareWall(new[] { real }, (0, -50, 100, 150));
+    SetLast(c, 110, 90);
+    var r = Move(c, 10, 140, true);
+    Check("wall-off monitor-aware: dummy LEFT -> entry-side usable neighbour (orthogonal clamp)",
+        r.act == GuardAction.Block && InRect(real, r.bx, r.by) && r.bx == 100 && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+{
+    var real = (L: 0, T: 100, R: 100, B: 200);
+    var c = NewMonitorAwareWall(new[] { real }, (-50, 0, 150, 100));
+    SetLast(c, 90, 110);
+    var r = Move(c, 140, 10, true);
+    Check("wall-off monitor-aware: dummy ABOVE -> entry-side usable neighbour (orthogonal clamp)",
+        r.act == GuardAction.Block && InRect(real, r.bx, r.by) && r.by == 100 && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+{
+    var real = (L: 0, T: 0, R: 100, B: 100);
+    var c = NewMonitorAwareWall(new[] { real }, (-50, 100, 150, 200));
+    SetLast(c, 90, 90);
+    var r = Move(c, 140, 190, true);
+    Check("wall-off monitor-aware: dummy BELOW -> entry-side usable neighbour (orthogonal clamp)",
+        r.act == GuardAction.Block && InRect(real, r.bx, r.by) && r.by == 99 && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+
+// A corner dummy touches two real monitors. The last point identifies the LEFT monitor as the entry-side owner;
+// even though the landing is near the dummy's opposite corner, the clamp must return to that same usable screen.
+{
+    var left = (L: 0, T: 100, R: 100, B: 160);
+    var above = (L: 100, T: 0, R: 160, B: 100);
+    var c = NewMonitorAwareWall(new[] { left, above }, (100, 100, 200, 200));
+    SetLast(c, 90, 150);
+    var r = Move(c, 190, 190, true);
+    Check("wall-off monitor-aware: corner dummy prefers the real monitor the move came from",
+        r.act == GuardAction.Block && InRect(left, r.bx, r.by) && !InRect(above, r.bx, r.by)
+        && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} onLeft={InRect(left, r.bx, r.by)} onAbove={InRect(above, r.bx, r.by)}");
+}
+
+// The dummy is shorter than its neighbour but vertically offset, leaving a lower overhang. The crossing axis (X)
+// clamps to the neighbour's right edge; the orthogonal axis keeps the ENTRY height (190, on the real screen), so the
+// cursor slides along the wall rather than jumping down to the eased target Y. Entry height is always on-screen.
+{
+    var real = (L: 0, T: 0, R: 100, B: 200);
+    var c = NewMonitorAwareWall(new[] { real }, (100, 150, 200, 250));
+    SetLast(c, 90, 190);
+    var r = Move(c, 190, 240, true);
+    Check("wall-off monitor-aware: shorter offset dummy still returns to its taller real neighbour",
+        r.act == GuardAction.Block && InRect(real, r.bx, r.by) && r.bx == 99 && r.by == 190
+        && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+
+// Two adjacent dummies are one region. Entry is from the usable screen beyond the RIGHT edge; the crossing axis (X)
+// clamps to that real screen's left edge (300), past both dummies, while the orthogonal axis keeps the ENTRY height
+// (90, on the real screen) — the cursor stops at the wall at its own height, no vertical jump.
+{
+    var real = (L: 300, T: 0, R: 400, B: 100);
+    var d1 = (L: 100, T: -50, R: 200, B: 150);
+    var d2 = (L: 200, T: -50, R: 300, B: 150);
+    var c = NewMonitorAwareWall(new[] { real }, d1, d2);
+    SetLast(c, 310, 90);
+    var r = Move(c, 110, 140, true);
+    Check("wall-off monitor-aware: adjacent dummies march as one region onto the real screen beyond both",
+        r.act == GuardAction.Block && InRect(real, r.bx, r.by) && r.bx == 300 && r.by == 90
+        && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+
+// With no usable entry direction, every far-edge landing chooses the nearest usable monitor instead of accepting
+// the naive geometric exit into a void.
+{
+    var real = (L: 0, T: 0, R: 50, B: 50);
+    var targets = new[]
+    {
+        (Name: "LEFT", X: 101, Y: 150), (Name: "RIGHT", X: 199, Y: 150),
+        (Name: "TOP", X: 150, Y: 101), (Name: "BOTTOM", X: 150, Y: 199),
+    };
+    foreach (var target in targets)
+    {
+        var c = NewMonitorAwareWall(new[] { real }, (100, 100, 200, 200));
+        var r = Move(c, target.X, target.Y, true);       // no HaveLast
+        Check($"wall-off monitor-aware: no-baseline deep landing near {target.Name} edge resolves on-screen",
+            r.act == GuardAction.Block && InRect(real, r.bx, r.by) && IsLegalWallResult(c, r.bx, r.by),
+            $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+    }
+}
+
+// Nearest-monitor fallback has a documented geometry tie-break. Rebuilding the same core twice must return the
+// identical left-side pixel; explicitly putting Last inside the forbidden region uses the same fallback.
+{
+    var left = (L: 0, T: 100, R: 100, B: 140);
+    var right = (L: 201, T: 100, R: 301, B: 140);
+    (int X, int Y, bool Legal) Run(bool lastInside)
+    {
+        var c = NewMonitorAwareWall(new[] { right, left }, (100, 100, 201, 200)); // reverse input order intentionally
+        if (lastInside) SetLast(c, 150, 150);
+        var r = Move(c, 150, 150, true);
+        return (r.bx, r.by, r.act == GuardAction.Block && IsLegalWallResult(c, r.bx, r.by));
+    }
+    var a = Run(false);
+    var b = Run(false);
+    var inside = Run(true);
+    var repeatCore = NewMonitorAwareWall(new[] { right, left }, (100, 100, 201, 200));
+    var firstOnSameCore = Move(repeatCore, 150, 150, true);
+    var secondOnSameCore = Move(repeatCore, 150, 150, true);
+    bool repeatsExactly = firstOnSameCore.bx == secondOnSameCore.bx
+                       && firstOnSameCore.by == secondOnSameCore.by
+                       && IsLegalWallResult(repeatCore, secondOnSameCore.bx, secondOnSameCore.by);
+    Check("wall-off monitor-aware: nearest-monitor tie is deterministic and independent of monitor list order",
+        a == b && a.Legal && a.X == 99 && a.Y == 139 && repeatsExactly,
+        $"a={a} b={b} sameCore=({firstOnSameCore.bx},{firstOnSameCore.by})->({secondOnSameCore.bx},{secondOnSameCore.by})");
+    Check("wall-off monitor-aware: Last inside forbidden region falls back to nearest legal monitor",
+        inside.Legal && inside.X == 99 && inside.Y == 139,
+        $"inside={inside}");
+}
+
+// Pathological connected ring: the usable monitor is a hole inside the component's bounding box. The old region
+// extent march returns to an outer void; the monitor-aware fallback must find the legal centre and terminate.
+{
+    var centre = (L: 100, T: 100, R: 200, B: 200);
+    var ring = new[]
+    {
+        (L: 0, T: 0, R: 100, B: 300), (L: 100, T: 0, R: 200, B: 100),
+        (L: 200, T: 0, R: 300, B: 300), (L: 100, T: 200, R: 200, B: 300),
+    };
+    var c = NewMonitorAwareWall(new[] { centre }, ring);
+    var r = Move(c, 250, 250, true);
+    Check("wall-off monitor-aware: pathological dummy ring terminates on its usable centre",
+        r.act == GuardAction.Block && InRect(centre, r.bx, r.by) && IsLegalWallResult(c, r.bx, r.by),
+        $"bx={r.bx} by={r.by} legal={IsLegalWallResult(c, r.bx, r.by)}");
+}
+
 // 10) Topology: an excluded device is dropped from the AntiTrap inputs, so it can't become a spurious gate/owner.
 //     Mirrors existing test #10 — feed the DUMMY-DROPPED rect list and assert no spurious gate for the right screen.
 {
@@ -1128,6 +1536,56 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
     bool valid = ValidMapLayout("eight-monitor sprawl", source, 960, 540, 14, out string detail);
     Check("map layout: 8-monitor sprawl stays bounded, ordered, centered, and proportional", valid, detail);
 }
+{
+    // Reporter geometry includes negative coordinates, a gap/offset, and an abutting dummy at m4.R == m5.L.
+    var source = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0), (0, 0, 2560, 1440),
+        (2560, 58, 4480, 1138), (4480, 845, 5280, 1445),
+    };
+    var mapped = GuardCore.MapLayout(source, 960, 520, 14);
+    var again = GuardCore.MapLayout(source, 960, 520, 14);
+    var reversed = GuardCore.MapLayout(source.AsEnumerable().Reverse().ToList(), 960, 520, 14);
+    bool valid = ValidMapLayout("reporter abutting dummy", source, 960, 520, 14, out string detail);
+    bool sameByGeometry = mapped.SequenceEqual(again) && mapped.SequenceEqual(reversed.AsEnumerable().Reverse());
+    bool abuts = mapped[3].R == mapped[4].L
+              && Math.Min(mapped[3].B, mapped[4].B) > Math.Max(mapped[3].T, mapped[4].T);
+    Check("map layout: reporter abutting dummy keeps its seam and is deterministic under input permutation",
+        valid && abuts && sameByGeometry, $"{detail} abuts={abuts} sameByGeometry={sameByGeometry}");
+}
+
+// MouseFence numbers are Left,Top ordered. StableId/Device break exact-origin ties, so native enumeration order does
+// not change labels or map hit order in clone/overlap layouts.
+{
+    MonitorInfo M(string stable, string device, int l, int t, int r, int b) => new()
+    {
+        StableId = stable, Device = device,
+        Bounds = new Native.RECT { Left = l, Top = t, Right = r, Bottom = b },
+    };
+    var seed = new List<MonitorInfo>
+    {
+        M("stable-z", "DISPLAY-Z", 0, 0, 1920, 1080),
+        M("stable-right", "DISPLAY-R", 2560, 58, 4480, 1138),
+        M("stable-left", "DISPLAY-L", -1920, 71, 0, 1151),
+        M("stable-a", "DISPLAY-A", 0, 0, 2560, 1440),
+        M("stable-top", "DISPLAY-T", -488, -1440, 2952, 0),
+    };
+    List<(string Stable, int Index)> Run(IEnumerable<MonitorInfo> input)
+    {
+        var copy = input.Select(m => M(m.StableId, m.Device, m.Bounds.Left, m.Bounds.Top,
+                                       m.Bounds.Right, m.Bounds.Bottom)).ToList();
+        MonitorInfo.SortAndNumber(copy);
+        return copy.Select(m => (m.StableId, m.Index)).ToList();
+    }
+    var forward = Run(seed);
+    var reverse = Run(seed.AsEnumerable().Reverse());
+    var expected = new[] { "stable-left", "stable-top", "stable-a", "stable-z", "stable-right" };
+    Check("monitor identity: numbering is deterministic Left,Top order with stable exact-origin ties",
+        forward.Select(x => x.Stable).SequenceEqual(expected)
+        && forward.SequenceEqual(reverse)
+        && forward.Select(x => x.Index).SequenceEqual(Enumerable.Range(1, expected.Length)),
+        $"forward=[{string.Join(",", forward)}] reverse=[{string.Join(",", reverse)}]");
+}
 
 // 19) Deterministic label: compact human identity only; position/device details live in the map tooltip.
 {
@@ -1137,6 +1595,19 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
         label1 == label2 && label1 == "2  •  2560x1440  [MAIN]"
         && !label1.Contains("@") && !label1.Contains("DISPLAY") && !label1.Contains("#"),
         label1);
+}
+{
+    var named = GuardCore.MonitorLabel(4, 1920, 1080, false, "[MAIN]", "Samsung 24");
+    Check("monitor naming: list label keeps the MouseFence number and adds the nickname",
+        named == "4  •  Samsung 24  •  1920x1080" && named.StartsWith("4  •  "), named);
+}
+{
+    var monitor = new MonitorInfo { Index = 1, Primary = true, StableId = "stable-main" };
+    string named = IdentifyOverlay.DisplayText(monitor, "BenQ\r\nDesk");
+    string fallback = IdentifyOverlay.DisplayText(monitor, null);
+    Check("monitor naming: identify text is one line with number+name and number-only fallback",
+        named == "1  ★ — BenQ  Desk" && fallback == "1  ★"
+        && !named.Contains('\r') && !named.Contains('\n'), $"named={named} fallback={fallback}");
 }
 
 // 20) CrossingPathMode migration and JSON export/import round-trip.
@@ -1182,6 +1653,105 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
     Check("settings normalization: Default mode persists no explicit UpLinks",
         normalized.CrossingPathMode == Settings.DefaultCrossingPathMode && normalized.UpLinks.Count == 0,
         $"mode={normalized.CrossingPathMode} links={normalized.UpLinks.Count}");
+}
+
+// StableId-keyed nicknames use the same JSON format as settings export/import. Dormant names are intentionally kept.
+{
+    var exported = new Settings();
+    exported.MonitorNames["edid-benq"] = "BenQ";
+    exported.MonitorNames["edid-absent-dummy"] = "Dummy";
+    string exportJson = JsonSerializer.Serialize(exported);
+    var imported = JsonSerializer.Deserialize<Settings>(exportJson);
+    imported.Normalize();
+    string reExportJson = JsonSerializer.Serialize(imported);
+    var roundTrip = JsonSerializer.Deserialize<Settings>(reExportJson);
+    roundTrip.Normalize();
+    Check("settings JSON: MonitorNames persist through export/import including an absent StableId",
+        roundTrip.MonitorNames.Count == 2
+        && roundTrip.MonitorNames["edid-benq"] == "BenQ"
+        && roundTrip.MonitorNames["edid-absent-dummy"] == "Dummy",
+        reExportJson);
+}
+{
+    var absent = JsonSerializer.Deserialize<Settings>("{}");
+    var explicitNull = JsonSerializer.Deserialize<Settings>("{\"MonitorNames\":null}");
+    absent.Normalize();
+    explicitNull.Normalize();
+    Check("settings JSON: absent/null MonitorNames are safe empty dictionaries",
+        absent.MonitorNames != null && absent.MonitorNames.Count == 0
+        && explicitNull.MonitorNames != null && explicitNull.MonitorNames.Count == 0);
+}
+{
+    var settings = new Settings();
+    settings.MonitorNames["stable-unplugged"] = "Old Dummy";
+    settings.Normalize();
+    string liveName = Settings.MonitorNameFor(settings.MonitorNames, "stable-live");
+    string dormantName = Settings.MonitorNameFor(settings.MonitorNames, "stable-unplugged");
+    Check("monitor naming: absent StableId stays inert and never retargets a live monitor",
+        liveName == "" && dormantName == "Old Dummy" && settings.MonitorNames.Count == 1,
+        $"live={liveName} dormant={dormantName}");
+}
+{
+    var settings = new Settings();
+    settings.MonitorNames["physical-samsung"] = "Samsung 24";
+    settings.Normalize();
+    var beforeLayout = new List<MonitorInfo>
+    {
+        new MonitorInfo { StableId = "other", Device = @"\\.\DISPLAY1", Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new MonitorInfo { StableId = "physical-samsung", Device = @"\\.\DISPLAY4", Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+    };
+    var afterLayout = new List<MonitorInfo>
+    {
+        new MonitorInfo { StableId = "physical-samsung", Device = @"\\.\DISPLAY1", Bounds = new Native.RECT { Left = -100, Top = 0, Right = 0, Bottom = 100 } },
+        new MonitorInfo { StableId = "other", Device = @"\\.\DISPLAY4", Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+    };
+    MonitorInfo.SortAndNumber(beforeLayout);
+    MonitorInfo.SortAndNumber(afterLayout);
+    var before = beforeLayout.Single(m => m.StableId == "physical-samsung");
+    var after = afterLayout.Single(m => m.StableId == "physical-samsung");
+    Check("monitor naming: nickname follows StableId across DISPLAYn renumbering and rearrangement",
+        Settings.MonitorNameFor(settings.MonitorNames, before.StableId) == "Samsung 24"
+        && Settings.MonitorNameFor(settings.MonitorNames, after.StableId) == "Samsung 24"
+        && before.Index == 2 && after.Index == 1,
+        $"before={before.Device}/{before.Index} after={after.Device}/{after.Index}");
+}
+{
+    List<MonitorInfo> Layout() => new()
+    {
+        new MonitorInfo { StableId = "right", Device = @"\\.\DISPLAY9", Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+        new MonitorInfo { StableId = "left", Device = @"\\.\DISPLAY2", Bounds = new Native.RECT { Left = -100, Top = 0, Right = 0, Bottom = 100 } },
+        new MonitorInfo { StableId = "main", Device = @"\\.\DISPLAY5", Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+    };
+    var unnamed = Layout();
+    var named = Layout();
+    var names = new Dictionary<string, string> { ["right"] = "Samsung", ["left"] = "BenQ" };
+    MonitorInfo.SortAndNumber(unnamed);
+    MonitorInfo.SortAndNumber(named);
+    var unnamedIdentity = unnamed.Select(m => (m.StableId, m.Index)).ToList();
+    var namedIdentity = named.Select(m => (m.StableId, m.Index)).ToList();
+    bool namesResolveOnlyByStableId = named.All(m =>
+        Settings.MonitorNameFor(names, m.StableId) == (m.StableId == "right" ? "Samsung" : m.StableId == "left" ? "BenQ" : ""));
+    Check("monitor naming: display-only names do not affect identity or numbering determinism",
+        unnamedIdentity.SequenceEqual(namedIdentity) && namesResolveOnlyByStableId,
+        $"unnamed=[{string.Join(",", unnamedIdentity)}] named=[{string.Join(",", namedIdentity)}]");
+}
+
+// Every persisted user setting must have a real GUI editor. SettingsVersion is schema metadata, while JsonIgnore and
+// static/computed properties are not persisted. The form's nameof-based contract makes future omissions fail loudly.
+{
+    var persisted = typeof(Settings).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+        .Where(p => p.Name != nameof(Settings.SettingsVersion)
+                 && p.GetGetMethod() != null && p.GetSetMethod() != null
+                 && p.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), true).Length == 0)
+        .Select(p => p.Name)
+        .ToHashSet();
+    var editable = SettingsForm.GuiEditableSettingProperties.ToHashSet();
+    var missing = persisted.Except(editable).OrderBy(x => x).ToList();
+    var stale = editable.Except(persisted).OrderBy(x => x).ToList();
+    Check("settings GUI: every persisted user field has an editor (including MonitorNames)",
+        missing.Count == 0 && stale.Count == 0 && editable.Contains(nameof(Settings.SideCrossSlack))
+        && editable.Contains(nameof(Settings.MonitorNames)),
+        $"missing=[{string.Join(",", missing)}] stale=[{string.Join(",", stale)}]");
 }
 
 // ---- SIDE CONTAINMENT (soft barrier, horizontal mirror of the up-barrier) ----
