@@ -1610,49 +1610,46 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
         && !named.Contains('\r') && !named.Contains('\n'), $"named={named} fallback={fallback}");
 }
 
-// 20) CrossingPathMode migration and JSON export/import round-trip.
+// 20) Deterministic schema-v4 migration and JSON round-trip. Legacy allowance is explicitly OverallFeel, never
+// confused with an absent rule (which means inherit the orientation default).
 {
-    var migrated = JsonSerializer.Deserialize<Settings>("{\"SettingsVersion\":2,\"UpLinks\":[]}");
+    var migrated = JsonSerializer.Deserialize<Settings>("{\"SettingsVersion\":3,\"CrossingPathMode\":\"Default\",\"UpLinks\":[]}");
     migrated.Normalize();
-    Check("settings migration: absent mode + empty UpLinks becomes Default",
-        migrated.CrossingPathMode == Settings.DefaultCrossingPathMode, migrated.CrossingPathMode);
+    Check("schema v4 migration: v3 Default becomes Automatic with no explicit rules",
+        migrated.SettingsVersion == 4 && migrated.UpwardBoundaryDefault == BoundaryDefault.Automatic
+        && migrated.BoundaryRules.Count == 0 && migrated.EdgeHoldbackPx == 0,
+        $"version={migrated.SettingsVersion} default={migrated.UpwardBoundaryDefault} rules={migrated.BoundaryRules.Count}");
 }
 {
-    const string legacy = "{\"SettingsVersion\":2,\"UpLinks\":[{\"FromDevice\":\"bottom\",\"ToDevice\":\"top\"}]}";
+    const string legacy = "{\"SettingsVersion\":3,\"CrossingPathMode\":\"Custom\",\"UpLinks\":[{\"FromDevice\":\"bottom\",\"ToDevice\":\"top\"}]}";
     var migrated = JsonSerializer.Deserialize<Settings>(legacy);
     migrated.Normalize();
-    Check("settings migration: absent mode + non-empty UpLinks becomes Custom",
-        migrated.CrossingPathMode == Settings.CustomCrossingPathMode && migrated.UpLinks.Count == 1,
-        $"mode={migrated.CrossingPathMode} links={migrated.UpLinks.Count}");
+    var rule = migrated.BoundaryRules.Single();
+    Check("schema v4 migration: v3 Custom becomes Blocked default + explicit OverallFeel allowance",
+        migrated.UpwardBoundaryDefault == BoundaryDefault.Blocked && rule.FromStableId == "bottom"
+        && rule.ToStableId == "top" && rule.Direction == BoundaryDirection.Up
+        && rule.Behavior == BoundaryBehavior.OverallFeel && rule.Control == BoundaryControl.Automatic,
+        $"default={migrated.UpwardBoundaryDefault} behavior={rule.Behavior} control={rule.Control}");
 }
 {
-    var exported = new Settings { CrossingPathMode = Settings.CustomCrossingPathMode };
-    exported.UpLinks.Add(new UpLink { FromDevice = "bottom", ToDevice = "top" });
+    var migrated = JsonSerializer.Deserialize<Settings>(
+        "{\"SettingsVersion\":3,\"Mode\":\"Manual\",\"ManualMonitors\":[],\"CrossingPathMode\":\"Custom\",\"UpLinks\":[]}");
+    migrated.Normalize();
+    Check("schema v4 migration: empty v3 Manual falls back to AutoTop while empty Custom remains explicit none",
+        migrated.Mode == "AutoTop" && migrated.UpwardBoundaryDefault == BoundaryDefault.Blocked
+        && migrated.BoundaryRules.Count == 0,
+        $"mode={migrated.Mode} default={migrated.UpwardBoundaryDefault} rules={migrated.BoundaryRules.Count}");
+}
+{
+    var exported = new Settings { UpwardBoundaryDefault = BoundaryDefault.Blocked };
+    exported.BoundaryRules.Add(new BoundaryRule { FromStableId = "bottom", ToStableId = "top",
+        Direction = BoundaryDirection.Up, Behavior = BoundaryBehavior.OverallFeel, Control = BoundaryControl.Automatic });
     string json = JsonSerializer.Serialize(exported);
     var imported = JsonSerializer.Deserialize<Settings>(json);
     imported.Normalize();
-    Check("settings JSON: CrossingPathMode and explicit links round-trip through export/import",
-        imported.CrossingPathMode == Settings.CustomCrossingPathMode
-        && imported.UpLinks.Count == 1
-        && imported.UpLinks[0].FromDevice == "bottom" && imported.UpLinks[0].ToDevice == "top",
-        $"mode={imported.CrossingPathMode} links={imported.UpLinks.Count}");
-}
-{
-    var exported = new Settings { CrossingPathMode = Settings.CustomCrossingPathMode };
-    string json = JsonSerializer.Serialize(exported);
-    var imported = JsonSerializer.Deserialize<Settings>(json);
-    imported.Normalize();
-    Check("settings JSON: explicit Custom with zero links stays Custom (allow none)",
-        imported.CrossingPathMode == Settings.CustomCrossingPathMode && imported.UpLinks.Count == 0,
-        $"mode={imported.CrossingPathMode} links={imported.UpLinks.Count}");
-}
-{
-    var normalized = new Settings { CrossingPathMode = Settings.DefaultCrossingPathMode };
-    normalized.UpLinks.Add(new UpLink { FromDevice = "stale-bottom", ToDevice = "stale-top" });
-    normalized.Normalize();
-    Check("settings normalization: Default mode persists no explicit UpLinks",
-        normalized.CrossingPathMode == Settings.DefaultCrossingPathMode && normalized.UpLinks.Count == 0,
-        $"mode={normalized.CrossingPathMode} links={normalized.UpLinks.Count}");
+    Check("schema v4 JSON: rules round-trip and legacy CrossingPathMode/UpLinks stop emitting",
+        imported.BoundaryRules.Count == 1 && imported.BoundaryRules[0].Behavior == BoundaryBehavior.OverallFeel
+        && !json.Contains("CrossingPathMode") && !json.Contains("UpLinks"), json);
 }
 
 // StableId-keyed nicknames use the same JSON format as settings export/import. Dormant names are intentionally kept.
@@ -1736,8 +1733,8 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
         $"unnamed=[{string.Join(",", unnamedIdentity)}] named=[{string.Join(",", namedIdentity)}]");
 }
 
-// Every persisted user setting must have a real GUI editor. SettingsVersion is schema metadata, while JsonIgnore and
-// static/computed properties are not persisted. The form's nameof-based contract makes future omissions fail loudly.
+// M1 keeps reflection coverage executable while explicitly staging only the v4 boundary/startup fields whose editors
+// arrive in M2/M3. Any unrelated persistence addition still fails, and every lean BoundaryRule field is covered now.
 {
     var persisted = typeof(Settings).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
         .Where(p => p.Name != nameof(Settings.SettingsVersion)
@@ -1746,12 +1743,17 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
         .Select(p => p.Name)
         .ToHashSet();
     var editable = SettingsForm.GuiEditableSettingProperties.ToHashSet();
-    var missing = persisted.Except(editable).OrderBy(x => x).ToList();
+    var deferred = SettingsForm.M1DeferredGuiSettingProperties.ToHashSet();
+    var missing = persisted.Except(editable).Except(deferred).OrderBy(x => x).ToList();
     var stale = editable.Except(persisted).OrderBy(x => x).ToList();
-    Check("settings GUI: every persisted user field has an editor (including MonitorNames)",
-        missing.Count == 0 && stale.Count == 0 && editable.Contains(nameof(Settings.SideCrossSlack))
-        && editable.Contains(nameof(Settings.MonitorNames)),
-        $"missing=[{string.Join(",", missing)}] stale=[{string.Join(",", stale)}]");
+    var deferredMismatch = deferred.Except(persisted).Concat(persisted.Intersect(deferred).Except(deferred)).ToList();
+    var ruleFields = typeof(BoundaryRule).GetProperties().Select(p => p.Name).OrderBy(x => x).ToList();
+    var expectedRuleFields = new[] { nameof(BoundaryRule.Behavior), nameof(BoundaryRule.Control),
+        nameof(BoundaryRule.Direction), nameof(BoundaryRule.FromStableId), nameof(BoundaryRule.ToStableId) }.OrderBy(x => x).ToList();
+    Check("settings GUI: persisted fields are edited or explicitly M1-staged; lean BoundaryRule reflection coverage",
+        missing.Count == 0 && stale.Count == 0 && deferredMismatch.Count == 0
+        && ruleFields.SequenceEqual(expectedRuleFields) && editable.Contains(nameof(Settings.MonitorNames)),
+        $"missing=[{string.Join(",", missing)}] stale=[{string.Join(",", stale)}] rules=[{string.Join(",", ruleFields)}]");
 }
 
 // ---- SIDE CONTAINMENT (soft barrier, horizontal mirror of the up-barrier) ----
@@ -1947,6 +1949,268 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
     Check("intel: a non-arrow key (G) is not a clash", !GuardCore.IsArrowRotationHotkey(0x47, true, true, false, false));
     Check("intel: missing Ctrl is not a clash", !GuardCore.IsArrowRotationHotkey(0x26, false, true, false, false));
     Check("intel: missing Alt is not a clash", !GuardCore.IsArrowRotationHotkey(0x26, true, false, false, false));
+}
+
+// ---- M1 SCHEMA-v4 BOUNDARY GRAPH + COMPILED ENGINE ----
+List<BoundaryScreen> GraphScreens(params (string Id, int L, int T, int R, int B, bool Primary)[] items) =>
+    items.Select(x => new BoundaryScreen { StableId = x.Id, Bounds = (x.L, x.T, x.R, x.B), Primary = x.Primary }).ToList();
+
+GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop = false, int barrierY = 0)
+{
+    var compiled = BoundaryGraph.Compile(settings, screens);
+    var core = new GuardCore { HasTop = hasTop, BarrierY = barrierY, Transitions = compiled.Transitions,
+        Monitors = screens.Where(s => !s.Excluded).Select(s => s.Bounds).ToList() };
+    core.Reset();
+    return core;
+}
+
+{
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0 };
+    var screens = GraphScreens(("bottom", 0, 200, 300, 300, true), ("top", 0, 0, 300, 100, false),
+                               ("occluder", 100, 100, 200, 200, false));
+    var a = BoundaryGraph.Compile(s, screens).Transitions
+        .Where(t => t.FromStableId == "bottom" && t.ToStableId == "top" && t.Direction == BoundaryDirection.Up).ToList();
+    var b = BoundaryGraph.Compile(s, screens.AsEnumerable().Reverse().ToList()).Transitions
+        .Where(t => t.FromStableId == "bottom" && t.ToStableId == "top" && t.Direction == BoundaryDirection.Up).ToList();
+    Check("M1 compiler: third-screen occlusion splits a corridor and sort is input-order independent",
+        a.Count == 2 && a[0].CorridorStart == 0 && a[0].CorridorEnd == 100
+        && a[1].CorridorStart == 200 && a[1].CorridorEnd == 300
+        && a.Select(t => (t.CorridorStart, t.CorridorEnd)).SequenceEqual(b.Select(t => (t.CorridorStart, t.CorridorEnd))));
+}
+{
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0 };
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "a", ToStableId = "b", Direction = BoundaryDirection.Right,
+        Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "b", ToStableId = "a", Direction = BoundaryDirection.Left,
+        Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("b", 100, 0, 200, 100, false));
+    var issues = BoundaryGraph.ValidateNoSeal(s, screens);
+    var healed = BoundaryGraph.Compile(s, screens);
+    Check("M1 validator: an authored zero-exit configuration is rejected deterministically",
+        issues.Length == 2 && issues[0].FocusCorridorWidth == 100, $"issues={issues.Length}");
+    Check("M1 compiler: geometry-seal backstop demotes widest exits to Push and flags them",
+        healed.HasSafetyDemotions && healed.Transitions.Count(t => t.SafetyDemoted) == 2
+        && healed.Transitions.Where(t => t.SafetyDemoted).All(t => t.Behavior == BoundaryBehavior.Push));
+}
+{
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0 };
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "b", ToStableId = "c", Direction = BoundaryDirection.Right,
+        Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("b", 100, 0, 200, 100, false),
+                               ("c", 200, 0, 300, 100, false));
+    var c = GraphCore(s, screens); Move(c, 90, 50, true, false);
+    var r = Move(c, 250, 50, true, false); // OS/ease-style fast move crosses two seams in one event
+    Check("M1 engine: authorized landing stops a fast multi-seam teleport before a blocked second transition",
+        r.act == GuardAction.Block && r.bx == 199 && r.by == 50, $"act={r.act} bx={r.bx} by={r.by}");
+
+    s.BoundaryRules.Clear();
+    c = GraphCore(s, screens); Move(c, 90, 50, true, false); r = Move(c, 250, 50, true, false);
+    Check("M1 engine: fast multi-seam move reaches a transitively authorized free monitor",
+        r.act == GuardAction.Pass && r.bx == 250, $"act={r.act} bx={r.bx}");
+}
+{
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0 };
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("b", 100, 0, 200, 100, false));
+    var c = GraphCore(s, screens); Move(c, 90, 50, true, false);
+    var r = Move(c, 250, -40, true, false); // crosses the seam then attempts a desktop void
+    Check("M1 engine: compiled Free crossing into void is corrected only onto an authorized real screen",
+        r.act == GuardAction.Block && screens.Any(m => InRect(m.Bounds, r.bx, r.by)),
+        $"act={r.act} bx={r.bx} by={r.by}");
+}
+{
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0, EdgeHoldbackPx = 5,
+        SafetyEscapes = false };
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "a", ToStableId = "dummy", Direction = BoundaryDirection.Right,
+        Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("dummy", 100, 0, 200, 100, false));
+    var c = GraphCore(s, screens); Move(c, 90, 22, true, true);
+    var r = Move(c, 180, 78, true, true); // eased target changes height substantially
+    Check("M1 engine: failed/Blocked Push holds back on source and never lands on the blocked monitor",
+        r.act == GuardAction.Block && r.bx == 94 && r.by == 78 && !InRect(screens[1].Bounds, r.bx, r.by),
+        $"bx={r.bx} by={r.by}");
+}
+{
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0 };
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("dummy", 100, 0, 200, 100, false));
+    screens[1].Excluded = true;
+    var compiled = BoundaryGraph.Compile(s, screens);
+    Check("M1 compiler: excluded screens are absent from transitions and every allowed-landing set",
+        compiled.Transitions.Length == 0 && compiled.Transitions.All(t => t.AllowedLandings.All(r => r != screens[1].Bounds)));
+}
+{
+    var s = new Settings { DownwardBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0, SafetyEscapes = false };
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "top", ToStableId = "bottom", Direction = BoundaryDirection.Down,
+        Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    var screens = GraphScreens(("top", 0, -100, 100, 0, false), ("bottom", 0, 0, 100, 100, true));
+    var c = GraphCore(s, screens, hasTop: true, barrierY: 0);
+    Move(c, 50, -10, true); var r = Move(c, 50, 20, true);
+    Check("M1 engine: Down-Blocked runs before OnTop legacy descent and state follows the source landing",
+        r.act == GuardAction.Block && r.by == -1 && r.onTop, $"act={r.act} by={r.by} onTop={r.onTop}");
+}
+{
+    var s = new Settings { DownwardBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0 };
+    var screens = GraphScreens(("top", 0, -100, 200, 0, false), ("landing", 0, 0, 100, 100, true),
+                               ("wrong", 100, 0, 200, 100, false));
+    var c = GraphCore(s, screens, true, 0);
+    c.DescentRouting = true;
+    c.DescentRoutes.Add((screens[0].Bounds, screens[1].Bounds));
+    Move(c, 150, -10, true); var r = Move(c, 150, 10, true);
+    Check("M1 engine: compiled Down-Free applies global descent guidance after transition resolution",
+        r.act == GuardAction.Block && r.bx == 99 && r.by == 10 && !r.onTop,
+        $"act={r.act} bx={r.bx} by={r.by} onTop={r.onTop}");
+}
+{
+    var automatic = new Settings { UpwardBoundaryDefault = BoundaryDefault.Blocked, PassageInsetPx = 0 };
+    automatic.BoundaryRules.Add(new BoundaryRule { FromStableId = "bottom", ToStableId = "top", Direction = BoundaryDirection.Up,
+        Behavior = BoundaryBehavior.Free, Control = BoundaryControl.Automatic });
+    // A side neighbour makes bottom non-isolated, so this remains a pure Automatic-vs-Always toggle test.
+    var screens = GraphScreens(("top", 0, -100, 100, 0, false), ("bottom", 0, 0, 100, 100, true),
+                               ("side", 100, 0, 200, 100, false));
+    var c = GraphCore(automatic, screens, true, 0); Move(c, 50, 10, false); var blocked = Move(c, 50, -10, false);
+    automatic.BoundaryRules[0].Control = BoundaryControl.Always;
+    c = GraphCore(automatic, screens, true, 0); Move(c, 50, 10, false); var allowed = Move(c, 50, -10, false);
+    Check("M1 engine: Automatic follows the live Up switch while Always ignores it",
+        blocked.act == GuardAction.Block && allowed.act == GuardAction.Pass,
+        $"automatic={blocked.act} always={allowed.act}");
+}
+{
+    var dormant = new Settings { SettingsVersion = Settings.CurrentSettingsVersion, SafetyEscapes = false };
+    dormant.BoundaryRules.Add(new BoundaryRule { FromStableId = "dock-old-a", ToStableId = "dock-old-b",
+        Direction = BoundaryDirection.Right, Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    dormant.Normalize();
+    var liveOther = GraphScreens(("live-a", 0, 0, 100, 100, true), ("live-b", 100, 0, 200, 100, false));
+    bool inert = BoundaryGraph.Compile(dormant, liveOther).Transitions.All(t => !t.ExplicitRule);
+    string json = JsonSerializer.Serialize(dormant); var restored = JsonSerializer.Deserialize<Settings>(json); restored.Normalize();
+    var oldReturns = GraphScreens(("dock-old-a", 0, 0, 100, 100, true), ("dock-old-b", 100, 0, 200, 100, false));
+    bool restoredRule = BoundaryGraph.Compile(restored, oldReturns).Transitions.Any(t => t.ExplicitRule && t.Behavior == BoundaryBehavior.Blocked);
+    Check("M1 identity dormancy: absent IDs stay inert, persist, and reactivate only on exact-identity return",
+        inert && restoredRule && restored.BoundaryRules.Count == 1,
+        $"inert={inert} restoredRule={restoredRule} rules={restored.BoundaryRules.Count} json={json}");
+}
+{
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0,
+        SeamTolerancePx = 2, SafetyEscapes = false };
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "a", ToStableId = "b", Direction = BoundaryDirection.Right,
+        Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("b", 200, 0, 300, 100, false));
+    var c = GraphCore(s, screens); Move(c, 90, 50, true, false);
+    var intoGap = Move(c, 150, 50, true, false);
+    c = GraphCore(s, screens); Move(c, 90, 50, true, false);
+    var established = Move(c, 220, 50, true, false);
+    Check("M1 gap semantics: void attempt stays source-authorized; OS landing on To activates the saved gap rule",
+        intoGap.act == GuardAction.Block && intoGap.bx == 99
+        && established.act == GuardAction.Block && established.bx == 99,
+        $"gap=({intoGap.act},{intoGap.bx}) established=({established.act},{established.bx})");
+}
+{
+    // A->diagonal has zero orthogonal overlap. The segment reaches the shared corner of Up and Right at the same t;
+    // half-open corridors deliberately fire neither ordered edge, independent of compiler input order.
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Blocked, UpwardBoundaryDefault = BoundaryDefault.Blocked,
+        PassageInsetPx = 0, SafetyEscapes = false };
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("up", 0, -100, 100, 0, false),
+        ("right", 100, 0, 200, 100, false), ("diagonal", 100, -100, 200, 0, false));
+    var c1 = GraphCore(s, screens); Move(c1, 50, 50, true, true); var r1 = Move(c1, 150, -50, true, true);
+    var c2 = GraphCore(s, screens.AsEnumerable().Reverse().ToList()); Move(c2, 50, 50, true, true); var r2 = Move(c2, 150, -50, true, true);
+    bool noDiagonalEdge = BoundaryGraph.Compile(s, screens).Transitions.All(t => t.ToStableId != "diagonal" || t.FromStableId != "a");
+    Check("M1 simultaneous-intersection tie: true corner fires no edge; authorized repair is deterministic",
+        noDiagonalEdge && r1.act == GuardAction.Block && r2.act == GuardAction.Block
+        && r1.bx == r2.bx && r1.by == r2.by && InRect(screens[0].Bounds, r1.bx, r1.by),
+        $"first=({r1.act},{r1.bx},{r1.by}) second=({r2.act},{r2.bx},{r2.by})");
+}
+{
+    var s = new Settings { Mode = "Manual", UpwardBoundaryDefault = BoundaryDefault.Automatic, PassageInsetPx = 0 };
+    var screens = GraphScreens(("top", 0, -100, 100, 0, false), ("main", 0, 0, 100, 100, true));
+    var up = BoundaryGraph.Compile(s, screens).Transitions.Single(t => t.FromStableId == "main" && t.Direction == BoundaryDirection.Up);
+    Check("M1 schema: a newly empty v4 Manual upper group is literal none (Automatic Up resolves Free)",
+        up.Behavior == BoundaryBehavior.Free, $"behavior={up.Behavior}");
+}
+{
+    // Legacy anti-trap invariant: the lower screen has no down/left/right neighbour, so its only real exit is Up.
+    // Closing the normal Up gate at launch must not strand the cursor when SafetyEscapes is enabled.
+    var s = new Settings { PassageInsetPx = 0, SafetyEscapes = true };
+    var screens = GraphScreens(("top", 0, -100, 100, 0, false), ("isolated-lower", 0, 0, 100, 100, true));
+    var compiled = BoundaryGraph.Compile(s, screens);
+    var safetyExit = compiled.Transitions.Single(t => t.FromStableId == "isolated-lower"
+        && t.ToStableId == "top" && t.Direction == BoundaryDirection.Up);
+    var c = GraphCore(s, screens, hasTop: true); Move(c, 50, 50, gate: false);
+    var escaped = Move(c, 50, -10, gate: false);
+    Check("M1 anti-trap: sole-up exit remains a deliberate Push while the normal Up gate is closed",
+        safetyExit.SoleUpSafetyEscape && escaped.act == GuardAction.Pass && escaped.by == -10
+        && InRect(screens[0].Bounds, escaped.bx, escaped.by),
+        $"safety={safetyExit.SoleUpSafetyEscape} act={escaped.act} bx={escaped.bx} by={escaped.by}");
+
+    s.SafetyEscapes = false;
+    c = GraphCore(s, screens, hasTop: true); Move(c, 50, 50, gate: false);
+    var sealedByExpert = Move(c, 50, -10, gate: false);
+    BoundaryValidationIssue[] validation = null;
+    Exception validationError = null;
+    try { validation = BoundaryGraph.ValidateNoSeal(s, screens); }
+    catch (Exception ex) { validationError = ex; }
+    Check("M1 anti-trap: SafetyEscapes off permits the expert runtime seal and validator remains total",
+        sealedByExpert.act == GuardAction.Block && sealedByExpert.by == 0 && validationError == null,
+        $"act={sealedByExpert.act} bx={sealedByExpert.bx} by={sealedByExpert.by} issues={validation?.Length} error={validationError?.GetType().Name}");
+}
+{
+    const string fieldlessLegacy =
+        "{\"CrossingPathMode\":\"Custom\",\"UpLinks\":[{\"FromDevice\":\"bottom\",\"ToDevice\":\"top\"}]}";
+    var migrated = JsonSerializer.Deserialize<Settings>(fieldlessLegacy);
+    migrated.Normalize();
+    var rule = migrated.BoundaryRules.SingleOrDefault();
+    Check("schema v4 migration: field-absent legacy JSON migrates as v0 and preserves custom UpLinks",
+        migrated.SettingsVersion == Settings.CurrentSettingsVersion
+        && migrated.UpwardBoundaryDefault == BoundaryDefault.Blocked
+        && rule?.FromStableId == "bottom" && rule.ToStableId == "top"
+        && rule.Direction == BoundaryDirection.Up && rule.Behavior == BoundaryBehavior.OverallFeel,
+        $"version={migrated.SettingsVersion} default={migrated.UpwardBoundaryDefault} rules={migrated.BoundaryRules.Count}");
+}
+{
+    const string importedJson =
+        "{\"SettingsVersion\":4,\"SafetyEscapes\":false,\"ExcludedDevices\":[\"primary\"],"
+        + "\"BoundaryRules\":["
+        + "{\"FromStableId\":\"primary\",\"ToStableId\":\"side\",\"Direction\":\"Right\",\"Behavior\":\"Blocked\",\"Control\":\"Always\"},"
+        + "{\"FromStableId\":\"side\",\"ToStableId\":\"primary\",\"Direction\":\"Left\",\"Behavior\":\"Blocked\",\"Control\":\"Always\"}]}";
+    var imported = JsonSerializer.Deserialize<Settings>(importedJson);
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "primary", Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new() { StableId = "side", Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+    };
+    var runtimeExcluded = new HashSet<string>(GuardCore.SanitizeExcluded(
+        monitors.Select(m => m.StableId).ToList(), "primary",
+        new HashSet<string>(imported.ExcludedDevices, StringComparer.OrdinalIgnoreCase), out _),
+        StringComparer.OrdinalIgnoreCase);
+    var runtimeIssues = BoundaryGraph.ValidateNoSeal(imported, BoundaryGraph.FromMonitors(monitors, runtimeExcluded));
+    var validatorIssues = imported.ValidateNoSeal(monitors);
+    Check("M1 validator: imported primary exclusion is sanitized identically to runtime topology",
+        runtimeExcluded.Count == 0 && validatorIssues.Select(x => x.StableId).SequenceEqual(runtimeIssues.Select(x => x.StableId))
+        && validatorIssues.Length == 2,
+        $"excluded={runtimeExcluded.Count} validator=[{string.Join(",", validatorIssues.Select(x => x.StableId))}] runtime=[{string.Join(",", runtimeIssues.Select(x => x.StableId))}]");
+}
+{
+    const string unknown = "{\"SettingsVersion\":4,\"UpwardBoundaryDefault\":\"Surprise\",\"BoundaryRules\":[{\"FromStableId\":\"a\",\"ToStableId\":\"b\",\"Direction\":\"Up\",\"Behavior\":\"Mystery\",\"Control\":\"Automatic\"}]}";
+    var draft = JsonSerializer.Deserialize<Settings>(unknown); draft.Normalize();
+    Check("M1 import: unknown enum values remain a repairable draft and never silently collapse",
+        draft.HasRepairableImportErrors && draft.UpwardBoundaryDefault == BoundaryDefault.Unknown
+        && draft.BoundaryRules.Single().Behavior == BoundaryBehavior.Unknown);
+}
+{
+    var projected = GuardCore.MapLayout(new List<(int L, int T, int R, int B)>
+        { (-32768, 0, -32128, 480), (30000, 0, 32767, 2160) }, 400, 160, 10);
+    Check("A-FIX-1: extreme-span 640x480 dummy retains a minimum 12x12 logical footprint",
+        projected[0].R - projected[0].L >= 12 && projected[0].B - projected[0].T >= 12,
+        $"dummy={projected[0]}");
+}
+{
+    var input = new List<(string Key, int Left, int Top, string RawIdentityKey)>
+        { ("clone", 0, 0, "port-z"), ("clone", 0, 0, "port-a") };
+    var first = GuardCore.DisambiguateKeys(input);
+    var reversed = GuardCore.DisambiguateKeys(input.AsEnumerable().Reverse().ToList());
+    var byRawFirst = input.Select((x, i) => (x.RawIdentityKey, Key: first[i])).ToDictionary(x => x.RawIdentityKey, x => x.Key);
+    var reversedInput = input.AsEnumerable().Reverse().ToList();
+    var byRawSecond = reversedInput.Select((x, i) => (x.RawIdentityKey, Key: reversed[i])).ToDictionary(x => x.RawIdentityKey, x => x.Key);
+    Check("A-FIX-2: exact-clone suffix tie breaks by ordinal raw identity, not enumeration order",
+        byRawFirst["port-a"] == "clone#0" && byRawFirst["port-z"] == "clone#1"
+        && byRawFirst.OrderBy(x => x.Key).SequenceEqual(byRawSecond.OrderBy(x => x.Key)));
 }
 
 // ---- localization parity: every key exists in BOTH languages (no cross-language fallback) ----

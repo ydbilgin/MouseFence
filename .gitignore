@@ -24,3 +24,7 @@ CURRENT_STATUS.md
 ## OS
 Thumbs.db
 desktop.ini
+
+# Playwright MCP session artifacts
+.playwright-mcp/
+mockup-*.png

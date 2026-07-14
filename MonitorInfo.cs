@@ -91,7 +91,8 @@ public sealed class MonitorInfo
     {
         // The disambiguation rule is pure + unit-tested in GuardCore; this only feeds it the raw key + stable geometry.
         var keys = GuardCore.DisambiguateKeys(
-            list.Select(m => (m.StableId, m.Bounds.Left, m.Bounds.Top)).ToList());
+            list.Select(m => (m.StableId, m.Bounds.Left, m.Bounds.Top,
+                              RawIdentityKey: (m.StableId ?? "") + "\n" + (m.Device ?? ""))).ToList());
         for (int i = 0; i < list.Count; i++)
             list[i].StableId = keys[i];
     }

@@ -64,6 +64,8 @@ public static class Strings
     public static string Cancel => G("Cancel");
     public static string MainTag => G("MainTag");
     public static string ValidationPickModifier => G("ValidationPickModifier");
+    public static string NoSealValidation => G("NoSealValidation");
+    public static string GeometrySealDemoted => G("GeometrySealDemoted");
 
     // ---- tray ----
     public static string MenuPause => G("MenuPause");
@@ -199,6 +201,8 @@ public static class Strings
         ["Cancel"] = "Cancel",
         ["MainTag"] = "[MAIN]",
         ["ValidationPickModifier"] = "Please pick at least one modifier (Ctrl / Alt / Shift / Win) and a key.",
+        ["NoSealValidation"] = "{0} would have no way out. Allow at least one boundary before saving.",
+        ["GeometrySealDemoted"] = "The display layout removed every exit from a screen. MouseFence temporarily changed its widest blocked boundary to Push.",
         ["MenuPause"] = "Pause",
         ["MenuResume"] = "Resume",
         ["MenuSettings"] = "Settings...",
@@ -329,6 +333,8 @@ public static class Strings
         ["Cancel"] = "İptal",
         ["MainTag"] = "[ANA]",
         ["ValidationPickModifier"] = "Lütfen en az bir değiştirici (Ctrl / Alt / Shift / Win) ve bir tuş seçin.",
+        ["NoSealValidation"] = "{0} ekranından çıkış yolu kalmaz. Kaydetmeden önce en az bir sınıra izin verin.",
+        ["GeometrySealDemoted"] = "Ekran düzeni bir ekranın tüm çıkışlarını kaldırdı. MouseFence en geniş engellenmiş sınırı geçici olarak İt olarak değiştirdi.",
         ["MenuPause"] = "Duraklat",
         ["MenuResume"] = "Devam et",
         ["MenuSettings"] = "Ayarlar...",

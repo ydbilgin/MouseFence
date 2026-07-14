@@ -39,6 +39,7 @@ public sealed class GuardCore
     // game mode: confine the cursor to whichever monitor it is currently on
     public bool Confine;
     public List<(int L, int T, int R, int B)> Monitors = new();
+    public RuntimeTransition[] Transitions = Array.Empty<RuntimeTransition>();
 
     // Side containment (horizontal mirror of the up-barrier): a SOFT, SYMMETRIC barrier on the MAIN screen's left/right
     // edges (MainL/MainR). It stops accidental drift in BOTH directions across those edges — OUT of main onto a side
@@ -58,7 +59,7 @@ public sealed class GuardCore
 
     /// <summary>The hook only needs to run (and the clamp/barrier logic only matters) when at least one of these
     /// holds. Factored so it is testable and so a dummy with NO top monitors still installs the hook to wall it off.</summary>
-    public bool NeedsProcessing => HasTop || Confine || Forbidden.Count > 0 || HasSides;
+    public bool NeedsProcessing => HasTop || Confine || Forbidden.Count > 0 || HasSides || Transitions.Length > 0;
 
     // descent routing (opt-in, default OFF): when descending out of a top monitor through its overhang onto the
     // WRONG side screen, clamp the exit X into the LINKED bottom monitor's full X-range so the cursor lands on the
@@ -218,10 +219,15 @@ public sealed class GuardCore
     /// UNCHANGED (no suffix) so existing single-panel ids are stable. Result is in the SAME order as the input.
     /// <see cref="MonitorInfo"/>.All() and the unit tests call THIS one method.
     /// </summary>
-    public static List<string> DisambiguateKeys(IReadOnlyList<(string Key, int Left, int Top)> monitors)
+    public static List<string> DisambiguateKeys(IReadOnlyList<(string Key, int Left, int Top)> monitors) =>
+        DisambiguateKeys(monitors.Select(m => (m.Key, m.Left, m.Top, RawIdentityKey: m.Key)).ToList());
+
+    /// <summary>A-FIX-2 overload: exact geometry ties resolve by ordinal raw identity, never enumeration order.</summary>
+    public static List<string> DisambiguateKeys(
+        IReadOnlyList<(string Key, int Left, int Top, string RawIdentityKey)> monitors)
     {
         var result = new string[monitors.Count];
-        foreach (var grp in monitors.Select((m, i) => (m, i)).GroupBy(t => t.m.Key))
+        foreach (var grp in monitors.Select((m, i) => (m, i)).GroupBy(t => t.m.Key, StringComparer.OrdinalIgnoreCase))
         {
             var members = grp.ToList();
             if (members.Count < 2)
@@ -230,7 +236,8 @@ public sealed class GuardCore
                 continue;
             }
             int ord = 0;
-            foreach (var (m, i) in members.OrderBy(t => t.m.Left).ThenBy(t => t.m.Top))
+            foreach (var (m, i) in members.OrderBy(t => t.m.Left).ThenBy(t => t.m.Top)
+                         .ThenBy(t => t.m.RawIdentityKey, StringComparer.Ordinal))
                 result[i] = $"{m.Key}#{ord++}";
         }
         return result.ToList();
@@ -332,11 +339,25 @@ public sealed class GuardCore
             int t = Edge(offsetY + ((long)r.T - minT) * scale);
             int rr = Edge(offsetX + ((long)r.R - minL) * scale);
             int bb = Edge(offsetY + ((long)r.B - minT) * scale);
-            result.Add((
-                Math.Clamp(l, pad, targetW - pad),
-                Math.Clamp(t, pad, targetH - pad),
-                Math.Clamp(rr, pad, targetW - pad),
-                Math.Clamp(bb, pad, targetH - pad)));
+            l = Math.Clamp(l, pad, targetW - pad); t = Math.Clamp(t, pad, targetH - pad);
+            rr = Math.Clamp(rr, pad, targetW - pad); bb = Math.Clamp(bb, pad, targetH - pad);
+
+            // A-FIX-1: even a 640x480 dummy at the far end of a ±32K span remains visibly present. Preserve the
+            // projected centre as far as the band permits, then clamp the 12x12 logical footprint inside the band.
+            int minW = Math.Min(12, usableW), minH = Math.Min(12, usableH);
+            if (r.R > r.L && rr - l < minW)
+            {
+                int centre = (l + rr) / 2;
+                l = Math.Clamp(centre - minW / 2, pad, targetW - pad - minW);
+                rr = l + minW;
+            }
+            if (r.B > r.T && bb - t < minH)
+            {
+                int centre = (t + bb) / 2;
+                t = Math.Clamp(centre - minH / 2, pad, targetH - pad - minH);
+                bb = t + minH;
+            }
+            result.Add((l, t, rr, bb));
         }
         return result;
     }
@@ -613,7 +634,8 @@ public sealed class GuardCore
     /// <summary>Nearest usable-monitor fallback. Distance is measured from the attempted target to the nearest legal
     /// pixel. Equal distances select the monitor with the lexicographically smaller (L,T,R,B), then smaller X,Y;
     /// input list order is never a tie-break, so identical calls are deterministic.</summary>
-    private bool TryNearestLegalMonitorPoint(int desiredX, int desiredY, out int bestX, out int bestY)
+    private bool TryNearestLegalMonitorPoint(int desiredX, int desiredY, out int bestX, out int bestY,
+                                             RuntimeTransition transition = null, bool transitionPassed = false)
     {
         bestX = bestY = 0;
         bool found = false;
@@ -622,6 +644,8 @@ public sealed class GuardCore
 
         foreach (var monitor in Monitors)
         {
+            if (transition != null && !RectIsAuthorized(monitor, transition, transitionPassed)) continue;
+            if (transition == null && !RectIsGloballyAuthorizedFromLast(monitor)) continue;
             if (!TryLegalPointOnMonitor(monitor, desiredX, desiredY, -1,
                                         out int candidateX, out int candidateY, out decimal distance))
                 continue;
@@ -709,7 +733,7 @@ public sealed class GuardCore
             return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
         // from here on, (x,y) == (bx,by) is guaranteed outside every forbidden rect.
 
-        if (!HasTop && !Confine && !HasSides)
+        if (!HasTop && !Confine && !HasSides && Transitions.Length == 0)
             return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
 
         if (!HaveLast)
@@ -727,6 +751,26 @@ public sealed class GuardCore
                 return FinishDecision(GuardAction.Block, x, y, ref bx, ref by);
             }
             return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by);
+        }
+
+        // Schema-v4 directional graph. All geometry/rule/default work was compiled during Configure; this hot path
+        // only intersects the movement segment with an already sorted array. It intentionally runs before the legacy
+        // BarrierY/OnTop path so Down and side rules are first-class and a fast move cannot skip a blocked seam.
+        var transition = MatchTransition(x, y);
+        if (transition != null)
+        {
+            BoundaryBehavior behavior = EffectiveBehavior(transition, gatesEnabled, sideContain);
+            bool crosses = behavior == BoundaryBehavior.Free
+                || behavior == BoundaryBehavior.Push && HasTransitionIntent(transition, x, y);
+            if (crosses)
+            {
+                if (transition.Direction == BoundaryDirection.Down && TryGuideDescent(x, y, out bx, out by))
+                    return FinishDecision(GuardAction.Block, x, y, ref bx, ref by, transition, transitionPassed: true);
+                return FinishDecision(GuardAction.Pass, x, y, ref bx, ref by, transition, transitionPassed: true);
+            }
+
+            HoldOnSource(transition, x, y, ref bx, ref by);
+            return FinishDecision(GuardAction.Block, x, y, ref bx, ref by, transition, transitionPassed: false);
         }
 
         // (S) Side containment: a SOFT, SYMMETRIC barrier with the up-barrier's feel. It stops the cursor from
@@ -860,23 +904,32 @@ public sealed class GuardCore
     /// anti-tunnel clamps on their entry side. With no usable entry monitor, Block also uses the globally nearest legal
     /// pixel. Both paths use finite boundary candidates and geometry-only tie-breaks.
     /// </summary>
-    private GuardAction FinishDecision(GuardAction action, int attemptedX, int attemptedY, ref int bx, ref int by)
+    private GuardAction FinishDecision(GuardAction action, int attemptedX, int attemptedY, ref int bx, ref int by,
+                                       RuntimeTransition transition = null, bool transitionPassed = false)
     {
         int finalX = action == GuardAction.Block ? bx : attemptedX;
         int finalY = action == GuardAction.Block ? by : attemptedY;
 
-        if (Monitors.Count > 0 && (!TryActiveMonitor(finalX, finalY, out _) || InsideForbidden(finalX, finalY)))
+        bool unauthorized = transition != null
+            ? !PointIsAuthorized(finalX, finalY, transition, transitionPassed)
+            : !PointIsGloballyAuthorizedFromLast(finalX, finalY);
+        if (Monitors.Count > 0 && (!TryActiveMonitor(finalX, finalY, out _) || InsideForbidden(finalX, finalY) || unauthorized))
         {
             bool resolved = false;
             int legalX = 0, legalY = 0;
 
             if (action == GuardAction.Block && HaveLast
                 && TryActiveMonitor(LastX, LastY, out var entryMonitor) && !InsideForbidden(LastX, LastY))
-                resolved = TryLegalPointOnMonitor(entryMonitor, finalX, finalY, -1,
-                                                  out legalX, out legalY, out _);
+            {
+                bool entryAuthorized = transition == null || RectIsAuthorized(entryMonitor, transition, transitionPassed);
+                if (entryAuthorized)
+                    resolved = TryLegalPointOnMonitor(entryMonitor, finalX, finalY, -1,
+                                                      out legalX, out legalY, out _);
+            }
 
             if (!resolved)
-                resolved = TryNearestLegalMonitorPoint(finalX, finalY, out legalX, out legalY);
+                resolved = TryNearestLegalMonitorPoint(finalX, finalY, out legalX, out legalY,
+                                                       transition, transitionPassed);
 
             if (resolved)
             {
@@ -893,6 +946,156 @@ public sealed class GuardCore
 
         Accept(finalX, finalY);
         return action;
+    }
+
+    private RuntimeTransition MatchTransition(int x, int y)
+    {
+        RuntimeTransition best = null;
+        double bestT = double.PositiveInfinity;
+        for (int i = 0; i < Transitions.Length; i++)
+        {
+            var t = Transitions[i];
+            if (!InRect(t.From, LastX, LastY)) continue;
+            int delta, plane, originAxis, targetAxis, originOrth, targetOrth;
+            switch (t.Direction)
+            {
+                case BoundaryDirection.Up:
+                    delta = LastY - y; plane = t.From.T; originAxis = LastY; targetAxis = y;
+                    originOrth = LastX; targetOrth = x; break;
+                case BoundaryDirection.Down:
+                    delta = y - LastY; plane = t.From.B; originAxis = LastY; targetAxis = y;
+                    originOrth = LastX; targetOrth = x; break;
+                case BoundaryDirection.Left:
+                    delta = LastX - x; plane = t.From.L; originAxis = LastX; targetAxis = x;
+                    originOrth = LastY; targetOrth = y; break;
+                case BoundaryDirection.Right:
+                    delta = x - LastX; plane = t.From.R; originAxis = LastX; targetAxis = x;
+                    originOrth = LastY; targetOrth = y; break;
+                default: continue;
+            }
+            if (delta <= 0 || targetAxis == originAxis) continue;
+            double hit = (double)(plane - originAxis) / (targetAxis - originAxis);
+            if (hit < 0 || hit > 1) continue;
+            double orth = originOrth + (targetOrth - originOrth) * hit;
+            int inset = Math.Min(t.PassageInsetPx, Math.Max(0, (t.CorridorWidth - 1) / 2));
+            if (orth < t.CorridorStart + inset || orth >= t.CorridorEnd - inset) continue;
+            // A gap is enforceable only when Windows establishes this exact ordered transition by landing in To.
+            if (t.GapPx > t.SeamTolerancePx && !InRect(t.To, x, y)) continue;
+
+            if (best == null || hit < bestT
+                || hit == bestT && (t.GapPx < best.GapPx
+                || t.GapPx == best.GapPx && t.SortOrder < best.SortOrder))
+            { best = t; bestT = hit; }
+        }
+        return best;
+    }
+
+    private static BoundaryBehavior EffectiveBehavior(RuntimeTransition t, bool gatesEnabled, bool sideContain)
+    {
+        // The shipped isolated-lower-screen escape is owner-bound and still requires deliberate Push intent, but the
+        // normal Up toggle may never close that source's only exit. SafetyEscapes is baked into this compile-time flag.
+        if (t.SoleUpSafetyEscape)
+            return t.Behavior == BoundaryBehavior.Free ? BoundaryBehavior.Free : BoundaryBehavior.Push;
+        if (t.Control == BoundaryControl.Always) return t.Behavior;
+        return t.Direction switch
+        {
+            BoundaryDirection.Up when !gatesEnabled => BoundaryBehavior.Blocked,
+            BoundaryDirection.Left or BoundaryDirection.Right when !sideContain => BoundaryBehavior.Free,
+            _ => t.Behavior,
+        };
+    }
+
+    private bool HasTransitionIntent(RuntimeTransition t, int x, int y)
+    {
+        int primary = t.Direction switch
+        {
+            BoundaryDirection.Up => LastY - y,
+            BoundaryDirection.Down => y - LastY,
+            BoundaryDirection.Left => LastX - x,
+            BoundaryDirection.Right => x - LastX,
+            _ => 0,
+        };
+        int orthogonal = t.Direction is BoundaryDirection.Up or BoundaryDirection.Down
+            ? Math.Abs(x - LastX) : Math.Abs(y - LastY);
+        return DeliberateCross ? primary >= t.PushMin && orthogonal <= primary + t.PushSlack : primary > 0;
+    }
+
+    private bool TryGuideDescent(int x, int y, out int bx, out int by)
+    {
+        bx = x; by = y;
+        if (!DescentRouting) return false;
+        foreach (var route in DescentRoutes)
+        {
+            if (route.Landing.R <= route.Landing.L) continue;
+            bool descending = y > LastY;
+            bool originInTop = InRect(route.Top, LastX, LastY);
+            bool crossesLocalEdge = y >= route.Top.B && x >= route.Top.L && x < route.Top.R;
+            bool outsideLanding = !InRect(route.Landing, x, y);
+            int landX = Math.Clamp(x, route.Landing.L, route.Landing.R - 1);
+            bool realLanding = InRect(route.Landing, landX, y);
+            bool wrongMonitor = TryActiveMonitor(x, y, out var active) && active != route.Landing;
+            if (!descending || !originInTop || !crossesLocalEdge || !outsideLanding || !realLanding || !wrongMonitor)
+                continue;
+            bx = landX;
+            return true;
+        }
+        return false;
+    }
+
+    private static void HoldOnSource(RuntimeTransition t, int x, int y, ref int bx, ref int by)
+    {
+        int holdX = Math.Min(t.EdgeHoldbackPx, Math.Max(0, t.From.R - t.From.L - 1));
+        int holdY = Math.Min(t.EdgeHoldbackPx, Math.Max(0, t.From.B - t.From.T - 1));
+        bx = Math.Clamp(x, t.From.L, t.From.R - 1);
+        by = Math.Clamp(y, t.From.T, t.From.B - 1);
+        switch (t.Direction)
+        {
+            case BoundaryDirection.Up: by = t.From.T + holdY; break;
+            case BoundaryDirection.Down: by = t.From.B - 1 - holdY; break;
+            case BoundaryDirection.Left: bx = t.From.L + holdX; break;
+            case BoundaryDirection.Right: bx = t.From.R - 1 - holdX; break;
+        }
+    }
+
+    private static bool PointIsAuthorized(int x, int y, RuntimeTransition transition, bool passed)
+    {
+        if (!passed) return InRect(transition.From, x, y);
+        foreach (var monitor in transition.AllowedLandings)
+            if (InRect(monitor, x, y)) return true;
+        return false;
+    }
+
+    private static bool RectIsAuthorized((int L, int T, int R, int B) monitor,
+                                         RuntimeTransition transition, bool passed)
+    {
+        if (!passed) return monitor == transition.From;
+        foreach (var allowed in transition.AllowedLandings)
+            if (allowed == monitor) return true;
+        return false;
+    }
+
+    private bool PointIsGloballyAuthorizedFromLast(int x, int y)
+    {
+        if (!TryActiveMonitor(x, y, out var monitor)) return true; // void is repaired through the rect overload below
+        return RectIsGloballyAuthorizedFromLast(monitor);
+    }
+
+    private bool RectIsGloballyAuthorizedFromLast((int L, int T, int R, int B) monitor)
+    {
+        if (Transitions.Length == 0 || !HaveLast || !TryActiveMonitor(LastX, LastY, out var source)) return true;
+        if (monitor == source) return true;
+        bool hasSourceTransition = false;
+        for (int i = 0; i < Transitions.Length; i++)
+        {
+            var edge = Transitions[i];
+            if (edge.From != source) continue;
+            hasSourceTransition = true;
+            if (edge.Behavior == BoundaryBehavior.Blocked) continue;
+            for (int j = 0; j < edge.AllowedLandings.Length; j++)
+                if (edge.AllowedLandings[j] == monitor) return true;
+        }
+        // With no geometric boundary from the source (true diagonal/clone), there is no ordered rule to violate.
+        return !hasSourceTransition;
     }
 
     private void Accept(int x, int y)

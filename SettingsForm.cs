@@ -23,7 +23,18 @@ public sealed class SettingsForm : Form
         nameof(Settings.DeliberateCross), nameof(Settings.DescentRouting),
         nameof(Settings.SideCrossMin), nameof(Settings.SideCrossSlack),
         nameof(Settings.Mode), nameof(Settings.ManualMonitors), nameof(Settings.ExcludedDevices), nameof(Settings.MonitorNames),
-        nameof(Settings.Language), nameof(Settings.Theme), nameof(Settings.CrossingPathMode), nameof(Settings.UpLinks),
+        nameof(Settings.Language), nameof(Settings.Theme),
+    };
+
+    // M1 intentionally ships the model/engine before the M2 boundary drawer and Advanced controls. The reflection
+    // gate treats only this named set as staged, so adding any unrelated JSON-only property still fails loudly.
+    internal static IReadOnlyCollection<string> M1DeferredGuiSettingProperties { get; } = new HashSet<string>
+    {
+        nameof(Settings.StartConfineOn), nameof(Settings.StartPaused),
+        nameof(Settings.UpwardBoundaryDefault), nameof(Settings.SideBoundaryDefault), nameof(Settings.DownwardBoundaryDefault),
+        nameof(Settings.BoundaryRules), nameof(Settings.UpCrossMin), nameof(Settings.UpCrossSlack),
+        nameof(Settings.PassageInsetPx), nameof(Settings.EdgeHoldbackPx), nameof(Settings.SeamTolerancePx),
+        nameof(Settings.SafetyEscapes), nameof(Settings.BoundaryTipSeen),
     };
 
     private readonly List<MonitorInfo> _monitors = new();
@@ -71,6 +82,7 @@ public sealed class SettingsForm : Form
     private readonly HashSet<string> _manualTops = new();
     private readonly Dictionary<string, HashSet<string>> _rules = new();
     private readonly Dictionary<string, string> _monitorNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Settings _source;
     private bool _rebuildingMonitorUi;
     private bool _updatingMonitorName;
     private bool _advancedExpanded;
@@ -92,6 +104,7 @@ public sealed class SettingsForm : Form
     public SettingsForm(Settings s, List<MonitorInfo> monitors)
     {
         s.Normalize();
+        _source = s;
         _monitors.AddRange(monitors ?? new List<MonitorInfo>());
         _mc = s.ModCtrl; _ma = s.ModAlt; _ms = s.ModShift; _mw = s.ModWin; _key = s.HotKey;
         _gc = s.ConfineModCtrl; _ga = s.ConfineModAlt; _gs = s.ConfineModShift; _gw = s.ConfineModWin; _gkey = s.ConfineHotKey;
@@ -99,7 +112,7 @@ public sealed class SettingsForm : Form
         _sc = s.SideModCtrl; _sa = s.SideModAlt; _ss = s.SideModShift; _sw = s.SideModWin; _skey = s.SideHotKey;
 
         foreach (var id in s.ManualMonitors) _manualTops.Add(id);
-        _tops.AddRange(s.Mode == "Manual" && _manualTops.Any(id => _monitors.Any(m => m.StableId == id && MonitorInfo.IsAbovePrimary(m)))
+        _tops.AddRange(s.Mode == "Manual"
             ? _monitors.Where(m => _manualTops.Contains(m.StableId) && MonitorInfo.IsAbovePrimary(m))
             : _monitors.Where(MonitorInfo.IsAbovePrimary));
         var topSet = new HashSet<string>(_tops.Select(t => t.StableId));
@@ -664,6 +677,15 @@ public sealed class SettingsForm : Form
     private string MonitorName(MonitorInfo monitor) =>
         Settings.MonitorNameFor(_monitorNames, monitor?.StableId);
 
+    private string MonitorName(string stableId)
+    {
+        string name = Settings.MonitorNameFor(_monitorNames, stableId);
+        if (!string.IsNullOrEmpty(name)) return name;
+        var monitor = _monitors.FirstOrDefault(m => SameId(m.StableId, stableId));
+        return monitor == null ? stableId : GuardCore.MonitorLabel(monitor.Index, monitor.Bounds.Width,
+            monitor.Bounds.Height, monitor.Primary, Strings.MainTag);
+    }
+
     private void MonitorNameBox_TextChanged(object sender, EventArgs e)
     {
         if (_updatingMonitorName || string.IsNullOrEmpty(_selectedStableId)) return;
@@ -905,7 +927,7 @@ public sealed class SettingsForm : Form
         var manualLive = _monitors
             .Where(m => MonitorInfo.IsAbovePrimary(m) && _manualTops.Contains(m.StableId))
             .ToList();
-        _tops.AddRange(_modeManual.Checked && manualLive.Count > 0
+        _tops.AddRange(_modeManual.Checked
             ? manualLive
             : _monitors.Where(MonitorInfo.IsAbovePrimary));
         var topSet = new HashSet<string>(_tops.Select(m => m.StableId));
@@ -1234,6 +1256,17 @@ public sealed class SettingsForm : Form
         }
 
         Result = BuildResult();
+        var sealedScreens = Result.ValidateNoSeal(_monitors);
+        if (Result.HasRepairableImportErrors || sealedScreens.Length > 0)
+        {
+            string message = sealedScreens.Length > 0
+                ? string.Format(Strings.NoSealValidation, MonitorName(sealedScreens[0].StableId))
+                : Strings.ImportInvalid;
+            MessageBox.Show(this, message, "MouseFence",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Result = null;
+            DialogResult = DialogResult.None;
+        }
     }
 
     /// <summary>Snapshot the current dialog selections into a <see cref="Settings"/> (shared by Save and Export).</summary>
@@ -1241,11 +1274,11 @@ public sealed class SettingsForm : Form
     {
         var res = new Settings
         {
+            SettingsVersion = Settings.CurrentSettingsVersion,
             ModCtrl = _mc, ModAlt = _ma, ModShift = _ms, ModWin = _mw, HotKey = _key,
             StartGateClosed = _startActive.Checked,
             AutoStart = _autoStart.Checked,
             Mode = _modeManual.Checked ? "Manual" : "AutoTop",
-            CrossingPathMode = _crossingCustom.Checked ? Settings.CustomCrossingPathMode : Settings.DefaultCrossingPathMode,
             Language = _langCombo.SelectedIndex switch { 1 => "en", 2 => "tr", _ => "auto" },
             Theme = _themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" },
             ConfineModCtrl = _gc, ConfineModAlt = _ga, ConfineModShift = _gs, ConfineModWin = _gw, ConfineHotKey = _gkey,
@@ -1256,6 +1289,18 @@ public sealed class SettingsForm : Form
             SideCrossSlack = (int)_sideSlackNum.Value,
             DeliberateCross = _deliberateCheck.Checked,
             DescentRouting = _descentCheck.Checked,
+            StartConfineOn = _source.StartConfineOn,
+            StartPaused = _source.StartPaused,
+            UpwardBoundaryDefault = _crossingCustom.Checked ? BoundaryDefault.Blocked : BoundaryDefault.Automatic,
+            SideBoundaryDefault = _source.SideBoundaryDefault,
+            DownwardBoundaryDefault = _source.DownwardBoundaryDefault,
+            UpCrossMin = _source.UpCrossMin,
+            UpCrossSlack = _source.UpCrossSlack,
+            PassageInsetPx = _source.PassageInsetPx,
+            EdgeHoldbackPx = _source.EdgeHoldbackPx,
+            SeamTolerancePx = _source.SeamTolerancePx,
+            SafetyEscapes = _source.SafetyEscapes,
+            BoundaryTipSeen = _source.BoundaryTipSeen,
         };
 
         if (res.Mode == "Manual")
@@ -1268,10 +1313,18 @@ public sealed class SettingsForm : Form
             }
         }
 
-        if (res.CrossingPathMode == Settings.CustomCrossingPathMode)
+        // Preserve every v4 rule the temporary v3 editor cannot represent. It only edits migrated OverallFeel/Up
+        // allowances; M2 replaces this glue with the complete directional drawer.
+        res.BoundaryRules.AddRange(_source.BoundaryRules.Where(r =>
+            r.Direction != BoundaryDirection.Up || r.Behavior != BoundaryBehavior.OverallFeel)
+            .Select(r => new BoundaryRule { FromStableId = r.FromStableId, ToStableId = r.ToStableId,
+                Direction = r.Direction, Behavior = r.Behavior, Control = r.Control }));
+        if (_crossingCustom.Checked)
             foreach (var kv in _rules.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
                 foreach (var to in kv.Value.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                    res.UpLinks.Add(new UpLink { FromDevice = kv.Key, ToDevice = to });
+                    res.BoundaryRules.Add(new BoundaryRule { FromStableId = kv.Key, ToStableId = to,
+                        Direction = BoundaryDirection.Up, Behavior = BoundaryBehavior.OverallFeel,
+                        Control = BoundaryControl.Automatic });
 
         // Carry the walled-off displays so a Save/Export doesn't silently drop them (binding fix #5).
         res.ExcludedDevices.AddRange(_excluded.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
@@ -1301,7 +1354,18 @@ public sealed class SettingsForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            var json = JsonSerializer.Serialize(BuildResult(), new JsonSerializerOptions { WriteIndented = true });
+            var draft = BuildResult();
+            var sealedScreens = draft.ValidateNoSeal(_monitors);
+            if (draft.HasRepairableImportErrors || sealedScreens.Length > 0)
+            {
+                string message = sealedScreens.Length > 0
+                    ? string.Format(Strings.NoSealValidation, MonitorName(sealedScreens[0].StableId))
+                    : Strings.ImportInvalid;
+                MessageBox.Show(this, message,
+                                "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var json = JsonSerializer.Serialize(draft, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(dlg.FileName, json);
         }
         catch (Exception ex)
@@ -1348,6 +1412,15 @@ public sealed class SettingsForm : Form
         {
             imported.MigrateLayoutKeysToStable(_monitors);
             imported.SettingsVersion = Settings.CurrentSettingsVersion;
+        }
+        var sealedScreens = imported.ValidateNoSeal(_monitors);
+        if (imported.HasRepairableImportErrors || sealedScreens.Length > 0)
+        {
+            string message = sealedScreens.Length > 0
+                ? string.Format(Strings.NoSealValidation, MonitorName(sealedScreens[0].StableId))
+                : Strings.ImportInvalid;
+            MessageBox.Show(this, message, "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
         }
         Result = imported;
         DialogResult = DialogResult.OK;   // closes the dialog; the tray saves + reconfigures via the existing path

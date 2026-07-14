@@ -112,7 +112,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         // can't lock the user out. The exclude identity is the STABLE per-monitor key (MonitorInfo.StableId, FIX 4),
         // so it survives \\.\DISPLAYn renumbering. If pruning happens, warn.
         var primaryStable = (allMonitors.FirstOrDefault(m => m.Primary) ?? allMonitors.FirstOrDefault())?.StableId;
-        var requested = new HashSet<string>(_settings.ExcludedDevices);
+        var requested = new HashSet<string>(_settings.ExcludedDevices, StringComparer.OrdinalIgnoreCase);
         var presentStable = allMonitors.Select(m => m.StableId).ToList();
         var excludedStable = new HashSet<string>(
             GuardCore.SanitizeExcluded(presentStable, primaryStable, requested, out bool pruned));
@@ -124,7 +124,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         // owner, a descent landing, or a confine target — WALL-OFF subsumes IGNORE-ONLY). Match by StableId.
         var monitors = allMonitors.Where(m => !excludedStable.Contains(m.StableId)).ToList();
 
-        var tops = (_settings.Mode == "Manual" && _settings.ManualMonitors.Count > 0
+        var tops = (_settings.Mode == "Manual"
             ? monitors.Where(m => _settings.ManualMonitors.Contains(m.StableId))
             : monitors.Where(MonitorInfo.IsAbovePrimary)).ToList();
 
@@ -133,7 +133,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         // Default paths are primary -> every top. Custom paths are explicit, including an intentionally EMPTY list.
         // The persisted mode removes the old UI/runtime ambiguity where empty looked like "none" but ran as "all".
-        var links = _settings.CrossingPathMode == Settings.CustomCrossingPathMode
+        var links = _settings.UpwardBoundaryDefault == BoundaryDefault.Blocked
             ? _settings.UpLinks
             : (primary != null
                 ? tops.Select(t => new UpLink { FromDevice = primary.StableId, ToDevice = t.StableId }).ToList()
@@ -160,7 +160,12 @@ public sealed class TrayApplicationContext : ApplicationContext
         var topIdx = new HashSet<int>();
         for (int i = 0; i < monitors.Count; i++)
             if (topSet.Contains(monitors[i].StableId)) topIdx.Add(i);
-        var (warn, safety) = GuardCore.AntiTrap(rects, topIdx);
+        var (warn, _) = GuardCore.AntiTrap(rects, topIdx);
+
+        // M1 compiler: all boundary/rule/default/geometry work happens here, never in the mouse hook. It carries the
+        // legacy owner-bound sole-up escape onto the matching transition; geometry-created seal demotion remains the
+        // separate backstop, while authored seals are rejected by Save/import validation.
+        var compiled = BoundaryGraph.Compile(_settings, BoundaryGraph.FromMonitors(monitors));
 
         // Descent routes (opt-in): derive (Top, Landing) pairs from the same UpLinks so a descent off a top's overhang
         // clamps back onto the intended bottom. The guards (ambiguity, SF-1 vertical, X-overlap) live in the pure,
@@ -168,8 +173,11 @@ public sealed class TrayApplicationContext : ApplicationContext
         var deviceRects = byStable.ToDictionary(
             kv => kv.Key,
             kv => (kv.Value.Bounds.Left, kv.Value.Bounds.Top, kv.Value.Bounds.Right, kv.Value.Bounds.Bottom));
+        var compiledUpLinks = compiled.Transitions
+            .Where(t => t.Direction == BoundaryDirection.Up && t.Behavior != BoundaryBehavior.Blocked)
+            .Select(t => (t.FromStableId, t.ToStableId)).Distinct().ToList();
         var routes = GuardCore.DeriveRoutes(
-            links.Select(lk => (lk.FromDevice, lk.ToDevice)), deviceRects, topSet);
+            compiledUpLinks, deviceRects, topSet);
 
         // Side containment: the cursor is contained within the MAIN (primary) screen horizontally. Only engage when
         // a real side screen flanks the main left/right (else the feature is inert — Windows already blocks the void),
@@ -184,7 +192,7 @@ public sealed class TrayApplicationContext : ApplicationContext
                  GuardCore.Adjacent(mainRect, (m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom), Dir.Right)));
         }
 
-        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), safety, routes,
+        _guard.Configure(tops.Select(t => t.Bounds), gates, monitors.Select(m => m.Bounds), compiled.Transitions, routes,
                          excludedMonitors.Select(m => m.Bounds),
                          hasSides, main?.Bounds ?? default);
         _guard.DeliberateCross = _settings.DeliberateCross;
@@ -194,6 +202,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         // as a deliberate push, defeating the whole feature.
         _guard.SideCrossMin = Math.Max(1, _settings.SideCrossMin);
         _guard.SideCrossSlack = Math.Max(0, _settings.SideCrossSlack);
+
+        if (compiled.HasSafetyDemotions)
+            _tray.ShowBalloonTip(5000, "MouseFence", Strings.GeometrySealDemoted, ToolTipIcon.Info);
 
         if (pruned)
             _tray.ShowBalloonTip(5000, "MouseFence", Strings.ExcludePruned, ToolTipIcon.Warning);
