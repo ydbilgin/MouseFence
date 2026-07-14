@@ -66,7 +66,7 @@ public sealed class MouseGuard : IDisposable
     /// <paramref name="forbidden"/> are excluded-display bounds the cursor is walled out of (headless/dummy screens).</summary>
     public void Configure(IEnumerable<Native.RECT> blocked, IEnumerable<(int Min, int Max)> gates,
                           IEnumerable<Native.RECT> allMonitors,
-                          IEnumerable<(int Min, int Max, int OwnerT, int OwnerB)> safetyGates,
+                          IEnumerable<RuntimeTransition> transitions,
                           IEnumerable<((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing)> descentRoutes,
                           IEnumerable<Native.RECT> forbidden,
                           bool hasSides, Native.RECT mainBounds)
@@ -76,7 +76,10 @@ public sealed class MouseGuard : IDisposable
         _core.BarrierY = _core.HasTop ? rects.Max(r => r.Bottom) : 0;
         _core.Gates = gates.Where(g => g.Max > g.Min).ToList();
         _core.Monitors = allMonitors.Select(r => (r.Left, r.Top, r.Right, r.Bottom)).ToList();
-        _core.SafetyGates = safetyGates.Where(g => g.Max > g.Min).ToList();
+        // Schema v4 carries the legacy sole-up safety escape on its compiled transition. The cut F-A1 runtime graph
+        // scan stays removed; no separate mutable SafetyGates list is needed in the hook path.
+        _core.SafetyGates.Clear();
+        _core.Transitions = (transitions ?? Enumerable.Empty<RuntimeTransition>()).ToArray();
         _core.DescentRoutes = descentRoutes.ToList();
         _core.Forbidden = forbidden.Select(r => (r.Left, r.Top, r.Right, r.Bottom))
                                    .Where(r => r.Right > r.Left && r.Bottom > r.Top).ToList();

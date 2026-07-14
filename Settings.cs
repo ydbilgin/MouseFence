@@ -5,11 +5,24 @@ namespace MouseFence;
 
 public sealed class Settings
 {
-    public const int CurrentSettingsVersion = 3;
+    public const int CurrentSettingsVersion = 4;
     public const string DefaultCrossingPathMode = "Default";
     public const string CustomCrossingPathMode = "Custom";
+    public const int DefaultUpCrossMin = 3;
+    public const int DefaultUpCrossSlack = 5;
+    public const int DefaultPassageInsetPx = 24;
+    public const int DefaultEdgeHoldbackPx = 0;
+    public const int DefaultSeamTolerancePx = 2;
 
-    public int SettingsVersion { get; set; } = CurrentSettingsVersion;
+    private int _settingsVersion = CurrentSettingsVersion;
+    // A missing JSON field is legacy v0. Fresh/schema-v4 construction sites set SettingsVersion through the setter;
+    // deserialization does the same only when the property is genuinely present.
+    private bool _settingsVersionWasSpecified;
+    public int SettingsVersion
+    {
+        get => _settingsVersion;
+        set { _settingsVersion = value; _settingsVersionWasSpecified = true; }
+    }
 
     // hotkey
     public Keys HotKey { get; set; } = Keys.Up;
@@ -42,6 +55,8 @@ public sealed class Settings
 
     // behaviour
     public bool StartGateClosed { get; set; } = true;  // main->top crossing blocked at launch
+    public bool StartConfineOn { get; set; } = false;
+    public bool StartPaused { get; set; } = false;
     // Default ON (true): side containment is a SOFT barrier — it only blocks accidental drift out of the main screen
     // sideways; a deliberate horizontal push always crosses, so shipping it on costs the user nothing but stops the
     // pixel-creep onto a side monitor. An absent JSON key deserializes to this default; toggle off via the tray menu
@@ -50,6 +65,22 @@ public sealed class Settings
     public bool AutoStart { get; set; } = false;       // launch with Windows
     public bool DeliberateCross { get; set; } = true;  // true: deliberate push to cross; false: any upward move
     public bool DescentRouting { get; set; } = false;  // opt-in: clamp a descent back onto the linked bottom screen
+
+    // Schema v4 boundary policy. Numeric crossing feel is global by design; BoundaryRule is intentionally lean.
+    [JsonConverter(typeof(TolerantEnumConverter<BoundaryDefault>))]
+    public BoundaryDefault UpwardBoundaryDefault { get; set; } = BoundaryDefault.Automatic;
+    [JsonConverter(typeof(TolerantEnumConverter<BoundaryDefault>))]
+    public BoundaryDefault SideBoundaryDefault { get; set; } = BoundaryDefault.Automatic;
+    [JsonConverter(typeof(TolerantEnumConverter<BoundaryDefault>))]
+    public BoundaryDefault DownwardBoundaryDefault { get; set; } = BoundaryDefault.Free;
+    public List<BoundaryRule> BoundaryRules { get; set; } = new();
+    public int UpCrossMin { get; set; } = DefaultUpCrossMin;
+    public int UpCrossSlack { get; set; } = DefaultUpCrossSlack;
+    public int PassageInsetPx { get; set; } = DefaultPassageInsetPx;
+    public int EdgeHoldbackPx { get; set; } = DefaultEdgeHoldbackPx;
+    public int SeamTolerancePx { get; set; } = DefaultSeamTolerancePx;
+    public bool SafetyEscapes { get; set; } = true;
+    public bool BoundaryTipSeen { get; set; } = false;
 
     // Side-barrier sensitivity (independent of the up barrier): the min horizontal px in one move that counts as a
     // DELIBERATE side crossing, and the vertical slack allowed beyond it. Higher SideCrossMin = a firmer/stiffer side
@@ -85,16 +116,37 @@ public sealed class Settings
     // Default mode deliberately persists an empty list; Custom mode treats this as an explicit "allow none" list.
     private string _crossingPathMode = DefaultCrossingPathMode;
     private bool _crossingPathModeWasSpecified;
-    public string CrossingPathMode
+    [JsonPropertyName("CrossingPathMode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string LegacyCrossingPathMode
     {
-        get => _crossingPathMode;
+        get => SettingsVersion < CurrentSettingsVersion ? _crossingPathMode : null;
         set
         {
             _crossingPathMode = value;
             _crossingPathModeWasSpecified = true;
         }
     }
-    public List<UpLink> UpLinks { get; set; } = new();
+    private List<UpLink> _legacyUpLinks = new();
+    [JsonPropertyName("UpLinks")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<UpLink> LegacyUpLinks
+    {
+        get => SettingsVersion < CurrentSettingsVersion ? _legacyUpLinks : null;
+        set => _legacyUpLinks = value ?? new List<UpLink>();
+    }
+
+    // M1 compatibility surface for the old textual editor. These are never persisted by schema v4.
+    [JsonIgnore]
+    public string CrossingPathMode => UpwardBoundaryDefault == BoundaryDefault.Blocked
+        ? CustomCrossingPathMode : DefaultCrossingPathMode;
+    [JsonIgnore]
+    public List<UpLink> UpLinks => BoundaryRules
+        .Where(r => r.Direction == BoundaryDirection.Up && r.Behavior == BoundaryBehavior.OverallFeel)
+        .Select(r => new UpLink { FromDevice = r.FromStableId, ToDevice = r.ToStableId }).ToList();
+
+    [JsonIgnore]
+    public bool HasRepairableImportErrors { get; private set; }
 
     // Transient (not persisted): set when a fresh install on an Intel GPU had Shift added to its arrow hotkeys,
     // so the tray can show an info balloon explaining the safe defaults.
@@ -138,7 +190,7 @@ public sealed class Settings
 
         // Fresh install (no settings file yet): on an Intel GPU, the Ctrl+Alt+Arrow defaults clash with the driver's
         // screen-rotation hotkeys, so add Shift to keep the directional arrow but dodge rotation.
-        var fresh = new Settings();
+        var fresh = new Settings { SettingsVersion = CurrentSettingsVersion };
         try { if (Native.HasIntelGpu()) fresh.AddShiftToArrowHotkeys(); }
         catch { /* detection is best-effort */ }
         return fresh;
@@ -152,7 +204,8 @@ public sealed class Settings
     {
         ManualMonitors ??= new List<string>();
         ExcludedDevices ??= new List<string>();
-        UpLinks ??= new List<UpLink>();
+        _legacyUpLinks ??= new List<UpLink>();
+        BoundaryRules ??= new List<BoundaryRule>();
 
         // Deserialization creates a comparer-neutral Dictionary, and hand-edited/imported JSON may contain blank,
         // duplicate-by-case, or multi-line values. Rebuild deterministically as a case-insensitive, single-line map.
@@ -168,11 +221,66 @@ public sealed class Settings
         }
         MonitorNames = normalizedNames;
 
-        bool valid = _crossingPathMode is DefaultCrossingPathMode or CustomCrossingPathMode;
-        if (!_crossingPathModeWasSpecified || !valid)
-            _crossingPathMode = UpLinks.Count > 0 ? CustomCrossingPathMode : DefaultCrossingPathMode;
-        _crossingPathModeWasSpecified = true;
-        if (_crossingPathMode == DefaultCrossingPathMode) UpLinks.Clear();
+        int loadedVersion = _settingsVersionWasSpecified ? _settingsVersion : 0;
+        if (loadedVersion < CurrentSettingsVersion)
+        {
+            bool valid = _crossingPathMode is DefaultCrossingPathMode or CustomCrossingPathMode;
+            if (!_crossingPathModeWasSpecified || !valid)
+                _crossingPathMode = _legacyUpLinks.Count > 0 ? CustomCrossingPathMode : DefaultCrossingPathMode;
+            if (_crossingPathMode == CustomCrossingPathMode)
+            {
+                UpwardBoundaryDefault = BoundaryDefault.Blocked;
+                BoundaryRules = _legacyUpLinks.Where(l => l != null)
+                    .Select(l => new BoundaryRule
+                    {
+                        FromStableId = l.FromDevice ?? "", ToStableId = l.ToDevice ?? "",
+                        Direction = BoundaryDirection.Up, Behavior = BoundaryBehavior.OverallFeel,
+                        Control = BoundaryControl.Automatic,
+                    }).ToList();
+            }
+            else
+            {
+                UpwardBoundaryDefault = BoundaryDefault.Automatic;
+                BoundaryRules.Clear();
+            }
+            SideBoundaryDefault = BoundaryDefault.Automatic;
+            DownwardBoundaryDefault = BoundaryDefault.Free;
+            EdgeHoldbackPx = DefaultEdgeHoldbackPx;
+            StartConfineOn = false;
+            StartPaused = false;
+            BoundaryTipSeen = false;
+            if (Mode == "Manual" && ManualMonitors.Count == 0) Mode = "AutoTop";
+            _settingsVersion = CurrentSettingsVersion;
+            _settingsVersionWasSpecified = true;
+        }
+
+        UpCrossMin = Math.Clamp(UpCrossMin, 1, 200);
+        UpCrossSlack = Math.Clamp(UpCrossSlack, 0, 200);
+        SideCrossMin = Math.Clamp(SideCrossMin, 1, 200);
+        SideCrossSlack = Math.Clamp(SideCrossSlack, 0, 200);
+        PassageInsetPx = Math.Clamp(PassageInsetPx, 0, 500);
+        EdgeHoldbackPx = Math.Clamp(EdgeHoldbackPx, 0, 200);
+        SeamTolerancePx = Math.Clamp(SeamTolerancePx, 0, 200);
+
+        HasRepairableImportErrors = UpwardBoundaryDefault == BoundaryDefault.Unknown
+            || SideBoundaryDefault == BoundaryDefault.Unknown || DownwardBoundaryDefault == BoundaryDefault.Unknown;
+        var dedup = new Dictionary<string, BoundaryRule>(StringComparer.OrdinalIgnoreCase);
+        var invalid = new List<BoundaryRule>();
+        foreach (var rule in BoundaryRules)
+        {
+            if (rule == null) continue;
+            rule.FromStableId = rule.FromStableId?.Trim() ?? "";
+            rule.ToStableId = rule.ToStableId?.Trim() ?? "";
+            bool enumInvalid = rule.Direction == BoundaryDirection.Unknown || rule.Behavior == BoundaryBehavior.Unknown
+                || rule.Control == BoundaryControl.Unknown;
+            if (enumInvalid) { HasRepairableImportErrors = true; invalid.Add(rule); continue; }
+            if (rule.FromStableId.Length == 0 || rule.ToStableId.Length == 0
+                || string.Equals(rule.FromStableId, rule.ToStableId, StringComparison.OrdinalIgnoreCase))
+            { HasRepairableImportErrors = true; invalid.Add(rule); continue; }
+            dedup[RuleIdentity(rule)] = rule; // import contract: last-valid-wins
+        }
+        BoundaryRules = dedup.Values.OrderBy(r => r.FromStableId, StringComparer.Ordinal)
+            .ThenBy(r => r.ToStableId, StringComparer.Ordinal).ThenBy(r => r.Direction).Concat(invalid).ToList();
 
         if (Mode is not ("AutoTop" or "Manual")) Mode = "AutoTop";
     }
@@ -217,12 +325,20 @@ public sealed class Settings
             .ToDictionary(g => g.Key, g => g.First().StableId, StringComparer.OrdinalIgnoreCase);
         var migrated = GuardCore.MigrateLayoutKeysToStable(
             ManualMonitors,
-            UpLinks.Select(lk => (lk.FromDevice, lk.ToDevice)),
+            _legacyUpLinks.Select(lk => (lk.FromDevice, lk.ToDevice)),
             map);
         ManualMonitors = migrated.ManualKeys;
-        UpLinks = migrated.Links
+        _legacyUpLinks = migrated.Links
             .Select(lk => new UpLink { FromDevice = lk.From, ToDevice = lk.To })
             .ToList();
+        foreach (var rule in BoundaryRules)
+        {
+            if (map.TryGetValue(rule.FromStableId, out var from)) rule.FromStableId = from;
+            else if (rule.FromStableId?.StartsWith(@"\\.\DISPLAY", StringComparison.OrdinalIgnoreCase) == true) rule.FromStableId = "";
+            if (map.TryGetValue(rule.ToStableId, out var to)) rule.ToStableId = to;
+            else if (rule.ToStableId?.StartsWith(@"\\.\DISPLAY", StringComparison.OrdinalIgnoreCase) == true) rule.ToStableId = "";
+        }
+        Normalize();
     }
 
     public void ResetLayoutConfig()
@@ -230,8 +346,14 @@ public sealed class Settings
         var reset = GuardCore.ResetLayoutConfig();
         Mode = reset.Mode;
         ManualMonitors = reset.ManualKeys;
-        CrossingPathMode = DefaultCrossingPathMode;
-        UpLinks = reset.Links.Select(lk => new UpLink { FromDevice = lk.From, ToDevice = lk.To }).ToList();
+        UpwardBoundaryDefault = BoundaryDefault.Automatic;
+        SideBoundaryDefault = BoundaryDefault.Automatic;
+        DownwardBoundaryDefault = BoundaryDefault.Free;
+        BoundaryRules.Clear();
+        UpCrossMin = DefaultUpCrossMin; UpCrossSlack = DefaultUpCrossSlack;
+        SideCrossMin = DefaultSideCrossMin; SideCrossSlack = DefaultSideCrossSlack;
+        PassageInsetPx = DefaultPassageInsetPx; EdgeHoldbackPx = DefaultEdgeHoldbackPx;
+        SeamTolerancePx = DefaultSeamTolerancePx; SafetyEscapes = true;
     }
 
     public void Save()
@@ -240,11 +362,36 @@ public sealed class Settings
         {
             Normalize();
             SettingsVersion = CurrentSettingsVersion;
+            if (HasRepairableImportErrors) return;
+            var monitors = MonitorInfo.All();
+            var excluded = SanitizedExcluded(monitors);
+            if (BoundaryGraph.ValidateNoSeal(this, BoundaryGraph.FromMonitors(monitors, excluded)).Length > 0)
+                return;
             Directory.CreateDirectory(Dir);
             File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { /* non-fatal */ }
     }
+
+    public BoundaryValidationIssue[] ValidateNoSeal(IEnumerable<MonitorInfo> monitors)
+    {
+        Normalize();
+        var monitorList = (monitors ?? Enumerable.Empty<MonitorInfo>()).ToList();
+        var excluded = SanitizedExcluded(monitorList);
+        return BoundaryGraph.ValidateNoSeal(this, BoundaryGraph.FromMonitors(monitorList, excluded));
+    }
+
+    private HashSet<string> SanitizedExcluded(IReadOnlyList<MonitorInfo> monitors)
+    {
+        var present = monitors.Select(m => m.StableId).ToList();
+        string primary = (monitors.FirstOrDefault(m => m.Primary) ?? monitors.FirstOrDefault())?.StableId;
+        var requested = new HashSet<string>(ExcludedDevices ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        return new HashSet<string>(GuardCore.SanitizeExcluded(present, primary, requested, out _),
+                                   StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string RuleIdentity(BoundaryRule rule) =>
+        rule.FromStableId + "\n" + rule.ToStableId + "\n" + rule.Direction;
 
     public uint Modifiers()
     {
@@ -336,4 +483,24 @@ public sealed class UpLink
 {
     public string FromDevice { get; set; } = "";
     public string ToDevice { get; set; } = "";
+}
+
+/// <summary>String enum converter that preserves unknown import values as the enum's Unknown sentinel. This lets the
+/// settings dialog keep a repairable draft instead of throwing or silently choosing a different behavior.</summary>
+public sealed class TolerantEnumConverter<T> : JsonConverter<T> where T : struct, Enum
+{
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String
+            && Enum.TryParse<T>(reader.GetString(), ignoreCase: true, out var parsed)
+            && Enum.IsDefined(parsed))
+            return parsed;
+        if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out int raw)
+            && Enum.IsDefined(typeof(T), raw))
+            return (T)Enum.ToObject(typeof(T), raw);
+        return Enum.TryParse<T>("Unknown", out var unknown) ? unknown : default;
+    }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString());
 }
