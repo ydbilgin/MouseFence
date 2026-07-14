@@ -45,17 +45,37 @@ public sealed class MonitorInfo
                 return true;
             }, IntPtr.Zero);
 
-        list.Sort((a, b) =>
-        {
-            int byLeft = a.Bounds.Left.CompareTo(b.Bounds.Left);
-            return byLeft != 0 ? byLeft : a.Bounds.Top.CompareTo(b.Bounds.Top);
-        });
-        for (int i = 0; i < list.Count; i++)
-            list[i].Index = i + 1;
+        SortAndNumber(list);
 
         DisambiguateStableIds(list);
 
         return list;
+    }
+
+    /// <summary>Assign MouseFence's human-facing numbers by Left, then Top. StableId and Device are deterministic
+    /// tie-breakers for overlapping/clone layouts whose monitors share the same origin, so native enumeration order
+    /// can never change labels or map hit order between refreshes.</summary>
+    internal static void SortAndNumber(List<MonitorInfo> list)
+    {
+        list.Sort((a, b) =>
+        {
+            int c = a.Bounds.Left.CompareTo(b.Bounds.Left);
+            if (c != 0) return c;
+            c = a.Bounds.Top.CompareTo(b.Bounds.Top);
+            if (c != 0) return c;
+            c = StringComparer.OrdinalIgnoreCase.Compare(a.StableId, b.StableId);
+            if (c != 0) return c;
+            c = StringComparer.Ordinal.Compare(a.StableId, b.StableId);
+            if (c != 0) return c;
+            c = StringComparer.OrdinalIgnoreCase.Compare(a.Device, b.Device);
+            if (c != 0) return c;
+            c = StringComparer.Ordinal.Compare(a.Device, b.Device);
+            if (c != 0) return c;
+            c = a.Bounds.Right.CompareTo(b.Bounds.Right);
+            return c != 0 ? c : a.Bounds.Bottom.CompareTo(b.Bounds.Bottom);
+        });
+        for (int i = 0; i < list.Count; i++)
+            list[i].Index = i + 1;
     }
 
     /// <summary>

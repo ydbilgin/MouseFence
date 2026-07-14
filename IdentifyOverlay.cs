@@ -5,9 +5,8 @@ namespace MouseFence;
 /// <summary>
 /// A brief, self-closing "which physical screen is this?" overlay drawn on ONE monitor (the MouseFence answer to
 /// Windows Display Settings' "Identify"). It covers the monitor with a translucent tint (via <see cref="Form.Opacity"/>
-/// — a proper layered window, NO TransparencyKey, so no fringe) and shows a bold frame border + the monitor's big
-/// number + its resolution (and [MAIN] for the primary). The frame is the form's own background revealed by Padding
-/// around an inner accent panel; the number/resolution are Labels — all GDI-control rendering, NO custom GDI+ paint
+/// — a proper layered window, NO TransparencyKey, so no fringe) and shows a bold frame plus the monitor's big
+/// MouseFence number and optional nickname. The content uses a normal WinForms Label — NO custom GDI+ paint
 /// (a large-pixel-font DrawString was crashing the process). Top-most + WS_EX_NOACTIVATE so it never steals focus.
 /// A life timer (started in OnLoad, before the window is interactable) closes it even if something throws, so it can
 /// never strand on screen; it is also Owner-bound to the settings dialog. Triggered from the modal settings dialog,
@@ -19,7 +18,7 @@ internal sealed class IdentifyOverlay : Form
 
     private readonly System.Windows.Forms.Timer _life;
 
-    private IdentifyOverlay(MonitorInfo m, Theme theme)
+    private IdentifyOverlay(MonitorInfo m, string monitorName, Theme theme)
     {
         int w = m.Bounds.Width, h = m.Bounds.Height;
         int side = Math.Min(w, h);
@@ -33,19 +32,23 @@ internal sealed class IdentifyOverlay : Form
         Opacity = 0.62;                          // uniform alpha (layered) — see-through, no color-key fringe
         Bounds = Rectangle.FromLTRB(m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom);
 
-        float pt = Math.Clamp(side / 14f, 36f, 150f);
+        string displayText = DisplayText(m, monitorName);
+        float pt = Math.Clamp(Math.Min(side / 14f,
+            w / Math.Max(1f, displayText.Length * 0.72f)), 24f, 150f);
 
         // ONE single-line Label only. On this hardware, ANY richer content on these layered, borderless, no-activate
         // overlays (a second docked Label, a multi-line Label, or custom GDI+ paint) reliably access-violates GDI
         // (0xC0000005) when the message loop pumps; a single single-line control is rock-solid. The number is the
-        // identifier; the primary gets a star. (Resolution/role intentionally dropped for this robustness.)
+        // identifier; the primary gets a star. A nickname only enriches this SAME one-line Text value.
         var label = new Label
         {
             Dock = DockStyle.Fill,
-            Text = m.Primary ? $"{m.Index}  ★" : m.Index.ToString(),
+            Text = displayText,
             ForeColor = Color.White,
             TextAlign = ContentAlignment.MiddleCenter,
             Font = new Font("Segoe UI", pt, FontStyle.Bold),
+            AutoEllipsis = true,
+            UseMnemonic = false,
         };
         Controls.Add(label);
 
@@ -84,9 +87,12 @@ internal sealed class IdentifyOverlay : Form
     /// model as the all-monitor path: exactly one, single-line <see cref="Label"/>.
     /// </summary>
     public static void Flash(MonitorInfo m, Theme theme, IWin32Window owner)
+        => Flash(m, null, theme, owner);
+
+    public static void Flash(MonitorInfo m, string monitorName, Theme theme, IWin32Window owner)
     {
         if (m == null) return;
-        var f = new IdentifyOverlay(m, theme);
+        var f = new IdentifyOverlay(m, monitorName, theme);
         if (owner is Form ownerForm) f.Owner = ownerForm;
         f.Show();
     }
@@ -96,8 +102,22 @@ internal sealed class IdentifyOverlay : Form
     /// Owner-bound to <paramref name="owner"/> (the settings dialog) so closing the dialog also tears them down.
     /// </summary>
     public static void Flash(IEnumerable<MonitorInfo> monitors, Theme theme, IWin32Window owner)
+        => Flash(monitors, null, theme, owner);
+
+    public static void Flash(IEnumerable<MonitorInfo> monitors, IReadOnlyDictionary<string, string> monitorNames,
+                             Theme theme, IWin32Window owner)
     {
         foreach (var m in monitors)
-            Flash(m, theme, owner);
+        {
+            string name = Settings.MonitorNameFor(monitorNames, m.StableId);
+            Flash(m, name, theme, owner);
+        }
+    }
+
+    internal static string DisplayText(MonitorInfo monitor, string monitorName)
+    {
+        string number = monitor.Primary ? $"{monitor.Index}  ★" : monitor.Index.ToString();
+        string name = Settings.NormalizeMonitorName(monitorName);
+        return name.Length == 0 ? number : $"{number} — {name}";
     }
 }

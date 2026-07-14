@@ -199,18 +199,24 @@ public sealed class TrayApplicationContext : ApplicationContext
             _tray.ShowBalloonTip(5000, "MouseFence", Strings.ExcludePruned, ToolTipIcon.Warning);
 
         WarnIsolationIfChanged(warn.Select(i => monitors[i].StableId).ToList(),
-                               warn.Select(i => monitors[i].Index).ToList());
+                               warn.Select(i => MonitorReference(monitors[i])).ToList());
     }
 
     // Warn (once per distinct bad layout) when a screen is isolated. Latch on the StableId so DISPLAYn reordering
     // doesn't re-nag; show the LIVE pause-hotkey text so the user always sees the working escape key.
-    private void WarnIsolationIfChanged(List<string> devices, List<int> displayIndices)
+    private void WarnIsolationIfChanged(List<string> devices, List<string> displayLabels)
     {
         bool changed = !devices.OrderBy(d => d).SequenceEqual(_isolatedDevices.OrderBy(d => d));
         _isolatedDevices = devices;
         if (devices.Count > 0 && changed)
             _tray.ShowBalloonTip(5000, "MouseFence",
-                Strings.TipIsolated(string.Join(", ", displayIndices), PauseKeyLabel()), ToolTipIcon.Warning);
+                Strings.TipIsolated(string.Join(", ", displayLabels), PauseKeyLabel()), ToolTipIcon.Warning);
+    }
+
+    private string MonitorReference(MonitorInfo monitor)
+    {
+        string name = Settings.MonitorNameFor(_settings.MonitorNames, monitor?.StableId);
+        return name.Length == 0 ? monitor.Index.ToString() : $"{monitor.Index} — {name}";
     }
 
     private string PauseKeyLabel()

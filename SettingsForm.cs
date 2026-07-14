@@ -7,7 +7,25 @@ namespace MouseFence;
 /// <summary>Settings dialog: General (hotkey, startup), Appearance (language, theme), Monitors (top monitors + per-screen crossing rules).</summary>
 public sealed class SettingsForm : Form
 {
-    private readonly Settings _orig;
+    // Executable audit contract: every persisted user setting (SettingsVersion is schema metadata) is represented by
+    // a control in this form. The console harness compares this list to Settings via reflection so a future setting
+    // cannot silently become JSON-only.
+    internal static IReadOnlyCollection<string> GuiEditableSettingProperties { get; } = new HashSet<string>
+    {
+        nameof(Settings.HotKey), nameof(Settings.ModCtrl), nameof(Settings.ModAlt), nameof(Settings.ModShift), nameof(Settings.ModWin),
+        nameof(Settings.ConfineHotKey), nameof(Settings.ConfineModCtrl), nameof(Settings.ConfineModAlt),
+        nameof(Settings.ConfineModShift), nameof(Settings.ConfineModWin),
+        nameof(Settings.PauseHotKey), nameof(Settings.PauseModCtrl), nameof(Settings.PauseModAlt),
+        nameof(Settings.PauseModShift), nameof(Settings.PauseModWin),
+        nameof(Settings.SideHotKey), nameof(Settings.SideModCtrl), nameof(Settings.SideModAlt),
+        nameof(Settings.SideModShift), nameof(Settings.SideModWin),
+        nameof(Settings.StartGateClosed), nameof(Settings.StartSideContainOn), nameof(Settings.AutoStart),
+        nameof(Settings.DeliberateCross), nameof(Settings.DescentRouting),
+        nameof(Settings.SideCrossMin), nameof(Settings.SideCrossSlack),
+        nameof(Settings.Mode), nameof(Settings.ManualMonitors), nameof(Settings.ExcludedDevices), nameof(Settings.MonitorNames),
+        nameof(Settings.Language), nameof(Settings.Theme), nameof(Settings.CrossingPathMode), nameof(Settings.UpLinks),
+    };
+
     private readonly List<MonitorInfo> _monitors = new();
     private readonly List<MonitorInfo> _tops = new();
     private readonly List<MonitorInfo> _bottoms = new();
@@ -26,11 +44,13 @@ public sealed class SettingsForm : Form
     private CheckedListBox _topsCheck;
     private MonitorMapControl _map;
     private GlyphCheckedListBox _excludeList;
+    private TextBox _monitorNameBox;
     private Panel _displayBody;
     private Panel _displayBodyContent;
     private Panel _advancedPanel;
     private Panel _customPathsPanel;
     private Panel _crossingModesPanel;
+    private Panel _sideTuningPanel;
     private Button _advancedToggle;
     private Label _behaviorHead;
     private Button _resetCrossing;
@@ -42,14 +62,17 @@ public sealed class SettingsForm : Form
     private readonly TextBox _pauseHotkeyBox;
     private readonly TextBox _sideHotkeyBox;
     private readonly CheckBox _startSideActive;
-    private readonly NumericUpDown _sideSensNum;
+    private NumericUpDown _sideSensNum;
+    private NumericUpDown _sideSlackNum;
     private CheckBox _deliberateCheck;
     private CheckBox _descentCheck;
     private readonly ToolTip _tips = new();
     private readonly HashSet<string> _excluded = new();
     private readonly HashSet<string> _manualTops = new();
     private readonly Dictionary<string, HashSet<string>> _rules = new();
+    private readonly Dictionary<string, string> _monitorNames = new(StringComparer.OrdinalIgnoreCase);
     private bool _rebuildingMonitorUi;
+    private bool _updatingMonitorName;
     private bool _advancedExpanded;
     private string _selectedStableId;
     private bool _mc, _ma, _ms, _mw;
@@ -69,7 +92,6 @@ public sealed class SettingsForm : Form
     public SettingsForm(Settings s, List<MonitorInfo> monitors)
     {
         s.Normalize();
-        _orig = s;
         _monitors.AddRange(monitors ?? new List<MonitorInfo>());
         _mc = s.ModCtrl; _ma = s.ModAlt; _ms = s.ModShift; _mw = s.ModWin; _key = s.HotKey;
         _gc = s.ConfineModCtrl; _ga = s.ConfineModAlt; _gs = s.ConfineModShift; _gw = s.ConfineModWin; _gkey = s.ConfineHotKey;
@@ -92,6 +114,8 @@ public sealed class SettingsForm : Form
         var primaryStable = (_monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault())?.StableId;
         foreach (var id in s.ExcludedDevices)
             if (id != primaryStable) _excluded.Add(id);
+        foreach (var pair in s.MonitorNames)
+            _monitorNames[pair.Key] = pair.Value;
 
         Text = Strings.SettingsTitle;
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -100,15 +124,15 @@ public sealed class SettingsForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9f);
-        ClientSize = new Size(520, 720);
-        MinimumSize = new Size(480, 600);
+        ClientSize = new Size(760, 720);
+        MinimumSize = new Size(680, 620);
 
         var headFont = new Font("Segoe UI Semibold", 9f);
 
         _tabs = new TabControl
         {
             Left = 12, Top = 12, Width = ClientSize.Width - 24, Height = ClientSize.Height - 66,
-            DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(147, 28),
+            DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(210, 30),
             Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
         };
         _tabs.DrawItem += DrawTab;
@@ -119,101 +143,110 @@ public sealed class SettingsForm : Form
 
         // ---- General ----
         int y = 12;
+        tabGeneral.Controls.Add(new Label
+        {
+            Text = Strings.GeneralIntro, Left = 12, Top = y, Width = 640, Height = 22,
+            Tag = "subtle", Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        });
+        y += 34;
         tabGeneral.Controls.Add(new Label { Text = Strings.HotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
         y += 20;
         tabGeneral.Controls.Add(new Label { Text = Strings.HotkeyHint, AutoSize = true, Left = 12, Top = y, Tag = "subtle" });
         y += 22;
         _hotkeyBox = new TextBox
         {
-            Left = 12, Top = y, Width = 300, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
+            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
             TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
         };
         _hotkeyBox.KeyDown += HotkeyBox_KeyDown;
-        var btnClear = new Button { Text = Strings.Clear, Left = 320, Top = y - 1, Width = 96, Height = 28, FlatStyle = FlatStyle.Flat };
+        var btnClear = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
         btnClear.Click += (a, b) => { _mc = _ma = _ms = _mw = false; _key = Keys.None; UpdateHotkeyText(); };
         tabGeneral.Controls.Add(_hotkeyBox);
         tabGeneral.Controls.Add(btnClear);
+        _tips.SetToolTip(_hotkeyBox, Strings.HotkeyHint);
+        _tips.SetToolTip(btnClear, Strings.HotkeyHint);
         y += 44;
         tabGeneral.Controls.Add(new Label { Text = Strings.StartupHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
         y += 22;
-        _startActive = new CheckBox { Text = Strings.StartGateClosed, Left = 12, Top = y, Width = 400, Height = 22, Checked = s.StartGateClosed };
+        _startActive = new CheckBox { Text = Strings.StartGateClosed, Left = 12, Top = y, Width = 640, Height = 22, Checked = s.StartGateClosed, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
         tabGeneral.Controls.Add(_startActive);
+        _tips.SetToolTip(_startActive, Strings.StartGateClosedTip);
         y += 26;
-        _autoStart = new CheckBox { Text = Strings.StartWithWindows, Left = 12, Top = y, Width = 400, Height = 22, Checked = s.AutoStart };
+        _autoStart = new CheckBox { Text = Strings.StartWithWindows, Left = 12, Top = y, Width = 640, Height = 22, Checked = s.AutoStart, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
         tabGeneral.Controls.Add(_autoStart);
+        _tips.SetToolTip(_autoStart, Strings.StartWithWindowsTip);
         y += 34;
         tabGeneral.Controls.Add(new Label { Text = Strings.GameHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
         y += 20;
-        tabGeneral.Controls.Add(new Label { Text = Strings.GameHotkeyHint, Left = 12, Top = y, Width = 412, Height = 30, Tag = "subtle" });
+        tabGeneral.Controls.Add(new Label { Text = Strings.GameHotkeyHint, Left = 12, Top = y, Width = 640, Height = 30, Tag = "subtle" });
         y += 32;
         _gameHotkeyBox = new TextBox
         {
-            Left = 12, Top = y, Width = 300, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
+            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
             TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
         };
         _gameHotkeyBox.KeyDown += GameHotkeyBox_KeyDown;
-        var btnClearGame = new Button { Text = Strings.Clear, Left = 320, Top = y - 1, Width = 96, Height = 28, FlatStyle = FlatStyle.Flat };
+        var btnClearGame = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
         btnClearGame.Click += (a, b) => { _gc = _ga = _gs = _gw = false; _gkey = Keys.None; UpdateGameHotkeyText(); };
         tabGeneral.Controls.Add(_gameHotkeyBox);
         tabGeneral.Controls.Add(btnClearGame);
+        _tips.SetToolTip(_gameHotkeyBox, Strings.GameHotkeyHint);
+        _tips.SetToolTip(btnClearGame, Strings.GameHotkeyHint);
         y += 44;
         tabGeneral.Controls.Add(new Label { Text = Strings.PauseHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
         y += 20;
-        tabGeneral.Controls.Add(new Label { Text = Strings.PauseHotkeyHint, Left = 12, Top = y, Width = 412, Height = 30, Tag = "subtle" });
+        tabGeneral.Controls.Add(new Label { Text = Strings.PauseHotkeyHint, Left = 12, Top = y, Width = 640, Height = 30, Tag = "subtle" });
         y += 32;
         _pauseHotkeyBox = new TextBox
         {
-            Left = 12, Top = y, Width = 300, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
+            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
             TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
         };
         _pauseHotkeyBox.KeyDown += PauseHotkeyBox_KeyDown;
-        var btnClearPause = new Button { Text = Strings.Clear, Left = 320, Top = y - 1, Width = 96, Height = 28, FlatStyle = FlatStyle.Flat };
+        var btnClearPause = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
         btnClearPause.Click += (a, b) => { _pc = _pa = _ps = _pw = false; _pkey = Keys.None; UpdatePauseHotkeyText(); };
         tabGeneral.Controls.Add(_pauseHotkeyBox);
         tabGeneral.Controls.Add(btnClearPause);
+        _tips.SetToolTip(_pauseHotkeyBox, Strings.PauseHotkeyHint);
+        _tips.SetToolTip(btnClearPause, Strings.PauseHotkeyHint);
         y += 44;
         tabGeneral.Controls.Add(new Label { Text = Strings.SideHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
         y += 20;
-        tabGeneral.Controls.Add(new Label { Text = Strings.SideHotkeyHint, Left = 12, Top = y, Width = 412, Height = 30, Tag = "subtle" });
-        y += 32;
+        tabGeneral.Controls.Add(new Label { Text = Strings.SideHotkeyHint, Left = 12, Top = y, Width = 640, Height = 44, Tag = "subtle" });
+        y += 46;
         _sideHotkeyBox = new TextBox
         {
-            Left = 12, Top = y, Width = 300, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
+            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
             TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
         };
         _sideHotkeyBox.KeyDown += SideHotkeyBox_KeyDown;
-        var btnClearSide = new Button { Text = Strings.Clear, Left = 320, Top = y - 1, Width = 96, Height = 28, FlatStyle = FlatStyle.Flat };
+        var btnClearSide = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
         btnClearSide.Click += (a, b) => { _sc = _sa = _ss = _sw = false; _skey = Keys.None; UpdateSideHotkeyText(); };
         tabGeneral.Controls.Add(_sideHotkeyBox);
         tabGeneral.Controls.Add(btnClearSide);
+        _tips.SetToolTip(_sideHotkeyBox, Strings.SideHotkeyHint);
+        _tips.SetToolTip(btnClearSide, Strings.SideHotkeyHint);
         y += 36;
-        _startSideActive = new CheckBox { Text = Strings.StartSideContainOn, Left = 12, Top = y, Width = 412, Height = 22, Checked = s.StartSideContainOn };
+        _startSideActive = new CheckBox { Text = Strings.StartSideContainOn, Left = 12, Top = y, Width = 640, Height = 22, Checked = s.StartSideContainOn, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
         tabGeneral.Controls.Add(_startSideActive);
-        y += 28;
-        tabGeneral.Controls.Add(new Label { Text = Strings.SideSensitivityLabel, AutoSize = true, Left = 12, Top = y + 4, Tag = "subtle" });
-        // The min horizontal px/move that counts as a deliberate side push — higher = a firmer barrier. Clamp the
-        // seeded value into the control's range so an out-of-range imported setting can't throw on construction.
-        _sideSensNum = new NumericUpDown { Left = 150, Top = y, Width = 70, Height = 26, Minimum = 1, Maximum = 200, Value = Math.Clamp(s.SideCrossMin, 1, 200) };
-        tabGeneral.Controls.Add(_sideSensNum);
-        // One-click reset back to the shipped default (3), so a user who over-tightens the barrier can always recover it.
-        var btnDefaultSide = new Button { Text = Strings.DefaultLabel, Left = 228, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
-        btnDefaultSide.Click += (a, b) => _sideSensNum.Value = Settings.DefaultSideCrossMin;
-        tabGeneral.Controls.Add(btnDefaultSide);
-        y += 30;
-        tabGeneral.Controls.Add(new Label { Text = Strings.SideSensitivityHint, Left = 12, Top = y, Width = 412, Height = 44, Tag = "subtle" });
+        _tips.SetToolTip(_startSideActive, Strings.StartSideContainTip);
 
         // ---- Appearance ----
-        tabAppearance.Controls.Add(new Label { Text = Strings.LanguageLabel, AutoSize = true, Left = 12, Top = 14, Tag = "subtle" });
-        tabAppearance.Controls.Add(new Label { Text = Strings.ThemeLabel, AutoSize = true, Left = 220, Top = 14, Tag = "subtle" });
-        _langCombo = new ComboBox { Left = 12, Top = 34, Width = 190, Height = 24, DropDownStyle = ComboBoxStyle.DropDownList };
-        _langCombo.Items.AddRange(new object[] { Strings.LangAuto, "English", "Türkçe" });
+        tabAppearance.Controls.Add(new Label { Text = Strings.AppearanceHead, AutoSize = true, Left = 12, Top = 14, Font = headFont, Tag = "head" });
+        tabAppearance.Controls.Add(new Label { Text = Strings.AppearanceIntro, Left = 12, Top = 38, Width = 640, Height = 34, Tag = "subtle" });
+        tabAppearance.Controls.Add(new Label { Text = Strings.LanguageLabel, AutoSize = true, Left = 12, Top = 86, Tag = "subtle" });
+        tabAppearance.Controls.Add(new Label { Text = Strings.ThemeLabel, AutoSize = true, Left = 340, Top = 86, Tag = "subtle" });
+        _langCombo = new ComboBox { Left = 12, Top = 108, Width = 300, Height = 24, DropDownStyle = ComboBoxStyle.DropDownList };
+        _langCombo.Items.AddRange(new object[] { Strings.LangAuto, Strings.LangEnglish, Strings.LangTurkish });
         _langCombo.SelectedIndex = s.Language switch { "en" => 1, "tr" => 2, _ => 0 };
-        _themeCombo = new ComboBox { Left = 220, Top = 34, Width = 190, Height = 24, DropDownStyle = ComboBoxStyle.DropDownList };
+        _themeCombo = new ComboBox { Left = 340, Top = 108, Width = 300, Height = 24, DropDownStyle = ComboBoxStyle.DropDownList, Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _themeCombo.Items.AddRange(new object[] { Strings.ThemeSystem, Strings.ThemeLight, Strings.ThemeDark });
         _themeCombo.SelectedIndex = s.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
         _themeCombo.SelectedIndexChanged += (a, b) => ApplyThemeLive();
         tabAppearance.Controls.Add(_langCombo);
         tabAppearance.Controls.Add(_themeCombo);
+        _tips.SetToolTip(_langCombo, Strings.LanguageTip);
+        _tips.SetToolTip(_themeCombo, Strings.ThemeTip);
 
         // ---- Displays: pinned map header + independently scrolling simple/advanced body ----
         BuildDisplaysTab(tabMonitors, headFont, s);
@@ -238,6 +271,24 @@ public sealed class SettingsForm : Form
         AcceptButton = ok;
         CancelButton = cancel;
 
+        // Lay out all hotkey rows from the live page width. Doing this in the Resize event avoids the WinForms quirk
+        // where anchoring the selected TabPage's first child during construction can absorb its Clear button.
+        void LayoutHotkeyRows()
+        {
+            int right = Math.Max(380, tabGeneral.ClientSize.Width - 22);
+            foreach (var (box, clearButton) in new[]
+            {
+                (_hotkeyBox, btnClear), (_gameHotkeyBox, btnClearGame),
+                (_pauseHotkeyBox, btnClearPause), (_sideHotkeyBox, btnClearSide),
+            })
+            {
+                clearButton.Left = right - clearButton.Width;
+                box.Width = Math.Max(240, clearButton.Left - box.Left - 8);
+            }
+        }
+        tabGeneral.Resize += (a, b) => LayoutHotkeyRows();
+        LayoutHotkeyRows();
+
         Result = s;
         UpdateHotkeyText();
         UpdateGameHotkeyText();
@@ -251,23 +302,28 @@ public sealed class SettingsForm : Form
     private void BuildDisplaysTab(TabPage tab, Font headFont, Settings s)
     {
         var header = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        var mapHead = new Label
+        {
+            Text = Strings.DisplayMapHead, Left = 2, Top = 7, Height = 22,
+            AutoSize = true, Font = headFont, Tag = "head",
+        };
         var identifyAll = new Button
         {
             Text = Strings.IdentifyAll, Top = 2, Width = 116, Height = 28,
             FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right,
         };
-        identifyAll.Click += (a, b) => IdentifyOverlay.Flash(_monitors, SelectedTheme(), this);
+        identifyAll.Click += (a, b) => IdentifyOverlay.Flash(_monitors, _monitorNames, SelectedTheme(), this);
         _tips.SetToolTip(identifyAll, Strings.IdentifyHint);
 
         _layoutChangedBanner = new Label
         {
-            Text = Strings.LayoutChangedBanner, Left = 2, Top = 7, Height = 22,
-            AutoEllipsis = true, Visible = false, Tag = "head",
+            Text = Strings.LayoutChangedBanner, Left = 2, Top = 29, Height = 20,
+            AutoEllipsis = true, Visible = false, Tag = "subtle",
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _map = new MonitorMapControl
         {
-            Left = 0, Top = 36, Height = 140,
+            Left = 0, Top = 52, Height = 178,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _map.MonitorClicked += MapMonitorClicked;
@@ -276,36 +332,61 @@ public sealed class SettingsForm : Form
         var legend = new Label
         {
             Text = $"{Strings.LegendMain}        {Strings.LegendKeptOut}",
-            Left = 2, Top = 181, Height = 18, AutoEllipsis = true, Tag = "subtle",
+            Left = 2, Top = 236, Height = 18, AutoEllipsis = true, Tag = "subtle",
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         var hint = new Label
         {
-            Text = Strings.MapHint, Left = 2, Top = 201, Height = 20,
+            Text = Strings.MapHint, Left = 2, Top = 258, Height = 20,
             AutoEllipsis = true, Tag = "subtle",
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
-        header.Controls.AddRange(new Control[] { identifyAll, _layoutChangedBanner, _map, legend, hint });
+        header.Controls.AddRange(new Control[] { mapHead, identifyAll, _layoutChangedBanner, _map, legend, hint });
         header.Resize += (a, b) =>
         {
             identifyAll.Left = Math.Max(0, header.ClientSize.Width - identifyAll.Width);
+            mapHead.MaximumSize = new Size(Math.Max(0, identifyAll.Left - 10), 0);
             _layoutChangedBanner.Width = Math.Max(0, identifyAll.Left - 10);
             _map.Width = header.ClientSize.Width;
             legend.Width = hint.Width = header.ClientSize.Width - 4;
         };
 
         _displayBody = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Margin = Padding.Empty };
-        _displayBodyContent = new Panel { Left = 0, Top = 0, Height = 190 };
+        _displayBodyContent = new Panel { Left = 0, Top = 0, Height = 260 };
         _displayBody.Controls.Add(_displayBodyContent);
+
+        var monitorNameHead = new Label
+        {
+            Text = Strings.MonitorNameHead, Left = 2, Top = 10, Height = 22,
+            AutoSize = true, Font = headFont, Tag = "head",
+        };
+        var monitorNameHint = new Label
+        {
+            Text = Strings.MonitorNameHint, Left = 2, Top = 34, Height = 32, Tag = "subtle",
+            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        _monitorNameBox = new TextBox
+        {
+            Left = 2, Top = 70, Height = 27, MaxLength = 80,
+            PlaceholderText = Strings.MonitorNamePlaceholder,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        _monitorNameBox.TextChanged += MonitorNameBox_TextChanged;
+        _tips.SetToolTip(_monitorNameBox, Strings.MonitorNameHint);
 
         var keepOutHead = new Label
         {
-            Text = Strings.KeepOutHead, Left = 2, Top = 10, Height = 22,
+            Text = Strings.KeepOutHead, Left = 2, Top = 112, Height = 22,
             AutoSize = true, Font = headFont, Tag = "head",
+        };
+        var keepOutHint = new Label
+        {
+            Text = Strings.ExcludeHint, Left = 2, Top = 136, Height = 34, Tag = "subtle",
+            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _excludeList = new GlyphCheckedListBox
         {
-            Left = 2, Top = 36, Height = 130, IntegralHeight = false,
+            Left = 2, Top = 176, Height = 138, IntegralHeight = false,
             BorderStyle = BorderStyle.FixedSingle, DrawMode = DrawMode.OwnerDrawFixed,
             ItemHeight = 24, ToggleAllowed = ExcludeCanToggle,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
@@ -315,29 +396,41 @@ public sealed class SettingsForm : Form
         _excludeList.RowClicked += ExcludeRowClicked;
         _excludeList.MouseMove += (a, e) => HoverMapFromList(_excludeList, _monitors, e.Location);
         _excludeList.MouseLeave += (a, e) => _map.ExternalHoveredStableId = null;
+        _tips.SetToolTip(_excludeList, Strings.ExcludeHint);
 
         _advancedToggle = new Button
         {
-            Left = 2, Top = 178, Height = 32, FlatStyle = FlatStyle.Flat,
+            Left = 2, Top = 326, Height = 34, FlatStyle = FlatStyle.Flat,
             TextAlign = ContentAlignment.MiddleLeft,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _advancedToggle.Click += (a, b) => SetAdvancedExpanded(!_advancedExpanded);
+        _tips.SetToolTip(_advancedToggle, Strings.AdvancedHint);
 
         _advancedPanel = new Panel
         {
-            Left = 2, Top = 222, Height = 590, Visible = false,
+            Left = 2, Top = 374, Height = 760, Visible = false,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
 
+        var advancedIntro = new Label
+        {
+            Text = Strings.AdvancedHint, Left = 0, Top = 0, Height = 34, Tag = "subtle",
+            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
         var topHead = new Label
         {
-            Text = Strings.TopSelectionHead, Left = 0, Top = 0, AutoSize = true,
+            Text = Strings.TopSelectionHead, Left = 0, Top = 44, AutoSize = true,
             Font = headFont, Tag = "head",
+        };
+        var topHint = new Label
+        {
+            Text = Strings.TopSelectionHint, Left = 0, Top = 68, Height = 32, Tag = "subtle",
+            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         var topModes = new Panel
         {
-            Left = 0, Top = 20, Height = 160,
+            Left = 0, Top = 104, Height = 160,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _modeAuto = new RadioButton
@@ -364,15 +457,23 @@ public sealed class SettingsForm : Form
         _modeAuto.CheckedChanged += TopMode_CheckedChanged;
         _modeManual.CheckedChanged += TopMode_CheckedChanged;
         topModes.Controls.AddRange(new Control[] { _modeAuto, _modeManual, _monitorList });
+        _tips.SetToolTip(_modeAuto, Strings.TopSelectionHint);
+        _tips.SetToolTip(_modeManual, Strings.TopSelectionHint);
+        _tips.SetToolTip(_monitorList, Strings.TopSelectionHint);
 
         var crossingHead = new Label
         {
-            Text = Strings.CrossingPathsHead, Left = 0, Top = 192, AutoSize = true,
+            Text = Strings.CrossingPathsHead, Left = 0, Top = 278, AutoSize = true,
             Font = headFont, Tag = "head",
+        };
+        var crossingHint = new Label
+        {
+            Text = Strings.CrossingPathsHint, Left = 0, Top = 302, Height = 32, Tag = "subtle",
+            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _crossingModesPanel = new Panel
         {
-            Left = 0, Top = 212, Height = 212,
+            Left = 0, Top = 338, Height = 212,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _crossingDefault = new RadioButton
@@ -389,6 +490,8 @@ public sealed class SettingsForm : Form
         };
         _crossingDefault.CheckedChanged += CrossingMode_CheckedChanged;
         _crossingCustom.CheckedChanged += CrossingMode_CheckedChanged;
+        _tips.SetToolTip(_crossingDefault, Strings.CrossingPathsHint);
+        _tips.SetToolTip(_crossingCustom, Strings.CrossingPathsHint);
 
         _customPathsPanel = new Panel
         {
@@ -417,51 +520,122 @@ public sealed class SettingsForm : Form
         _topsCheck.ItemCheck += TopsCheck_ItemCheck;
         _topsCheck.MouseMove += (a, e) => HoverMapFromList(_topsCheck, _tops, e.Location);
         _topsCheck.MouseLeave += (a, e) => _map.ExternalHoveredStableId = null;
+        _tips.SetToolTip(_fromCombo, Strings.RuleHint);
+        _tips.SetToolTip(_topsCheck, Strings.RuleHint);
         _customPathsPanel.Controls.AddRange(new Control[] { fromLabel, _fromCombo, allowedLabel, _topsCheck });
         _crossingModesPanel.Controls.AddRange(new Control[] { _crossingDefault, _crossingCustom, _customPathsPanel });
 
         _behaviorHead = new Label
         {
-            Text = Strings.BehaviorHead, Left = 0, Top = 436, AutoSize = true,
+            Text = Strings.BehaviorHead, Left = 0, Top = 566, AutoSize = true,
             Font = headFont, Tag = "head",
         };
         _deliberateCheck = new CheckBox
         {
-            Text = Strings.DeliberateCrossLabel, Left = 0, Top = 460, Height = 38, Checked = s.DeliberateCross,
+            Text = Strings.DeliberateCrossLabel, Left = 0, Top = 590, Height = 40, Checked = s.DeliberateCross,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
         _descentCheck = new CheckBox
         {
-            Text = Strings.DescentRoutingLabel, Left = 0, Top = 502, Height = 28, Checked = s.DescentRouting,
+            Text = Strings.DescentRoutingLabel, Left = 0, Top = 634, Height = 38, Checked = s.DescentRouting,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
+        _tips.SetToolTip(_deliberateCheck, Strings.DeliberateCrossHint);
+        _tips.SetToolTip(_descentCheck, Strings.DescentRoutingHint);
+
+        _sideTuningPanel = new Panel
+        {
+            Left = 0, Top = 686, Height = 136,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        var sideTuningHead = new Label
+        {
+            Text = Strings.SideTuningHead, Left = 0, Top = 0, AutoSize = true, Font = headFont, Tag = "head",
+        };
+        var sideTuningHint = new Label
+        {
+            Text = Strings.SideTuningHint, Left = 0, Top = 24, Height = 30, Tag = "subtle",
+            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        var sideMinLabel = new Label
+        {
+            Text = Strings.SideSensitivityLabel, Left = 0, Top = 63, Width = 320, Height = 24,
+            TextAlign = ContentAlignment.MiddleLeft, Tag = "subtle",
+        };
+        _sideSensNum = new NumericUpDown
+        {
+            Left = 330, Top = 61, Width = 72, Height = 26, Minimum = 1, Maximum = 200,
+            Value = Math.Clamp(s.SideCrossMin, 1, 200),
+        };
+        var btnDefaultSide = new Button
+        {
+            Text = Strings.DefaultLabel, Left = 412, Top = 60, Width = 118, Height = 28, FlatStyle = FlatStyle.Flat,
+        };
+        btnDefaultSide.Click += (a, b) => _sideSensNum.Value = Settings.DefaultSideCrossMin;
+
+        var sideSlackLabel = new Label
+        {
+            Text = Strings.SideSlackLabel, Left = 0, Top = 101, Width = 320, Height = 24,
+            TextAlign = ContentAlignment.MiddleLeft, Tag = "subtle",
+        };
+        _sideSlackNum = new NumericUpDown
+        {
+            Left = 330, Top = 99, Width = 72, Height = 26, Minimum = 0, Maximum = 200,
+            Value = Math.Clamp(s.SideCrossSlack, 0, 200),
+        };
+        var btnDefaultSlack = new Button
+        {
+            Text = Strings.DefaultSlackLabel, Left = 412, Top = 98, Width = 118, Height = 28, FlatStyle = FlatStyle.Flat,
+        };
+        btnDefaultSlack.Click += (a, b) => _sideSlackNum.Value = Settings.DefaultSideCrossSlack;
+        _tips.SetToolTip(sideMinLabel, Strings.SideSensitivityHint);
+        _tips.SetToolTip(_sideSensNum, Strings.SideSensitivityHint);
+        _tips.SetToolTip(btnDefaultSide, Strings.SideSensitivityHint);
+        _tips.SetToolTip(sideSlackLabel, Strings.SideSlackHint);
+        _tips.SetToolTip(_sideSlackNum, Strings.SideSlackHint);
+        _tips.SetToolTip(btnDefaultSlack, Strings.SideSlackHint);
+        _sideTuningPanel.Controls.AddRange(new Control[]
+        {
+            sideTuningHead, sideTuningHint, sideMinLabel, _sideSensNum, btnDefaultSide,
+            sideSlackLabel, _sideSlackNum, btnDefaultSlack,
+        });
+
         _resetCrossing = new Button
         {
-            Text = Strings.ResetCrossing, Left = 0, Top = 544, Width = 180, Height = 30,
+            Text = Strings.ResetCrossing, Left = 0, Top = 838, Width = 210, Height = 30,
             FlatStyle = FlatStyle.Flat,
         };
         _resetCrossing.Click += ResetLayout_Click;
+        _tips.SetToolTip(_resetCrossing, Strings.AdvancedHint);
 
         _advancedPanel.Controls.AddRange(new Control[]
         {
-            topHead, topModes, crossingHead, _crossingModesPanel,
-            _behaviorHead, _deliberateCheck, _descentCheck, _resetCrossing,
+            advancedIntro, topHead, topHint, topModes, crossingHead, crossingHint, _crossingModesPanel,
+            _behaviorHead, _deliberateCheck, _descentCheck, _sideTuningPanel, _resetCrossing,
         });
-        _displayBodyContent.Controls.AddRange(new Control[] { keepOutHead, _excludeList, _advancedToggle, _advancedPanel });
+        _displayBodyContent.Controls.AddRange(new Control[]
+        {
+            monitorNameHead, monitorNameHint, _monitorNameBox,
+            keepOutHead, keepOutHint, _excludeList, _advancedToggle, _advancedPanel,
+        });
 
         void LayoutBody()
         {
             int width = Math.Max(240, _displayBody.ClientSize.Width - 2);
             _displayBodyContent.Width = width;
             _excludeList.Width = _advancedToggle.Width = Math.Max(0, width - 4);
+            monitorNameHint.Width = _monitorNameBox.Width = keepOutHint.Width = Math.Max(0, width - 4);
             _advancedPanel.Width = Math.Max(0, width - 4);
             int advancedWidth = _advancedPanel.ClientSize.Width;
+            advancedIntro.Width = topHint.Width = crossingHint.Width = advancedWidth;
             topModes.Width = _crossingModesPanel.Width = advancedWidth;
             _modeAuto.Width = _modeManual.Width = _monitorList.Width = topModes.ClientSize.Width;
             _crossingDefault.Width = _crossingCustom.Width = _crossingModesPanel.ClientSize.Width;
             _customPathsPanel.Width = _crossingModesPanel.ClientSize.Width;
             _fromCombo.Width = _topsCheck.Width = advancedWidth;
             _deliberateCheck.Width = _descentCheck.Width = advancedWidth;
+            _sideTuningPanel.Width = advancedWidth;
+            sideTuningHint.Width = advancedWidth;
         }
         _displayBody.Resize += (a, b) => LayoutBody();
 
@@ -471,7 +645,7 @@ public sealed class SettingsForm : Form
             Margin = Padding.Empty, Padding = Padding.Empty,
         };
         zones.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        zones.RowStyles.Add(new RowStyle(SizeType.Absolute, 224f));
+        zones.RowStyles.Add(new RowStyle(SizeType.Absolute, 284f));
         zones.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
         zones.Controls.Add(header, 0, 0);
         zones.Controls.Add(_displayBody, 0, 1);
@@ -483,7 +657,67 @@ public sealed class SettingsForm : Form
 
     private string MonitorLabel(MonitorInfo m)
     {
-        return GuardCore.MonitorLabel(m.Index, m.Bounds.Width, m.Bounds.Height, m.Primary, Strings.MainTag);
+        return GuardCore.MonitorLabel(m.Index, m.Bounds.Width, m.Bounds.Height, m.Primary, Strings.MainTag,
+            MonitorName(m));
+    }
+
+    private string MonitorName(MonitorInfo monitor) =>
+        Settings.MonitorNameFor(_monitorNames, monitor?.StableId);
+
+    private void MonitorNameBox_TextChanged(object sender, EventArgs e)
+    {
+        if (_updatingMonitorName || string.IsNullOrEmpty(_selectedStableId)) return;
+
+        if (string.IsNullOrWhiteSpace(_monitorNameBox.Text)) _monitorNames.Remove(_selectedStableId);
+        else _monitorNames[_selectedStableId] = _monitorNameBox.Text;
+        RefreshMonitorNamePresentation();
+    }
+
+    private void LoadSelectedMonitorName()
+    {
+        _updatingMonitorName = true;
+        try
+        {
+            bool selected = !string.IsNullOrEmpty(_selectedStableId)
+                         && _monitors.Any(m => SameId(m.StableId, _selectedStableId));
+            _monitorNameBox.Enabled = selected;
+            string name = selected && _monitorNames.TryGetValue(_selectedStableId, out var value) ? value : "";
+            if (_monitorNameBox.Text != name) _monitorNameBox.Text = name;
+        }
+        finally { _updatingMonitorName = false; }
+    }
+
+    private void RefreshMonitorNamePresentation()
+    {
+        bool wasRebuilding = _rebuildingMonitorUi;
+        _rebuildingMonitorUi = true;
+        _excludeList.BeginUpdate();
+        _monitorList.BeginUpdate();
+        _topsCheck.BeginUpdate();
+        _fromCombo.BeginUpdate();
+        try
+        {
+            for (int i = 0; i < _monitors.Count; i++)
+            {
+                if (i < _excludeList.Items.Count) _excludeList.Items[i] = MonitorLabel(_monitors[i]);
+                if (i < _monitorList.Items.Count) _monitorList.Items[i] = MonitorLabel(_monitors[i]);
+            }
+            for (int i = 0; i < _bottoms.Count && i < _fromCombo.Items.Count; i++)
+                _fromCombo.Items[i] = MonitorLabel(_bottoms[i]);
+            for (int i = 0; i < _tops.Count && i < _topsCheck.Items.Count; i++)
+                _topsCheck.Items[i] = MonitorLabel(_tops[i]);
+            _map.SetNames(_monitorNames);
+        }
+        finally
+        {
+            _fromCombo.EndUpdate();
+            _topsCheck.EndUpdate();
+            _monitorList.EndUpdate();
+            _excludeList.EndUpdate();
+            _rebuildingMonitorUi = wasRebuilding;
+        }
+        _excludeList.Invalidate();
+        _monitorList.Invalidate();
     }
 
     private string SelectedFromKey() =>
@@ -519,11 +753,12 @@ public sealed class SettingsForm : Form
         _fromCombo.Enabled = custom && _bottoms.Count > 0 && _tops.Count > 0;
         _topsCheck.Enabled = custom && _fromCombo.SelectedIndex >= 0 && _tops.Count > 0;
 
-        int behaviorTop = _crossingModesPanel.Bottom + 12;
+        int behaviorTop = _crossingModesPanel.Bottom + 18;
         _behaviorHead.Top = behaviorTop;
-        _deliberateCheck.Top = behaviorTop + 24;
-        _descentCheck.Top = behaviorTop + 66;
-        _resetCrossing.Top = behaviorTop + 108;
+        _deliberateCheck.Top = behaviorTop + 26;
+        _descentCheck.Top = behaviorTop + 70;
+        _sideTuningPanel.Top = behaviorTop + 122;
+        _resetCrossing.Top = _sideTuningPanel.Bottom + 16;
         _advancedPanel.Height = _resetCrossing.Bottom + 16;
         SetAdvancedExpanded(_advancedExpanded);
     }
@@ -599,7 +834,8 @@ public sealed class SettingsForm : Form
             if (fromIndex >= 0) _fromCombo.SelectedIndex = fromIndex;
         }
 
-        if (flash) IdentifyOverlay.Flash(monitor, SelectedTheme(), this);
+        LoadSelectedMonitorName();
+        if (flash) IdentifyOverlay.Flash(monitor, MonitorName(monitor), SelectedTheme(), this);
     }
 
     private void MapMonitorHovered(MonitorInfo monitor)
@@ -720,7 +956,9 @@ public sealed class SettingsForm : Form
             _monitorList.SelectedIndex = _excludeList.SelectedIndex;
 
             _map.SetMonitors(_monitors);
+            _map.SetNames(_monitorNames);
             _map.SelectedStableId = _selectedStableId;
+            LoadSelectedMonitorName();
         }
         finally
         {
@@ -780,7 +1018,8 @@ public sealed class SettingsForm : Form
         var textRect = new Rectangle(boxRect.Right + 6, e.Bounds.Top,
             Math.Max(0, e.Bounds.Right - boxRect.Right - 8), e.Bounds.Height);
         TextRenderer.DrawText(e.Graphics, label, _excludeList.Font, textRect, foreground,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis |
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         e.DrawFocusRectangle();
     }
 
@@ -810,7 +1049,8 @@ public sealed class SettingsForm : Form
         var textRect = new Rectangle(boxRect.Right + 6, e.Bounds.Top,
             Math.Max(0, e.Bounds.Right - boxRect.Right - 8), e.Bounds.Height);
         TextRenderer.DrawText(e.Graphics, label, _monitorList.Font, textRect, foreground,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis |
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         e.DrawFocusRectangle();
     }
 
@@ -870,6 +1110,8 @@ public sealed class SettingsForm : Form
     {
         var theme = SelectedTheme();
         Theming.Apply(this, theme);
+        _tips.BackColor = theme.Surface;
+        _tips.ForeColor = theme.Text;
         _map?.SetTheme(theme);
         _tabs.Invalidate();
         Invalidate(true);
@@ -1011,7 +1253,7 @@ public sealed class SettingsForm : Form
             SideModCtrl = _sc, SideModAlt = _sa, SideModShift = _ss, SideModWin = _sw, SideHotKey = _skey,
             StartSideContainOn = _startSideActive.Checked,
             SideCrossMin = (int)_sideSensNum.Value,
-            SideCrossSlack = _orig.SideCrossSlack,   // not surfaced in the UI — preserve whatever was loaded/imported
+            SideCrossSlack = (int)_sideSlackNum.Value,
             DeliberateCross = _deliberateCheck.Checked,
             DescentRouting = _descentCheck.Checked,
         };
@@ -1033,6 +1275,14 @@ public sealed class SettingsForm : Form
 
         // Carry the walled-off displays so a Save/Export doesn't silently drop them (binding fix #5).
         res.ExcludedDevices.AddRange(_excluded.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+
+        // Keep names for unplugged displays too: they remain dormant until that same StableId returns.
+        foreach (var pair in _monitorNames.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            string name = Settings.NormalizeMonitorName(pair.Value);
+            if (!string.IsNullOrWhiteSpace(pair.Key) && name.Length > 0)
+                res.MonitorNames[pair.Key] = name;
+        }
 
         return res;
     }

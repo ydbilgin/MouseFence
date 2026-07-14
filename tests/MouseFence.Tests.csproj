@@ -19,6 +19,10 @@
     <Compile Include="..\Settings.cs" Link="Settings.cs" />
     <Compile Include="..\MonitorInfo.cs" Link="MonitorInfo.cs" />
     <Compile Include="..\Native.cs" Link="Native.cs" />
+    <Compile Include="..\SettingsForm.cs" Link="SettingsForm.cs" />
+    <Compile Include="..\MonitorMapControl.cs" Link="MonitorMapControl.cs" />
+    <Compile Include="..\IdentifyOverlay.cs" Link="IdentifyOverlay.cs" />
+    <Compile Include="..\Theming.cs" Link="Theming.cs" />
   </ItemGroup>
 
 </Project>

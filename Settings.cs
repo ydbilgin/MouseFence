@@ -55,9 +55,10 @@ public sealed class Settings
     // DELIBERATE side crossing, and the vertical slack allowed beyond it. Higher SideCrossMin = a firmer/stiffer side
     // barrier (a faster horizontal flick is needed to cross, so accidental drift onto/off a side screen is caught more
     // aggressively). Defaults match the up barrier's feel; an absent JSON key deserializes to these.
-    public const int DefaultSideCrossMin = 3;   // shared so the UI's "reset to default" button and the seed agree
+    public const int DefaultSideCrossMin = 3;   // shared so the UI reset buttons and persisted defaults agree
+    public const int DefaultSideCrossSlack = 5;
     public int SideCrossMin { get; set; } = DefaultSideCrossMin;
-    public int SideCrossSlack { get; set; } = 5;
+    public int SideCrossSlack { get; set; } = DefaultSideCrossSlack;
 
     // which monitors to block. Layout-dependent monitor keys are stable MonitorInfo.StableId values.
     public string Mode { get; set; } = "AutoTop";   // "AutoTop" | "Manual"
@@ -70,6 +71,10 @@ public sealed class Settings
     // backward-compatible (an existing settings.json lacking the key deserializes to empty; no migration needed —
     // no ExcludedDevices has shipped yet).
     public List<string> ExcludedDevices { get; set; } = new();
+
+    // Optional user nicknames, keyed by the same stable physical-monitor identity used by exclusions and layout rules.
+    // A name for an unplugged/absent StableId remains dormant and can never attach to a different live monitor.
+    public Dictionary<string, string> MonitorNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     // appearance / localization
     public string Language { get; set; } = "auto";   // "auto" | "en" | "tr"
@@ -149,6 +154,20 @@ public sealed class Settings
         ExcludedDevices ??= new List<string>();
         UpLinks ??= new List<UpLink>();
 
+        // Deserialization creates a comparer-neutral Dictionary, and hand-edited/imported JSON may contain blank,
+        // duplicate-by-case, or multi-line values. Rebuild deterministically as a case-insensitive, single-line map.
+        var normalizedNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in (MonitorNames ?? new Dictionary<string, string>())
+                     .OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            string stableId = pair.Key?.Trim();
+            string name = NormalizeMonitorName(pair.Value);
+            if (!string.IsNullOrEmpty(stableId) && !string.IsNullOrEmpty(name)
+                && !normalizedNames.ContainsKey(stableId))
+                normalizedNames.Add(stableId, name);
+        }
+        MonitorNames = normalizedNames;
+
         bool valid = _crossingPathMode is DefaultCrossingPathMode or CustomCrossingPathMode;
         if (!_crossingPathModeWasSpecified || !valid)
             _crossingPathMode = UpLinks.Count > 0 ? CustomCrossingPathMode : DefaultCrossingPathMode;
@@ -156,6 +175,15 @@ public sealed class Settings
         if (_crossingPathMode == DefaultCrossingPathMode) UpLinks.Clear();
 
         if (Mode is not ("AutoTop" or "Manual")) Mode = "AutoTop";
+    }
+
+    internal static string NormalizeMonitorName(string value) =>
+        value?.Replace('\r', ' ').Replace('\n', ' ').Trim() ?? "";
+
+    internal static string MonitorNameFor(IReadOnlyDictionary<string, string> names, string stableId)
+    {
+        if (names == null || string.IsNullOrEmpty(stableId) || !names.TryGetValue(stableId, out var value)) return "";
+        return NormalizeMonitorName(value);
     }
 
     /// <summary>On an Intel GPU, the Ctrl+Alt+Arrow defaults (up-barrier + side containment) collide with the driver's
