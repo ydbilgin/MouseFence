@@ -100,6 +100,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void Configure()
     {
+        _settings.Normalize();
         var allMonitors = MonitorInfo.All();
 
         // Wall-off: split the live monitors into the EXCLUDED set (whose bounds become forbidden rects) and the
@@ -130,8 +131,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         var topSet = new HashSet<string>(tops.Select(t => t.StableId));
         var primary = monitors.FirstOrDefault(m => m.Primary) ?? monitors.FirstOrDefault();
 
-        // Allowed crossings: configured UpLinks, else default = primary -> every top monitor.
-        var links = _settings.UpLinks.Count > 0
+        // Default paths are primary -> every top. Custom paths are explicit, including an intentionally EMPTY list.
+        // The persisted mode removes the old UI/runtime ambiguity where empty looked like "none" but ran as "all".
+        var links = _settings.CrossingPathMode == Settings.CustomCrossingPathMode
             ? _settings.UpLinks
             : (primary != null
                 ? tops.Select(t => new UpLink { FromDevice = primary.StableId, ToDevice = t.StableId }).ToList()

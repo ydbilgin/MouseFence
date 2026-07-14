@@ -80,17 +80,24 @@ internal sealed class IdentifyOverlay : Form
     }
 
     /// <summary>
+    /// Flash a brief identify overlay on one physical monitor. The overlay keeps the same hardware-safe rendering
+    /// model as the all-monitor path: exactly one, single-line <see cref="Label"/>.
+    /// </summary>
+    public static void Flash(MonitorInfo m, Theme theme, IWin32Window owner)
+    {
+        if (m == null) return;
+        var f = new IdentifyOverlay(m, theme);
+        if (owner is Form ownerForm) f.Owner = ownerForm;
+        f.Show();
+    }
+
+    /// <summary>
     /// Flash a brief identify overlay on EVERY physical monitor. Each overlay self-closes via its own timer and is
     /// Owner-bound to <paramref name="owner"/> (the settings dialog) so closing the dialog also tears them down.
     /// </summary>
     public static void Flash(IEnumerable<MonitorInfo> monitors, Theme theme, IWin32Window owner)
     {
-        var ownerForm = owner as Form;
         foreach (var m in monitors)
-        {
-            var f = new IdentifyOverlay(m, theme);
-            if (ownerForm != null) f.Owner = ownerForm;   // closing the dialog tears these down too
-            f.Show();                                      // self-closes via its life timer; GC reclaims it
-        }
+            Flash(m, theme, owner);
     }
 }

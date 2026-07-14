@@ -5,6 +5,8 @@ namespace MouseFence;
 internal readonly record struct Theme(Color Back, Color Surface, Color Text, Color Subtle, Color Accent, Color Border)
 {
     public bool IsDark => Back.R < 128;
+    public Color Danger => IsDark ? Color.FromArgb(232, 106, 106) : Color.FromArgb(196, 43, 28);
+    public Color AccentText => Color.White;
 
     public static readonly Theme Light = new(
         Back: Color.White,

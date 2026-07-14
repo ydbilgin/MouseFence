@@ -1,4 +1,5 @@
 using MouseFence;
+using System.Text.Json;
 
 // Deterministic tests for the barrier decision logic, using the user's real monitor geometry:
 //   DISPLAY3 left  X -1920..0    Y 14..1094
@@ -1042,14 +1043,145 @@ var DUMMY = (2560, 0, 3360, 600);
         $"mode={reset.Mode} manual={reset.ManualKeys.Count} links={reset.Links.Count}");
 }
 
-// 18) Deterministic label: no DISPLAY name and no conflicting '#N'; includes ordinal, resolution, position, primary tag.
+// 18) MapLayout: the same pure transform drives map painting and hit-testing across common and extreme layouts.
+bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> source,
+    int targetW, int targetH, int pad, out string detail)
 {
-    var label1 = GuardCore.MonitorLabel(2, 2560, 1440, 0, 0, true, "[MAIN]");
-    var label2 = GuardCore.MonitorLabel(2, 2560, 1440, 0, 0, true, "[MAIN]");
-    Check("layout label: deterministic and not DISPLAY-number based",
-        label1 == label2 && label1.Contains("2") && label1.Contains("2560x1440")
-        && label1.Contains("@ 0,0") && label1.Contains("[MAIN]") && !label1.Contains("DISPLAY") && !label1.Contains("#"),
+    var mapped = GuardCore.MapLayout(source, targetW, targetH, pad);
+    bool count = mapped.Count == source.Count;
+    bool inside = mapped.All(r => r.L >= pad && r.T >= pad && r.R <= targetW - pad && r.B <= targetH - pad
+                                  && r.R > r.L && r.B > r.T);
+    bool aspect = count;
+    for (int i = 0; i < source.Count && aspect; i++)
+    {
+        int sw = source[i].R - source[i].L, sh = source[i].B - source[i].T;
+        int dw = mapped[i].R - mapped[i].L, dh = mapped[i].B - mapped[i].T;
+        double scaleDifference = Math.Abs(dw / (double)sw - dh / (double)sh);
+        aspect = scaleDifference <= 1.1 / sw + 1.1 / sh;
+    }
+
+    bool order = count;
+    for (int i = 0; i < source.Count && order; i++)
+        for (int j = 0; j < source.Count && order; j++)
+        {
+            if (source[i].R <= source[j].L && mapped[i].R > mapped[j].L) order = false;
+            if (source[i].B <= source[j].T && mapped[i].B > mapped[j].T) order = false;
+        }
+
+    int minL = mapped.Count == 0 ? 0 : mapped.Min(r => r.L);
+    int maxR = mapped.Count == 0 ? 0 : mapped.Max(r => r.R);
+    int minT = mapped.Count == 0 ? 0 : mapped.Min(r => r.T);
+    int maxB = mapped.Count == 0 ? 0 : mapped.Max(r => r.B);
+    bool centered = mapped.Count > 0 && Math.Abs((minL + maxR) - targetW) <= 1
+                                    && Math.Abs((minT + maxB) - targetH) <= 1;
+    detail = $"{name}: count={mapped.Count} inside={inside} aspect={aspect} order={order} centered={centered} " +
+             $"bounds={minL},{minT}-{maxR},{maxB}";
+    return count && inside && aspect && order && centered;
+}
+
+{
+    var source = new List<(int L, int T, int R, int B)> { (0, 0, 1920, 1080) };
+    var mapped = GuardCore.MapLayout(source, 400, 300, 10);
+    bool valid = ValidMapLayout("single", source, 400, 300, 10, out string detail);
+    Check("map layout: single monitor scales and centers exactly",
+        valid && mapped[0] == (10, 43, 390, 257), $"{detail} rect={mapped[0]}");
+}
+{
+    var source = new List<(int L, int T, int R, int B)>
+        { (0, 0, 1920, 1080), (1920, 0, 3840, 1080) };
+    var mapped = GuardCore.MapLayout(source, 600, 240, 10);
+    bool valid = ValidMapLayout("side-by-side", source, 600, 240, 10, out string detail);
+    Check("map layout: two side-by-side monitors keep adjacency and order",
+        valid && mapped[0].R == mapped[1].L && mapped[0].T == mapped[1].T, detail);
+}
+{
+    var source = new List<(int L, int T, int R, int B)>
+        { (0, 0, 1000, 1000), (1500, 0, 2500, 1000) };
+    var mapped = GuardCore.MapLayout(source, 520, 240, 10);
+    bool valid = ValidMapLayout("gap", source, 520, 240, 10, out string detail);
+    Check("map layout: a real desktop gap remains visible",
+        valid && mapped[1].L - mapped[0].R == 100, $"{detail} gap={mapped[1].L - mapped[0].R}");
+}
+{
+    var source = new List<(int L, int T, int R, int B)>
+        { (-2560, 0, 0, 1440), (0, 0, 1920, 1080) };
+    var mapped = GuardCore.MapLayout(source, 700, 300, 12);
+    bool valid = ValidMapLayout("negative-origin", source, 700, 300, 12, out string detail);
+    Check("map layout: negative-origin left monitor stays left of Main",
+        valid && mapped[0].R == mapped[1].L, detail);
+}
+{
+    var source = new List<(int L, int T, int R, int B)>
+        { (-1080, -400, 0, 1520), (0, 0, 1920, 1080) };
+    bool valid = ValidMapLayout("portrait", source, 640, 420, 10, out string detail);
+    var mapped = GuardCore.MapLayout(source, 640, 420, 10);
+    Check("map layout: portrait geometry preserves its tall aspect",
+        valid && (mapped[0].B - mapped[0].T) > (mapped[0].R - mapped[0].L), detail);
+}
+{
+    var source = new List<(int L, int T, int R, int B)>
+    {
+        (-5120, -2160, -3200, -1080), (-3000, -2160, -1080, -1080), (0, -2160, 3840, 0),
+        (-6000, 0, -4080, 1080), (-3840, 0, -1920, 1080), (0, 0, 2560, 1440),
+        (2800, 200, 4720, 1280), (5000, 1600, 6080, 3520),
+    };
+    bool valid = ValidMapLayout("eight-monitor sprawl", source, 960, 540, 14, out string detail);
+    Check("map layout: 8-monitor sprawl stays bounded, ordered, centered, and proportional", valid, detail);
+}
+
+// 19) Deterministic label: compact human identity only; position/device details live in the map tooltip.
+{
+    var label1 = GuardCore.MonitorLabel(2, 2560, 1440, true, "[MAIN]");
+    var label2 = GuardCore.MonitorLabel(2, 2560, 1440, true, "[MAIN]");
+    Check("layout label: compact, deterministic, and not position/DISPLAY-number based",
+        label1 == label2 && label1 == "2  •  2560x1440  [MAIN]"
+        && !label1.Contains("@") && !label1.Contains("DISPLAY") && !label1.Contains("#"),
         label1);
+}
+
+// 20) CrossingPathMode migration and JSON export/import round-trip.
+{
+    var migrated = JsonSerializer.Deserialize<Settings>("{\"SettingsVersion\":2,\"UpLinks\":[]}");
+    migrated.Normalize();
+    Check("settings migration: absent mode + empty UpLinks becomes Default",
+        migrated.CrossingPathMode == Settings.DefaultCrossingPathMode, migrated.CrossingPathMode);
+}
+{
+    const string legacy = "{\"SettingsVersion\":2,\"UpLinks\":[{\"FromDevice\":\"bottom\",\"ToDevice\":\"top\"}]}";
+    var migrated = JsonSerializer.Deserialize<Settings>(legacy);
+    migrated.Normalize();
+    Check("settings migration: absent mode + non-empty UpLinks becomes Custom",
+        migrated.CrossingPathMode == Settings.CustomCrossingPathMode && migrated.UpLinks.Count == 1,
+        $"mode={migrated.CrossingPathMode} links={migrated.UpLinks.Count}");
+}
+{
+    var exported = new Settings { CrossingPathMode = Settings.CustomCrossingPathMode };
+    exported.UpLinks.Add(new UpLink { FromDevice = "bottom", ToDevice = "top" });
+    string json = JsonSerializer.Serialize(exported);
+    var imported = JsonSerializer.Deserialize<Settings>(json);
+    imported.Normalize();
+    Check("settings JSON: CrossingPathMode and explicit links round-trip through export/import",
+        imported.CrossingPathMode == Settings.CustomCrossingPathMode
+        && imported.UpLinks.Count == 1
+        && imported.UpLinks[0].FromDevice == "bottom" && imported.UpLinks[0].ToDevice == "top",
+        $"mode={imported.CrossingPathMode} links={imported.UpLinks.Count}");
+}
+{
+    var exported = new Settings { CrossingPathMode = Settings.CustomCrossingPathMode };
+    string json = JsonSerializer.Serialize(exported);
+    var imported = JsonSerializer.Deserialize<Settings>(json);
+    imported.Normalize();
+    Check("settings JSON: explicit Custom with zero links stays Custom (allow none)",
+        imported.CrossingPathMode == Settings.CustomCrossingPathMode && imported.UpLinks.Count == 0,
+        $"mode={imported.CrossingPathMode} links={imported.UpLinks.Count}");
+}
+{
+    var normalized = new Settings { CrossingPathMode = Settings.DefaultCrossingPathMode };
+    normalized.UpLinks.Add(new UpLink { FromDevice = "stale-bottom", ToDevice = "stale-top" });
+    normalized.Normalize();
+    Check("settings normalization: Default mode persists no explicit UpLinks",
+        normalized.CrossingPathMode == Settings.DefaultCrossingPathMode && normalized.UpLinks.Count == 0,
+        $"mode={normalized.CrossingPathMode} links={normalized.UpLinks.Count}");
 }
 
 // ---- SIDE CONTAINMENT (soft barrier, horizontal mirror of the up-barrier) ----
