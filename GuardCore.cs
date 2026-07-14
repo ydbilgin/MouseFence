@@ -294,11 +294,58 @@ public sealed class GuardCore
     public static bool IsArrowRotationHotkey(int vk, bool ctrl, bool alt, bool shift, bool win) =>
         ctrl && alt && !shift && !win && (vk == 0x25 || vk == 0x26 || vk == 0x27 || vk == 0x28);
 
-    /// <summary>Deterministic UI label that avoids mixing a positional # with renumber-prone DISPLAY names.</summary>
-    public static string MonitorLabel(int ordinal, int width, int height, int left, int top, bool primary, string mainTag)
+    /// <summary>
+    /// Scale virtual-desktop rectangles into a target area while preserving their relative positions and a single
+    /// common scale. The result uses the same half-open L/T/R/B convention as the input, making it suitable for both
+    /// painting and hit-testing. Invalid/empty target areas return one empty rectangle per input rectangle.
+    /// </summary>
+    public static List<(int L, int T, int R, int B)> MapLayout(
+        IReadOnlyList<(int L, int T, int R, int B)> rects, int targetW, int targetH, int pad)
+    {
+        var result = new List<(int L, int T, int R, int B)>(rects?.Count ?? 0);
+        if (rects == null || rects.Count == 0) return result;
+
+        targetW = Math.Max(0, targetW);
+        targetH = Math.Max(0, targetH);
+        pad = Math.Clamp(pad, 0, Math.Min(targetW, targetH) / 2);
+        int usableW = Math.Max(0, targetW - pad * 2);
+        int usableH = Math.Max(0, targetH - pad * 2);
+        int minL = rects.Min(r => r.L), minT = rects.Min(r => r.T);
+        int maxR = rects.Max(r => r.R), maxB = rects.Max(r => r.B);
+        long virtualW = (long)maxR - minL, virtualH = (long)maxB - minT;
+
+        if (usableW == 0 || usableH == 0 || virtualW <= 0 || virtualH <= 0)
+        {
+            for (int i = 0; i < rects.Count; i++) result.Add((pad, pad, pad, pad));
+            return result;
+        }
+
+        double scale = Math.Min(usableW / (double)virtualW, usableH / (double)virtualH);
+        double scaledW = virtualW * scale, scaledH = virtualH * scale;
+        double offsetX = pad + (usableW - scaledW) / 2d;
+        double offsetY = pad + (usableH - scaledH) / 2d;
+
+        int Edge(double value) => (int)Math.Round(value, MidpointRounding.AwayFromZero);
+        foreach (var r in rects)
+        {
+            int l = Edge(offsetX + ((long)r.L - minL) * scale);
+            int t = Edge(offsetY + ((long)r.T - minT) * scale);
+            int rr = Edge(offsetX + ((long)r.R - minL) * scale);
+            int bb = Edge(offsetY + ((long)r.B - minT) * scale);
+            result.Add((
+                Math.Clamp(l, pad, targetW - pad),
+                Math.Clamp(t, pad, targetH - pad),
+                Math.Clamp(rr, pad, targetW - pad),
+                Math.Clamp(bb, pad, targetH - pad)));
+        }
+        return result;
+    }
+
+    /// <summary>Short, human-facing monitor label; position and device details belong in the map tooltip.</summary>
+    public static string MonitorLabel(int ordinal, int width, int height, bool primary, string mainTag)
     {
         var suffix = primary && !string.IsNullOrEmpty(mainTag) ? "  " + mainTag : "";
-        return $"{ordinal}  {width}x{height}  @ {left},{top}{suffix}";
+        return $"{ordinal}  •  {width}x{height}{suffix}";
     }
 
     private static bool InRect((int L, int T, int R, int B) r, int x, int y) =>

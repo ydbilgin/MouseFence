@@ -5,7 +5,9 @@ namespace MouseFence;
 
 public sealed class Settings
 {
-    public const int CurrentSettingsVersion = 2;
+    public const int CurrentSettingsVersion = 3;
+    public const string DefaultCrossingPathMode = "Default";
+    public const string CustomCrossingPathMode = "Custom";
 
     public int SettingsVersion { get; set; } = CurrentSettingsVersion;
 
@@ -75,7 +77,18 @@ public sealed class Settings
 
     // per-screen crossing rules: which bottom monitor may cross UP into which top monitor.
     // FromDevice/ToDevice store stable MonitorInfo.StableId values; the property names stay for JSON compatibility.
-    // Empty = default behaviour (the primary may cross up into every top monitor).
+    // Default mode deliberately persists an empty list; Custom mode treats this as an explicit "allow none" list.
+    private string _crossingPathMode = DefaultCrossingPathMode;
+    private bool _crossingPathModeWasSpecified;
+    public string CrossingPathMode
+    {
+        get => _crossingPathMode;
+        set
+        {
+            _crossingPathMode = value;
+            _crossingPathModeWasSpecified = true;
+        }
+    }
     public List<UpLink> UpLinks { get; set; } = new();
 
     // Transient (not persisted): set when a fresh install on an Intel GPU had Shift added to its arrow hotkeys,
@@ -97,8 +110,10 @@ public sealed class Settings
             if (File.Exists(FilePath))
             {
                 var json = File.ReadAllText(FilePath);
+                int loadedVersion = ReadVersion(json);
                 var settings = JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
-                if (ReadVersion(json) < CurrentSettingsVersion)
+                settings.Normalize();
+                if (loadedVersion < CurrentSettingsVersion)
                 {
                     try
                     {
@@ -122,6 +137,25 @@ public sealed class Settings
         try { if (Native.HasIntelGpu()) fresh.AddShiftToArrowHotkeys(); }
         catch { /* detection is best-effort */ }
         return fresh;
+    }
+
+    /// <summary>
+    /// Normalize deserialized/imported data and migrate the pre-v3 implicit crossing-path meaning. When the persisted
+    /// field is absent, an old non-empty UpLinks list means Custom; an old empty list means Default.
+    /// </summary>
+    public void Normalize()
+    {
+        ManualMonitors ??= new List<string>();
+        ExcludedDevices ??= new List<string>();
+        UpLinks ??= new List<UpLink>();
+
+        bool valid = _crossingPathMode is DefaultCrossingPathMode or CustomCrossingPathMode;
+        if (!_crossingPathModeWasSpecified || !valid)
+            _crossingPathMode = UpLinks.Count > 0 ? CustomCrossingPathMode : DefaultCrossingPathMode;
+        _crossingPathModeWasSpecified = true;
+        if (_crossingPathMode == DefaultCrossingPathMode) UpLinks.Clear();
+
+        if (Mode is not ("AutoTop" or "Manual")) Mode = "AutoTop";
     }
 
     /// <summary>On an Intel GPU, the Ctrl+Alt+Arrow defaults (up-barrier + side containment) collide with the driver's
@@ -168,6 +202,7 @@ public sealed class Settings
         var reset = GuardCore.ResetLayoutConfig();
         Mode = reset.Mode;
         ManualMonitors = reset.ManualKeys;
+        CrossingPathMode = DefaultCrossingPathMode;
         UpLinks = reset.Links.Select(lk => new UpLink { FromDevice = lk.From, ToDevice = lk.To }).ToList();
     }
 
@@ -175,6 +210,8 @@ public sealed class Settings
     {
         try
         {
+            Normalize();
+            SettingsVersion = CurrentSettingsVersion;
             Directory.CreateDirectory(Dir);
             File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
         }

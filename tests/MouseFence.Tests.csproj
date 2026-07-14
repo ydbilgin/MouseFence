@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <AssemblyName>MouseFence.Tests</AssemblyName>
@@ -12,9 +13,12 @@
   <ItemGroup>
     <!-- Don't pull in the council scratch sub-projects nested under tests/ -->
     <Compile Remove="council_*/**/*.cs" />
-    <!-- Test the REAL production logic (these files are WinForms-free) -->
+    <!-- Test the REAL production logic. The Windows target is needed only because Settings stores WinForms Keys. -->
     <Compile Include="..\GuardCore.cs" Link="GuardCore.cs" />
     <Compile Include="..\Strings.cs" Link="Strings.cs" />
+    <Compile Include="..\Settings.cs" Link="Settings.cs" />
+    <Compile Include="..\MonitorInfo.cs" Link="MonitorInfo.cs" />
+    <Compile Include="..\Native.cs" Link="Native.cs" />
   </ItemGroup>
 
 </Project>
