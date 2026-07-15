@@ -1,15 +1,15 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Text.Json;
 using Microsoft.Win32;
 
 namespace MouseFence;
 
-/// <summary>Settings dialog: General (hotkey, startup), Appearance (language, theme), Monitors (top monitors + per-screen crossing rules).</summary>
+public readonly record struct SettingsRuntimeState(bool UpwardPassageOpen, bool SideProtectionOn, bool Paused);
+
+/// <summary>The transactional, native WinForms settings experience.</summary>
 public sealed class SettingsForm : Form
 {
-    // Executable audit contract: every persisted user setting (SettingsVersion is schema metadata) is represented by
-    // a control in this form. The console harness compares this list to Settings via reflection so a future setting
-    // cannot silently become JSON-only.
     internal static IReadOnlyCollection<string> GuiEditableSettingProperties { get; } = new HashSet<string>
     {
         nameof(Settings.HotKey), nameof(Settings.ModCtrl), nameof(Settings.ModAlt), nameof(Settings.ModShift), nameof(Settings.ModWin),
@@ -20,1472 +20,1728 @@ public sealed class SettingsForm : Form
         nameof(Settings.SideHotKey), nameof(Settings.SideModCtrl), nameof(Settings.SideModAlt),
         nameof(Settings.SideModShift), nameof(Settings.SideModWin),
         nameof(Settings.StartGateClosed), nameof(Settings.StartSideContainOn), nameof(Settings.AutoStart),
-        nameof(Settings.DeliberateCross), nameof(Settings.DescentRouting),
-        nameof(Settings.SideCrossMin), nameof(Settings.SideCrossSlack),
-        nameof(Settings.Mode), nameof(Settings.ManualMonitors), nameof(Settings.ExcludedDevices), nameof(Settings.MonitorNames),
-        nameof(Settings.Language), nameof(Settings.Theme),
-    };
-
-    // M1 intentionally ships the model/engine before the M2 boundary drawer and Advanced controls. The reflection
-    // gate treats only this named set as staged, so adding any unrelated JSON-only property still fails loudly.
-    internal static IReadOnlyCollection<string> M1DeferredGuiSettingProperties { get; } = new HashSet<string>
-    {
         nameof(Settings.StartConfineOn), nameof(Settings.StartPaused),
+        nameof(Settings.DeliberateCross), nameof(Settings.DescentRouting), nameof(Settings.Mode),
+        nameof(Settings.ManualMonitors), nameof(Settings.ExcludedDevices), nameof(Settings.MonitorNames),
+        nameof(Settings.Language), nameof(Settings.Theme),
         nameof(Settings.UpwardBoundaryDefault), nameof(Settings.SideBoundaryDefault), nameof(Settings.DownwardBoundaryDefault),
         nameof(Settings.BoundaryRules), nameof(Settings.UpCrossMin), nameof(Settings.UpCrossSlack),
-        nameof(Settings.PassageInsetPx), nameof(Settings.EdgeHoldbackPx), nameof(Settings.SeamTolerancePx),
-        nameof(Settings.SafetyEscapes), nameof(Settings.BoundaryTipSeen),
+        nameof(Settings.SideCrossMin), nameof(Settings.SideCrossSlack), nameof(Settings.PassageInsetPx),
+        nameof(Settings.EdgeHoldbackPx), nameof(Settings.SeamTolerancePx), nameof(Settings.SafetyEscapes),
+        nameof(Settings.BoundaryTipSeen),
     };
 
-    private readonly List<MonitorInfo> _monitors = new();
-    private readonly List<MonitorInfo> _tops = new();
-    private readonly List<MonitorInfo> _bottoms = new();
+    internal static IReadOnlyCollection<string> M1DeferredGuiSettingProperties { get; } = new HashSet<string>();
 
-    private readonly TextBox _hotkeyBox;
-    private readonly CheckBox _startActive;
-    private readonly CheckBox _autoStart;
+    private readonly Settings _draft;
+    private readonly Func<SettingsRuntimeState> _runtimeState;
+    private readonly List<MonitorInfo> _monitors = new();
+    private readonly ToolTip _tips = new();
+    private readonly System.Windows.Forms.Timer _runtimeTimer = new() { Interval = 400 };
+    private readonly System.Windows.Forms.Timer _displayRefreshTimer = new() { Interval = 700 };
+
+    private readonly FlatTabControl _tabs;
+    private readonly TabPage _advancedPage;
+    private readonly TabPage _shortcutsPage;
+    private readonly TabPage _generalPage;
+    private readonly Panel _tabStrip;
+    private readonly SidebarButton[] _tabItems;
+    private readonly MonitorMapControl _map;
+    private readonly MapLegend _mapLegend;
+    private readonly TableLayoutPanel _screenRows;
+    private readonly Panel _screenSplit;
+    private readonly Panel _drawer;
+    private readonly FlowLayoutPanel _drawerFlow;
+    private readonly FlowLayoutPanel _bodyFlow;
+    private readonly Label _mapHint;
+    private readonly Panel _screenSection;
+    private readonly Label _screenSectionTitle;
+    private readonly Label _screenSectionHelp;
+    private readonly TableLayoutPanel _footer;
+    private readonly Label _inlineStatus;
+    private readonly Button _inlineAction;
+    private readonly Button _endpointFrom;
+    private readonly Button _endpointTo;
+    private readonly Label _pairSeparator;
+    private readonly Label _drawerTitle;
+    private readonly Label _drawerMeta;
+    private readonly Label _drawerBinding;
+    private readonly Label _drawerStatus;
+    private readonly Label _drawerDirection;
+    private readonly Label _returnLine;
+    private readonly LinkLabel _separateLink;
+    private readonly LinkLabel _overallLink;
+    private readonly LinkLabel _whenLink;
+    private readonly Button _allowScreen;
+    private readonly FlowLayoutPanel _modeTiles;
+    private readonly TableLayoutPanel _separatePanel;
+    private readonly Panel _whenPanel;
+    private readonly RadioButton _automaticControl;
+    private readonly RadioButton _alwaysControl;
+    private readonly ModeTile _freeTile;
+    private readonly ModeTile _pushTile;
+    private readonly ModeTile _blockedTile;
+    private readonly FlowLayoutPanel _advancedPanel;
+    private readonly Button _advancedToggle;
+
+    private readonly TextBox[] _hotkeyBoxes = new TextBox[4];
     private readonly ComboBox _langCombo;
     private readonly ComboBox _themeCombo;
-    private RadioButton _modeAuto;
-    private RadioButton _modeManual;
-    private GlyphCheckedListBox _monitorList;
-    private RadioButton _crossingDefault;
-    private RadioButton _crossingCustom;
-    private ComboBox _fromCombo;
-    private CheckedListBox _topsCheck;
-    private MonitorMapControl _map;
-    private GlyphCheckedListBox _excludeList;
-    private TextBox _monitorNameBox;
-    private Panel _displayBody;
-    private Panel _displayBodyContent;
-    private Panel _advancedPanel;
-    private Panel _customPathsPanel;
-    private Panel _crossingModesPanel;
-    private Panel _sideTuningPanel;
-    private Button _advancedToggle;
-    private Label _behaviorHead;
-    private Button _resetCrossing;
-    private Label _layoutChangedBanner;
-    private readonly System.Windows.Forms.Timer _displayRefreshTimer = new() { Interval = 650 };
+    private readonly CheckBox _startGate;
+    private readonly CheckBox _startSide;
+    private readonly CheckBox _autoStart;
+    private readonly CheckBox _startConfine;
+    private readonly CheckBox _startPaused;
 
-    private readonly TabControl _tabs;
-    private readonly TextBox _gameHotkeyBox;
-    private readonly TextBox _pauseHotkeyBox;
-    private readonly TextBox _sideHotkeyBox;
-    private readonly CheckBox _startSideActive;
-    private NumericUpDown _sideSensNum;
-    private NumericUpDown _sideSlackNum;
-    private CheckBox _deliberateCheck;
-    private CheckBox _descentCheck;
-    private readonly ToolTip _tips = new();
-    private readonly HashSet<string> _excluded = new();
-    private readonly HashSet<string> _manualTops = new();
-    private readonly Dictionary<string, HashSet<string>> _rules = new();
-    private readonly Dictionary<string, string> _monitorNames = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Settings _source;
-    private bool _rebuildingMonitorUi;
-    private bool _updatingMonitorName;
+    private BoundaryView _boundary;
+    private BoundaryEndpoint _primary;
+    private BoundaryEndpoint _reverse;
+    private bool _separateExpanded;
+    private bool _whenExpanded;
     private bool _advancedExpanded;
-    private string _selectedStableId;
-    private bool _mc, _ma, _ms, _mw;
-    private Keys _key;
-    private bool _gc, _ga, _gs, _gw;
-    private Keys _gkey;
-    private bool _pc, _pa, _ps, _pw;
-    private Keys _pkey;
-    private bool _sc, _sa, _ss, _sw;
-    private Keys _skey;
+    private bool _rebuilding;
+    private bool _inlineStatusIsError;
+    private int _advancedWidth = 520;
+    private Theme _theme;
+
+    private sealed record BoundaryEndpoint(MonitorInfo From, MonitorInfo To, BoundaryDirection Direction, RuntimeTransition Runtime);
 
     public Settings Result { get; private set; }
+    internal Settings DraftForTests => _draft;
+    internal bool BoundaryEditorVisibleForTests => _screenSplit.Height > 0 && _screenSplit.Visible;
+    internal string InlineStatusForTests => _inlineStatus?.Text ?? "";
+    internal IReadOnlyList<string> DrawerStatusCandidatesForTests => DrawerStatusCandidates();
+    // Test hooks (fields, not auto-properties, so the WinForms WFO1000 designer-serialization analyzer stays quiet).
+    internal Func<string> RestorePathPickerForTests = null;
+    internal Func<bool> RestoreConfirmForTests = null;
+    // Drives the backup path (validate + write + inline success) to a fixed path without a file dialog, for tests.
+    internal bool BackupToFileForTests(string path) => ValidateDraftForBackup() && WriteBackupFile(path);
+    internal void RestoreFromFileForTests() => Import_Click(this, EventArgs.Empty);
 
-    /// <summary>Dev helper for docs screenshots: select a tab by index.</summary>
-    public void SelectTab(int i) { if (i >= 0 && i < _tabs.TabPages.Count) _tabs.SelectedIndex = i; }
-
-    public SettingsForm(Settings s, List<MonitorInfo> monitors)
+    public SettingsForm(Settings settings, List<MonitorInfo> monitors, Func<SettingsRuntimeState> runtimeState = null)
     {
-        s.Normalize();
-        _source = s;
+        // Never normalize or edit the live instance. The draft owns all nested lists, dictionaries, and rule objects.
+        _draft = (settings ?? new Settings()).DeepClone();
+        _runtimeState = runtimeState;
         _monitors.AddRange(monitors ?? new List<MonitorInfo>());
-        _mc = s.ModCtrl; _ma = s.ModAlt; _ms = s.ModShift; _mw = s.ModWin; _key = s.HotKey;
-        _gc = s.ConfineModCtrl; _ga = s.ConfineModAlt; _gs = s.ConfineModShift; _gw = s.ConfineModWin; _gkey = s.ConfineHotKey;
-        _pc = s.PauseModCtrl; _pa = s.PauseModAlt; _ps = s.PauseModShift; _pw = s.PauseModWin; _pkey = s.PauseHotKey;
-        _sc = s.SideModCtrl; _sa = s.SideModAlt; _ss = s.SideModShift; _sw = s.SideModWin; _skey = s.SideHotKey;
-
-        foreach (var id in s.ManualMonitors) _manualTops.Add(id);
-        _tops.AddRange(s.Mode == "Manual"
-            ? _monitors.Where(m => _manualTops.Contains(m.StableId) && MonitorInfo.IsAbovePrimary(m))
-            : _monitors.Where(MonitorInfo.IsAbovePrimary));
-        var topSet = new HashSet<string>(_tops.Select(t => t.StableId));
-        _bottoms.AddRange(_monitors.Where(m => !topSet.Contains(m.StableId)));
-        foreach (var lk in s.UpLinks)
-        {
-            if (!_rules.TryGetValue(lk.FromDevice, out var set)) { set = new HashSet<string>(); _rules[lk.FromDevice] = set; }
-            set.Add(lk.ToDevice);
-        }
-        // The exclude list keys on the STABLE per-monitor id (FIX 4), so an exclusion survives \\.\DISPLAYn
-        // renumbering. Never seed the primary as excluded (it can't be walled).
-        var primaryStable = (_monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault())?.StableId;
-        foreach (var id in s.ExcludedDevices)
-            if (id != primaryStable) _excluded.Add(id);
-        foreach (var pair in s.MonitorNames)
-            _monitorNames[pair.Key] = pair.Value;
+        Strings.Use(_draft.Language);
+        _theme = Theming.Resolve(_draft.Theme);
 
         Text = Strings.SettingsTitle;
+        Font = new Font("Segoe UI", 9f);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = false;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Segoe UI", 9f);
-        ClientSize = new Size(760, 720);
-        MinimumSize = new Size(680, 620);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        ClientSize = new Size(1064, 712);
+        MinimumSize = new Size(720, 560);
 
-        var headFont = new Font("Segoe UI Semibold", 9f);
-
-        _tabs = new TabControl
+        var root = new TableLayoutPanel
         {
-            Left = 12, Top = 12, Width = ClientSize.Width - 24, Height = ClientSize.Height - 66,
-            DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(210, 30),
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty, Padding = Padding.Empty,
         };
-        _tabs.DrawItem += DrawTab;
-        var tabGeneral = new TabPage(Strings.TabGeneral) { Padding = new Padding(10), AutoScroll = true };
-        var tabAppearance = new TabPage(Strings.TabAppearance) { Padding = new Padding(10) };
-        var tabMonitors = new TabPage(Strings.DisplaysTab) { Padding = new Padding(10) };
-        _tabs.TabPages.AddRange(new[] { tabGeneral, tabAppearance, tabMonitors });
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        // ---- General ----
-        int y = 12;
-        tabGeneral.Controls.Add(new Label
+        _tabs = new FlatTabControl
         {
-            Text = Strings.GeneralIntro, Left = 12, Top = y, Width = 640, Height = 22,
-            Tag = "subtle", Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        });
-        y += 34;
-        tabGeneral.Controls.Add(new Label { Text = Strings.HotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
-        y += 20;
-        tabGeneral.Controls.Add(new Label { Text = Strings.HotkeyHint, AutoSize = true, Left = 12, Top = y, Tag = "subtle" });
-        y += 22;
-        _hotkeyBox = new TextBox
-        {
-            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
-            TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
+            Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, SizeMode = TabSizeMode.Fixed,
+            ItemSize = new Size(0, 1), Padding = Point.Empty, Margin = Padding.Empty,
         };
-        _hotkeyBox.KeyDown += HotkeyBox_KeyDown;
-        var btnClear = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
-        btnClear.Click += (a, b) => { _mc = _ma = _ms = _mw = false; _key = Keys.None; UpdateHotkeyText(); };
-        tabGeneral.Controls.Add(_hotkeyBox);
-        tabGeneral.Controls.Add(btnClear);
-        _tips.SetToolTip(_hotkeyBox, Strings.HotkeyHint);
-        _tips.SetToolTip(btnClear, Strings.HotkeyHint);
-        y += 44;
-        tabGeneral.Controls.Add(new Label { Text = Strings.StartupHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
-        y += 22;
-        _startActive = new CheckBox { Text = Strings.StartGateClosed, Left = 12, Top = y, Width = 640, Height = 22, Checked = s.StartGateClosed, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-        tabGeneral.Controls.Add(_startActive);
-        _tips.SetToolTip(_startActive, Strings.StartGateClosedTip);
-        y += 26;
-        _autoStart = new CheckBox { Text = Strings.StartWithWindows, Left = 12, Top = y, Width = 640, Height = 22, Checked = s.AutoStart, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-        tabGeneral.Controls.Add(_autoStart);
-        _tips.SetToolTip(_autoStart, Strings.StartWithWindowsTip);
-        y += 34;
-        tabGeneral.Controls.Add(new Label { Text = Strings.GameHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
-        y += 20;
-        tabGeneral.Controls.Add(new Label { Text = Strings.GameHotkeyHint, Left = 12, Top = y, Width = 640, Height = 30, Tag = "subtle" });
-        y += 32;
-        _gameHotkeyBox = new TextBox
+        var screens = new TabPage(Strings.Ui("TabScreens"))
+            { Padding = new Padding(0), UseVisualStyleBackColor = false };
+        _advancedPage = new TabPage(Strings.Ui("AdvancedM2"))
+            { Padding = new Padding(28, 23, 28, 32), AutoScroll = true, UseVisualStyleBackColor = false };
+        _shortcutsPage = new TabPage(Strings.Ui("TabShortcuts"))
+            { Padding = new Padding(28, 23, 28, 32), AutoScroll = true, UseVisualStyleBackColor = false };
+        _generalPage = new TabPage(Strings.TabGeneral)
+            { Padding = new Padding(28, 23, 28, 32), AutoScroll = true, UseVisualStyleBackColor = false };
+        _tabs.TabPages.AddRange(new[] { screens, _advancedPage, _shortcutsPage, _generalPage });
+        _tabStrip = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Tag = "sidebar", Padding = new Padding(12, 18, 12, 12) };
+        _tabStrip.Paint += (_, e) =>
         {
-            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
-            TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
+            using var border = new Pen(_theme.Border);
+            e.Graphics.DrawLine(border, _tabStrip.Width - 1, 0, _tabStrip.Width - 1, _tabStrip.Height);
         };
-        _gameHotkeyBox.KeyDown += GameHotkeyBox_KeyDown;
-        var btnClearGame = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
-        btnClearGame.Click += (a, b) => { _gc = _ga = _gs = _gw = false; _gkey = Keys.None; UpdateGameHotkeyText(); };
-        tabGeneral.Controls.Add(_gameHotkeyBox);
-        tabGeneral.Controls.Add(btnClearGame);
-        _tips.SetToolTip(_gameHotkeyBox, Strings.GameHotkeyHint);
-        _tips.SetToolTip(btnClearGame, Strings.GameHotkeyHint);
-        y += 44;
-        tabGeneral.Controls.Add(new Label { Text = Strings.PauseHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
-        y += 20;
-        tabGeneral.Controls.Add(new Label { Text = Strings.PauseHotkeyHint, Left = 12, Top = y, Width = 640, Height = 30, Tag = "subtle" });
-        y += 32;
-        _pauseHotkeyBox = new TextBox
+        var product = new Label { Text = "▣  MouseFence", Left = 12, Top = 21, Width = 144, Height = 25,
+            Font = new Font("Segoe UI Semibold", 10.5f), Tag = "head" };
+        var settingsLabel = new Label { Text = Strings.Ui("SettingsNavLabel"), Left = 12, Top = 66, Width = 144, Height = 18,
+            Font = new Font("Segoe UI Semibold", 7.5f), Tag = "faint" };
+        _tabStrip.Controls.Add(product); _tabStrip.Controls.Add(settingsLabel);
+        _tabItems = new[]
         {
-            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
-            TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
+            new SidebarButton(Strings.Ui("NavDisplays"), 0),
+            new SidebarButton(Strings.Ui("NavAdvanced"), 1),
+            new SidebarButton(Strings.Ui("NavShortcuts"), 2),
+            new SidebarButton(Strings.Ui("NavGeneral"), 3),
         };
-        _pauseHotkeyBox.KeyDown += PauseHotkeyBox_KeyDown;
-        var btnClearPause = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
-        btnClearPause.Click += (a, b) => { _pc = _pa = _ps = _pw = false; _pkey = Keys.None; UpdatePauseHotkeyText(); };
-        tabGeneral.Controls.Add(_pauseHotkeyBox);
-        tabGeneral.Controls.Add(btnClearPause);
-        _tips.SetToolTip(_pauseHotkeyBox, Strings.PauseHotkeyHint);
-        _tips.SetToolTip(btnClearPause, Strings.PauseHotkeyHint);
-        y += 44;
-        tabGeneral.Controls.Add(new Label { Text = Strings.SideHotkeyHead, AutoSize = true, Left = 12, Top = y, Font = headFont, Tag = "head" });
-        y += 20;
-        tabGeneral.Controls.Add(new Label { Text = Strings.SideHotkeyHint, Left = 12, Top = y, Width = 640, Height = 44, Tag = "subtle" });
-        y += 46;
-        _sideHotkeyBox = new TextBox
+        int tabTop = 92;
+        foreach (var item in _tabItems)
         {
-            Left = 12, Top = y, Width = 500, Height = 26, ReadOnly = true, Cursor = Cursors.Hand,
-            TextAlign = HorizontalAlignment.Center, Font = new Font("Segoe UI Semibold", 9.5f), BorderStyle = BorderStyle.FixedSingle
-        };
-        _sideHotkeyBox.KeyDown += SideHotkeyBox_KeyDown;
-        var btnClearSide = new Button { Text = Strings.Clear, Left = 520, Top = y - 1, Width = 110, Height = 28, FlatStyle = FlatStyle.Flat };
-        btnClearSide.Click += (a, b) => { _sc = _sa = _ss = _sw = false; _skey = Keys.None; UpdateSideHotkeyText(); };
-        tabGeneral.Controls.Add(_sideHotkeyBox);
-        tabGeneral.Controls.Add(btnClearSide);
-        _tips.SetToolTip(_sideHotkeyBox, Strings.SideHotkeyHint);
-        _tips.SetToolTip(btnClearSide, Strings.SideHotkeyHint);
-        y += 36;
-        _startSideActive = new CheckBox { Text = Strings.StartSideContainOn, Left = 12, Top = y, Width = 640, Height = 22, Checked = s.StartSideContainOn, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-        tabGeneral.Controls.Add(_startSideActive);
-        _tips.SetToolTip(_startSideActive, Strings.StartSideContainTip);
-
-        // ---- Appearance ----
-        tabAppearance.Controls.Add(new Label { Text = Strings.AppearanceHead, AutoSize = true, Left = 12, Top = 14, Font = headFont, Tag = "head" });
-        tabAppearance.Controls.Add(new Label { Text = Strings.AppearanceIntro, Left = 12, Top = 38, Width = 640, Height = 34, Tag = "subtle" });
-        tabAppearance.Controls.Add(new Label { Text = Strings.LanguageLabel, AutoSize = true, Left = 12, Top = 86, Tag = "subtle" });
-        tabAppearance.Controls.Add(new Label { Text = Strings.ThemeLabel, AutoSize = true, Left = 340, Top = 86, Tag = "subtle" });
-        _langCombo = new ComboBox { Left = 12, Top = 108, Width = 300, Height = 24, DropDownStyle = ComboBoxStyle.DropDownList };
-        _langCombo.Items.AddRange(new object[] { Strings.LangAuto, Strings.LangEnglish, Strings.LangTurkish });
-        _langCombo.SelectedIndex = s.Language switch { "en" => 1, "tr" => 2, _ => 0 };
-        _themeCombo = new ComboBox { Left = 340, Top = 108, Width = 300, Height = 24, DropDownStyle = ComboBoxStyle.DropDownList, Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        _themeCombo.Items.AddRange(new object[] { Strings.ThemeSystem, Strings.ThemeLight, Strings.ThemeDark });
-        _themeCombo.SelectedIndex = s.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
-        _themeCombo.SelectedIndexChanged += (a, b) => ApplyThemeLive();
-        tabAppearance.Controls.Add(_langCombo);
-        tabAppearance.Controls.Add(_themeCombo);
-        _tips.SetToolTip(_langCombo, Strings.LanguageTip);
-        _tips.SetToolTip(_themeCombo, Strings.ThemeTip);
-
-        // ---- Displays: pinned map header + independently scrolling simple/advanced body ----
-        BuildDisplaysTab(tabMonitors, headFont, s);
-
-        // ---- buttons ----
-        int buttonTop = ClientSize.Height - 42;
-        var cancel = new Button { Text = Strings.Cancel, Left = ClientSize.Width - 12 - 96, Top = buttonTop, Width = 96, Height = 30, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.Cancel, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
-        var ok = new Button { Text = Strings.Save, Left = cancel.Left - 104, Top = buttonTop, Width = 96, Height = 30, FlatStyle = FlatStyle.Flat, Tag = "primary", DialogResult = DialogResult.OK, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
-        ok.Click += Ok_Click;
-
-        // back up / restore the whole configuration as a single settings.json-format file (e.g. before a format/reinstall)
-        var export = new Button { Text = Strings.ExportLabel, Left = 12, Top = buttonTop, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        export.Click += Export_Click;
-        var import = new Button { Text = Strings.ImportLabel, Left = export.Left + 116, Top = buttonTop, Width = 110, Height = 30, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        import.Click += Import_Click;
-
-        Controls.Add(_tabs);
-        Controls.Add(export);
-        Controls.Add(import);
-        Controls.Add(ok);
-        Controls.Add(cancel);
-        AcceptButton = ok;
-        CancelButton = cancel;
-
-        // Lay out all hotkey rows from the live page width. Doing this in the Resize event avoids the WinForms quirk
-        // where anchoring the selected TabPage's first child during construction can absorb its Clear button.
-        void LayoutHotkeyRows()
-        {
-            int right = Math.Max(380, tabGeneral.ClientSize.Width - 22);
-            foreach (var (box, clearButton) in new[]
-            {
-                (_hotkeyBox, btnClear), (_gameHotkeyBox, btnClearGame),
-                (_pauseHotkeyBox, btnClearPause), (_sideHotkeyBox, btnClearSide),
-            })
-            {
-                clearButton.Left = right - clearButton.Width;
-                box.Width = Math.Max(240, clearButton.Left - box.Left - 8);
-            }
+            item.Left = 12; item.Top = tabTop; item.Width = 144; item.Height = 42;
+            item.Click += (_, _) => _tabs.SelectedIndex = item.Index;
+            item.SelectionRequested += SelectRelativeTab;
+            _tabStrip.Controls.Add(item);
+            tabTop += 46;
         }
-        tabGeneral.Resize += (a, b) => LayoutHotkeyRows();
-        LayoutHotkeyRows();
+        _tabs.SelectedIndexChanged += (_, _) =>
+        {
+            UpdateTabStrip();
+            UpdateBoundaryTipVisibility();
+        };
+        root.SetRowSpan(_tabStrip, 2);
+        root.Controls.Add(_tabStrip, 0, 0);
+        root.Controls.Add(_tabs, 1, 0);
 
-        Result = s;
-        UpdateHotkeyText();
-        UpdateGameHotkeyText();
-        UpdatePauseHotkeyText();
-        UpdateSideHotkeyText();
+        _bodyFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown,
+            WrapContents = false, Padding = new Padding(28, 23, 28, 32), Margin = Padding.Empty };
+        _bodyFlow.HandleCreated += (_, _) => ThemeScrollbars(_bodyFlow);
+        _bodyFlow.SizeChanged += (_, _) => ResizeV2Layout();
+        var mapHeader = new TableLayoutPanel
+        {
+            Width = 820, Height = 72, MinimumSize = new Size(0, 72), ColumnCount = 2, RowCount = 1,
+            Margin = new Padding(0, 0, 0, 10), Tag = "mapHeader",
+        };
+        mapHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        mapHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        mapHeader.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var headingStack = new Panel { Dock = DockStyle.Fill };
+        headingStack.Controls.Add(new Label { Text = Strings.Ui("DisplaysTitle"), Left = 0, Top = 0, Width = 520, Height = 28,
+            Font = new Font("Segoe UI Semibold", 18f), Tag = "head" });
+        headingStack.Controls.Add(new Label { Text = Strings.Ui("DisplaysSubtitle"), Left = 0, Top = 31, Width = 650, Height = 23, Tag = "subtle" });
+        var identifyAll = new ThemedButton { Text = Strings.Ui("IdentifyAllScreensM2"), Width = 154, Height = 36,
+            Anchor = AnchorStyles.Right, Role = ThemedButtonRole.Secondary, Tag = "identifyAll" };
+        identifyAll.Click += (_, _) => IdentifyOverlay.Flash(
+            _monitors.Where(m => !_draft.ExcludedDevices.Contains(m.StableId, StringComparer.OrdinalIgnoreCase)),
+            _draft.MonitorNames, _theme, this);
+        mapHeader.Controls.Add(headingStack, 0, 0); mapHeader.Controls.Add(identifyAll, 1, 0);
+        _bodyFlow.Controls.Add(mapHeader);
+        _map = new MonitorMapControl { Width = 820, Height = 258, Margin = Padding.Empty };
+        _map.SetTheme(_theme);
+        _map.MonitorClicked += MonitorChosen;
+        _map.MonitorHovered += m => HoverRow(m?.StableId);
+        _map.BoundaryClicked += OpenBoundary;
+        _map.BoundaryEscape += CloseDrawer;
+        _bodyFlow.Controls.Add(_map);
+        _mapLegend = new MapLegend { Visible = false };
+        _mapLegend.SetTheme(_theme);
+        _mapHint = new Label
+        {
+            Width = 820, Height = 38, TextAlign = ContentAlignment.MiddleLeft, Tag = "subtle", Margin = Padding.Empty,
+            Text = _monitors.Count(m => !_draft.ExcludedDevices.Contains(m.StableId, StringComparer.OrdinalIgnoreCase)) <= 1
+                ? Strings.Ui("MapOnlyOne") : Strings.Ui("MapHintV2"),
+        };
+        _bodyFlow.Controls.Add(_mapHint);
+
+        _screenSplit = new Panel { Width = 820, Height = 0, Visible = false, Margin = Padding.Empty };
+
+        _drawer = new Panel { Dock = DockStyle.Fill, Tag = "surface2", Margin = Padding.Empty, Padding = new Padding(14, 12, 14, 12) };
+        _drawer.Paint += PaintDrawerCard;
+        _drawerFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill, AutoScroll = false,
+            FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = Padding.Empty, Tag = "surface2",
+        };
+        var drawerFlow = _drawerFlow;
+        var drawerHeader = new Panel { Width = 790, Height = 51, Tag = "surface2", Margin = Padding.Empty };
+        _drawerTitle = new Label
+        {
+            Text = Strings.Ui("DrawerTitle"), Left = 0, Top = 0, Width = 10, Height = 1, Visible = false,
+        };
+        var close = new DrawerCloseButton { Left = 758, Top = 0, Size = new Size(31, 31), AccessibleName = Strings.Ui("CloseDrawer") };
+        close.Click += (_, _) => CloseDrawer();
+        _endpointFrom = new ThemedButton { Width = 135, Height = 31, Role = ThemedButtonRole.Secondary };
+        _endpointTo = new ThemedButton { Left = 165, Width = 135, Height = 31, Role = ThemedButtonRole.Secondary };
+        _pairSeparator = new Label { Text = "↔", Left = 136, Top = 0, Width = 28, Height = 31, TextAlign = ContentAlignment.MiddleCenter, Tag = "subtle" };
+        // Endpoint chips are static labels of the two screens in this boundary — no click-to-identify
+        // (owner request 2026-07-15; identification is the "Identify all screens" button's job only).
+        _endpointFrom.Cursor = Cursors.Default;
+        _endpointTo.Cursor = Cursors.Default;
+        _drawerMeta = new Label { Left = 316, Top = 0, Width = 430, Height = 20, Tag = "head", Font = new Font("Segoe UI Semibold", 8.5f) };
+        _drawerBinding = new Label { Text = Strings.Ui("DrawerBinding"), Left = 316, Top = 21, Width = 430, Height = 25, Tag = "subtle" };
+        drawerHeader.Controls.AddRange(new Control[] { _drawerTitle, _endpointFrom, _pairSeparator, _endpointTo, _drawerMeta, _drawerBinding, close });
+        drawerFlow.Controls.Add(drawerHeader);
+        var question = new Panel { Width = 790, Height = 29, Margin = Padding.Empty, Tag = "surface2" };
+        _drawerDirection = new Label { Left = 0, Top = 4, Width = 520, Height = 22, Font = new Font("Segoe UI Semibold", 10.5f), TextAlign = ContentAlignment.MiddleLeft };
+        _overallLink = new FlatLinkLabel { Text = Strings.Ui("UseOverallBehavior"), Left = 570, Top = 4, Width = 215, Height = 20, TextAlign = ContentAlignment.MiddleRight };
+        _overallLink.LinkClicked += (_, _) => UseOverall(); question.Controls.Add(_drawerDirection); question.Controls.Add(_overallLink);
+        drawerFlow.Controls.Add(question);
+        _modeTiles = new FlowLayoutPanel { Width = 790, Height = 84, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty, Tag = "surface2" };
+        _freeTile = NewModeTile(BoundaryBehavior.Free, Strings.Ui("CrossesFreely"), Strings.Ui("CrossesFreelyHelp"));
+        _pushTile = NewModeTile(BoundaryBehavior.Push, Strings.Ui("NeedsFirmPush"), Strings.Ui("NeedsFirmPushHelp"));
+        _blockedTile = NewModeTile(BoundaryBehavior.Blocked, Strings.Ui("NeverCrosses"), Strings.Ui("NeverCrossesHelp"));
+        _modeTiles.Controls.AddRange(new Control[] { _freeTile, _pushTile, _blockedTile });
+        drawerFlow.Controls.Add(_modeTiles);
+        _returnLine = new Label { Width = 790, Height = 20, Tag = "subtle", Margin = Padding.Empty };
+        drawerFlow.Controls.Add(_returnLine);
+        _drawerStatus = new Label { Width = 790, Height = 21, Tag = "warning", Font = new Font("Segoe UI", 8.5f, FontStyle.Italic), Margin = Padding.Empty };
+        drawerFlow.Controls.Add(_drawerStatus);
+        var folds = new FlowLayoutPanel { Width = 790, Height = 31, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty, Tag = "surface2" };
+        _separateLink = new FlatLinkLabel { Text = Strings.Ui("SetDirectionsSeparately"), Width = 390, Height = 31, LinkColor = _theme.Accent, Margin = Padding.Empty, TextAlign = ContentAlignment.MiddleLeft };
+        _separateLink.LinkClicked += (_, _) => ToggleSeparate();
+        _whenLink = new FlatLinkLabel { Text = Strings.Ui("WhenThisApplies"), Width = 390, Height = 31, LinkColor = _theme.Accent, Margin = Padding.Empty, TextAlign = ContentAlignment.MiddleLeft };
+        _whenLink.LinkClicked += (_, _) => ToggleWhen();
+        folds.Controls.Add(_separateLink); folds.Controls.Add(_whenLink); drawerFlow.Controls.Add(folds);
+        _separatePanel = new TableLayoutPanel { Width = 790, AutoSize = true, ColumnCount = 1, Visible = false, Margin = Padding.Empty, Tag = "surface2" };
+        drawerFlow.Controls.Add(_separatePanel);
+        _whenPanel = new Panel { Width = 790, Height = 94, Visible = false, Margin = Padding.Empty, Tag = "surface2" };
+        _automaticControl = new RadioButton { Text = Strings.Ui("AutomaticControl"), Left = 0, Top = 0, Width = 760, Height = 24 };
+        var autoHelp = new Label { Text = Strings.Ui("AutomaticControlHelp"), Left = 24, Top = 24, Width = 302, Height = 24, Tag = "subtle" };
+        _alwaysControl = new RadioButton { Text = Strings.Ui("AlwaysControl"), Left = 0, Top = 48, Width = 760, Height = 24 };
+        var alwaysHelp = new Label { Text = Strings.Ui("AlwaysControlHelp"), Left = 24, Top = 76, Width = 302, Height = 24, Tag = "subtle" };
+        _automaticControl.CheckedChanged += (_, _) => { if (!_rebuilding && _automaticControl.Checked) SetControl(BoundaryControl.Automatic); };
+        _alwaysControl.CheckedChanged += (_, _) => { if (!_rebuilding && _alwaysControl.Checked) SetControl(BoundaryControl.Always); };
+        _whenPanel.Controls.AddRange(new Control[] { _automaticControl, autoHelp, _alwaysControl, alwaysHelp });
+        drawerFlow.Controls.Add(_whenPanel);
+        _allowScreen = new ThemedButton { Text = Strings.Ui("AllowThisScreen"), Width = 190, Height = 32, Role = ThemedButtonRole.Quiet }; _allowScreen.Visible = true; _allowScreen.Enabled = false;
+        _allowScreen.Click += (_, _) => AllowBoundaryScreen(); drawerFlow.Controls.Add(_allowScreen);
+        _drawer.Controls.Add(drawerFlow);
+        _screenSplit.Controls.Add(_drawer); _bodyFlow.Controls.Add(_screenSplit);
+
+        _screenSection = new Panel { Width = 820, Height = 48, Margin = new Padding(0, 5, 0, 0) };
+        _screenSectionTitle = new Label { Text = Strings.Ui("ScreensSectionTitle"), Left = 0, Top = 8, Height = 24, Font = new Font("Segoe UI Semibold", 11f) };
+        _screenSectionHelp = new Label { Text = Strings.Ui("ScreensSectionHelp"), Top = 10, Height = 22, Tag = "subtle", TextAlign = ContentAlignment.MiddleRight };
+        _screenSection.Controls.Add(_screenSectionTitle);
+        _screenSection.Controls.Add(_screenSectionHelp);
+        _bodyFlow.Controls.Add(_screenSection);
+        _screenRows = new TableLayoutPanel { AutoSize = false, ColumnCount = 1, Width = 820, Height = 1, Margin = Padding.Empty };
+        _screenRows.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); _bodyFlow.Controls.Add(_screenRows);
+        screens.Controls.Add(_bodyFlow);
+
+        _advancedToggle = new ThemedButton { Text = Strings.Ui("FineTunePixels"), Width = 800, Height = 36, Role = ThemedButtonRole.Quiet, TextAlign = ContentAlignment.MiddleLeft };
+        _advancedToggle.Click += (_, _) => ToggleAdvanced();
+        _advancedPanel = BuildAdvancedPanel();
+        _advancedPage.Controls.Add(_advancedPanel);
+        _advancedPage.SizeChanged += (_, _) => ResizeV2Layout();
+        _shortcutsPage.SizeChanged += (_, _) => ResizeV2Layout();
+        _generalPage.SizeChanged += (_, _) => ResizeV2Layout();
+        ToggleAdvanced(force: false);
+
+        _shortcutsPage.HandleCreated += (_, _) => ThemeScrollbars(_shortcutsPage);
+        _generalPage.HandleCreated += (_, _) => ThemeScrollbars(_generalPage);
+        BuildShortcutsTab(_shortcutsPage);
+        var generalControls = BuildGeneralTab(_generalPage);
+        _langCombo = generalControls.Language;
+        _themeCombo = generalControls.Theme;
+        _startGate = generalControls.StartGate;
+        _startSide = generalControls.StartSide;
+        _autoStart = generalControls.AutoStart;
+        _startConfine = generalControls.StartConfine;
+        _startPaused = generalControls.StartPaused;
+
+        _footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(22, 13, 22, 13), Tag = "surface" };
+        _footer.Paint += (_, e) => { using var p = new Pen(_theme.Border); e.Graphics.DrawLine(p, 0, 0, _footer.Width, 0); };
+        _footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); _footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); _footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _inlineStatus = new Label
+        {
+            AutoSize = false, Dock = DockStyle.Fill, Height = 36, Anchor = AnchorStyles.Left,
+            TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, Tag = "faint",
+            Text = !_draft.BoundaryTipSeen && !_draft.BoundaryRules.Any() ? Strings.Ui("BoundaryTip") : Strings.Ui("UnsavedFooter"),
+        };
+        _inlineAction = new ThemedButton { Text = "", Width = 145, Height = 36, Role = ThemedButtonRole.Quiet, Visible = true, Enabled = false }; _inlineAction.Click += OpenValidationBoundary;
+        var cancel = new ThemedButton { Text = Strings.Cancel, Width = 94, Height = 36, Role = ThemedButtonRole.Secondary, DialogResult = DialogResult.Cancel, Margin = new Padding(10, 0, 0, 0) };
+        var save = new ThemedButton { Text = Strings.Save, Width = 94, Height = 36, Role = ThemedButtonRole.Primary, Margin = new Padding(10, 0, 0, 0) }; save.Click += Save_Click;
+        _footer.Controls.Add(_inlineStatus, 0, 0); _footer.Controls.Add(_inlineAction, 1, 0);
+        _footer.Controls.Add(cancel, 2, 0); _footer.Controls.Add(save, 3, 0);
+        root.Controls.Add(_footer, 1, 1);
+        Controls.Add(root);
+        AcceptButton = save; CancelButton = cancel;
+
+        RebuildScreenRows();
+        RefreshMap();
+        UpdateShortcutErrors();
+        _runtimeTimer.Tick += (_, _) => UpdateLiveStatus();
+        _runtimeTimer.Start();
         _displayRefreshTimer.Tick += DisplayRefreshTimer_Tick;
-        ApplyThemeLive();
         SystemEvents.DisplaySettingsChanged += DisplaySettingsChanged;
+        Resize += (_, _) => ResizeV2Layout();
+        HandleCreated += (_, _) => Theming.DarkTitleBar(this, _theme);
+        UpdateTabStrip();
+        ApplyTheme();
+        ResizeV2Layout();
     }
 
-    private void BuildDisplaysTab(TabPage tab, Font headFont, Settings s)
+    public void SelectTab(int i) { if (i >= 0 && i < _tabs.TabCount) _tabs.SelectedIndex = i; }
+    internal void OpenFirstBoundaryForPreview()
     {
-        var header = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
-        var mapHead = new Label
-        {
-            Text = Strings.DisplayMapHead, Left = 2, Top = 7, Height = 22,
-            AutoSize = true, Font = headFont, Tag = "head",
-        };
-        var identifyAll = new Button
-        {
-            Text = Strings.IdentifyAll, Top = 2, Width = 116, Height = 28,
-            FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right,
-        };
-        identifyAll.Click += (a, b) => IdentifyOverlay.Flash(_monitors, _monitorNames, SelectedTheme(), this);
-        _tips.SetToolTip(identifyAll, Strings.IdentifyHint);
-
-        _layoutChangedBanner = new Label
-        {
-            Text = Strings.LayoutChangedBanner, Left = 2, Top = 29, Height = 20,
-            AutoEllipsis = true, Visible = false, Tag = "subtle",
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _map = new MonitorMapControl
-        {
-            Left = 0, Top = 52, Height = 178,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _map.MonitorClicked += MapMonitorClicked;
-        _map.MonitorHovered += MapMonitorHovered;
-
-        var legend = new Label
-        {
-            Text = $"{Strings.LegendMain}        {Strings.LegendKeptOut}",
-            Left = 2, Top = 236, Height = 18, AutoEllipsis = true, Tag = "subtle",
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        var hint = new Label
-        {
-            Text = Strings.MapHint, Left = 2, Top = 258, Height = 20,
-            AutoEllipsis = true, Tag = "subtle",
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        header.Controls.AddRange(new Control[] { mapHead, identifyAll, _layoutChangedBanner, _map, legend, hint });
-        header.Resize += (a, b) =>
-        {
-            identifyAll.Left = Math.Max(0, header.ClientSize.Width - identifyAll.Width);
-            mapHead.MaximumSize = new Size(Math.Max(0, identifyAll.Left - 10), 0);
-            _layoutChangedBanner.Width = Math.Max(0, identifyAll.Left - 10);
-            _map.Width = header.ClientSize.Width;
-            legend.Width = hint.Width = header.ClientSize.Width - 4;
-        };
-
-        _displayBody = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Margin = Padding.Empty };
-        _displayBodyContent = new Panel { Left = 0, Top = 0, Height = 260 };
-        _displayBody.Controls.Add(_displayBodyContent);
-
-        var monitorNameHead = new Label
-        {
-            Text = Strings.MonitorNameHead, Left = 2, Top = 10, Height = 22,
-            AutoSize = true, Font = headFont, Tag = "head",
-        };
-        var monitorNameHint = new Label
-        {
-            Text = Strings.MonitorNameHint, Left = 2, Top = 34, Height = 32, Tag = "subtle",
-            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _monitorNameBox = new TextBox
-        {
-            Left = 2, Top = 70, Height = 27, MaxLength = 80,
-            PlaceholderText = Strings.MonitorNamePlaceholder,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _monitorNameBox.TextChanged += MonitorNameBox_TextChanged;
-        _tips.SetToolTip(_monitorNameBox, Strings.MonitorNameHint);
-
-        var keepOutHead = new Label
-        {
-            Text = Strings.KeepOutHead, Left = 2, Top = 112, Height = 22,
-            AutoSize = true, Font = headFont, Tag = "head",
-        };
-        var keepOutHint = new Label
-        {
-            Text = Strings.ExcludeHint, Left = 2, Top = 136, Height = 34, Tag = "subtle",
-            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _excludeList = new GlyphCheckedListBox
-        {
-            Left = 2, Top = 176, Height = 138, IntegralHeight = false,
-            BorderStyle = BorderStyle.FixedSingle, DrawMode = DrawMode.OwnerDrawFixed,
-            ItemHeight = 24, ToggleAllowed = ExcludeCanToggle,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _excludeList.DrawItem += (a, e) => DrawExcludeItem(e);
-        _excludeList.ItemCheck += ExcludeList_ItemCheck;
-        _excludeList.RowClicked += ExcludeRowClicked;
-        _excludeList.MouseMove += (a, e) => HoverMapFromList(_excludeList, _monitors, e.Location);
-        _excludeList.MouseLeave += (a, e) => _map.ExternalHoveredStableId = null;
-        _tips.SetToolTip(_excludeList, Strings.ExcludeHint);
-
-        _advancedToggle = new Button
-        {
-            Left = 2, Top = 326, Height = 34, FlatStyle = FlatStyle.Flat,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _advancedToggle.Click += (a, b) => SetAdvancedExpanded(!_advancedExpanded);
-        _tips.SetToolTip(_advancedToggle, Strings.AdvancedHint);
-
-        _advancedPanel = new Panel
-        {
-            Left = 2, Top = 374, Height = 760, Visible = false,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-
-        var advancedIntro = new Label
-        {
-            Text = Strings.AdvancedHint, Left = 0, Top = 0, Height = 34, Tag = "subtle",
-            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        var topHead = new Label
-        {
-            Text = Strings.TopSelectionHead, Left = 0, Top = 44, AutoSize = true,
-            Font = headFont, Tag = "head",
-        };
-        var topHint = new Label
-        {
-            Text = Strings.TopSelectionHint, Left = 0, Top = 68, Height = 32, Tag = "subtle",
-            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        var topModes = new Panel
-        {
-            Left = 0, Top = 104, Height = 160,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _modeAuto = new RadioButton
-        {
-            Text = Strings.TopModeAuto, Left = 0, Top = 4, Height = 22,
-            Checked = s.Mode != "Manual", Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _modeManual = new RadioButton
-        {
-            Text = Strings.TopModeManual, Left = 0, Top = 29, Height = 22,
-            Checked = s.Mode == "Manual", Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _monitorList = new GlyphCheckedListBox
-        {
-            Left = 0, Top = 56, Height = 102, IntegralHeight = false,
-            BorderStyle = BorderStyle.FixedSingle, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 24,
-            ToggleAllowed = ManualCanToggle, ToggleAnywhere = true,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _monitorList.DrawItem += (a, e) => DrawManualTopItem(e);
-        _monitorList.ItemCheck += ManualTop_ItemCheck;
-        _monitorList.MouseMove += (a, e) => HoverMapFromList(_monitorList, _monitors, e.Location);
-        _monitorList.MouseLeave += (a, e) => _map.ExternalHoveredStableId = null;
-        _modeAuto.CheckedChanged += TopMode_CheckedChanged;
-        _modeManual.CheckedChanged += TopMode_CheckedChanged;
-        topModes.Controls.AddRange(new Control[] { _modeAuto, _modeManual, _monitorList });
-        _tips.SetToolTip(_modeAuto, Strings.TopSelectionHint);
-        _tips.SetToolTip(_modeManual, Strings.TopSelectionHint);
-        _tips.SetToolTip(_monitorList, Strings.TopSelectionHint);
-
-        var crossingHead = new Label
-        {
-            Text = Strings.CrossingPathsHead, Left = 0, Top = 278, AutoSize = true,
-            Font = headFont, Tag = "head",
-        };
-        var crossingHint = new Label
-        {
-            Text = Strings.CrossingPathsHint, Left = 0, Top = 302, Height = 32, Tag = "subtle",
-            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _crossingModesPanel = new Panel
-        {
-            Left = 0, Top = 338, Height = 212,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _crossingDefault = new RadioButton
-        {
-            Text = Strings.CrossingDefault, Left = 0, Top = 4, Height = 34,
-            Checked = s.CrossingPathMode != Settings.CustomCrossingPathMode,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _crossingCustom = new RadioButton
-        {
-            Text = Strings.CrossingCustom, Left = 0, Top = 40, Height = 22,
-            Checked = s.CrossingPathMode == Settings.CustomCrossingPathMode,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _crossingDefault.CheckedChanged += CrossingMode_CheckedChanged;
-        _crossingCustom.CheckedChanged += CrossingMode_CheckedChanged;
-        _tips.SetToolTip(_crossingDefault, Strings.CrossingPathsHint);
-        _tips.SetToolTip(_crossingCustom, Strings.CrossingPathsHint);
-
-        _customPathsPanel = new Panel
-        {
-            Left = 0, Top = 66, Height = 146,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        var fromLabel = new Label { Text = Strings.FromScreenLabel, Left = 0, Top = 0, AutoSize = true, Tag = "subtle" };
-        _fromCombo = new ComboBox
-        {
-            Left = 0, Top = 20, Height = 24, DropDownStyle = ComboBoxStyle.DropDownList,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _fromCombo.SelectedIndexChanged += (a, b) =>
-        {
-            if (_rebuildingMonitorUi) return;
-            LoadTopsForSelectedFrom();
-            SyncMapState();
-        };
-        var allowedLabel = new Label { Text = Strings.AllowedTopsLabel, Left = 0, Top = 53, AutoSize = true, Tag = "subtle" };
-        _topsCheck = new CheckedListBox
-        {
-            Left = 0, Top = 74, Height = 70, CheckOnClick = true, IntegralHeight = false,
-            BorderStyle = BorderStyle.FixedSingle,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _topsCheck.ItemCheck += TopsCheck_ItemCheck;
-        _topsCheck.MouseMove += (a, e) => HoverMapFromList(_topsCheck, _tops, e.Location);
-        _topsCheck.MouseLeave += (a, e) => _map.ExternalHoveredStableId = null;
-        _tips.SetToolTip(_fromCombo, Strings.RuleHint);
-        _tips.SetToolTip(_topsCheck, Strings.RuleHint);
-        _customPathsPanel.Controls.AddRange(new Control[] { fromLabel, _fromCombo, allowedLabel, _topsCheck });
-        _crossingModesPanel.Controls.AddRange(new Control[] { _crossingDefault, _crossingCustom, _customPathsPanel });
-
-        _behaviorHead = new Label
-        {
-            Text = Strings.BehaviorHead, Left = 0, Top = 566, AutoSize = true,
-            Font = headFont, Tag = "head",
-        };
-        _deliberateCheck = new CheckBox
-        {
-            Text = Strings.DeliberateCrossLabel, Left = 0, Top = 590, Height = 40, Checked = s.DeliberateCross,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _descentCheck = new CheckBox
-        {
-            Text = Strings.DescentRoutingLabel, Left = 0, Top = 634, Height = 38, Checked = s.DescentRouting,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        _tips.SetToolTip(_deliberateCheck, Strings.DeliberateCrossHint);
-        _tips.SetToolTip(_descentCheck, Strings.DescentRoutingHint);
-
-        _sideTuningPanel = new Panel
-        {
-            Left = 0, Top = 686, Height = 136,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        var sideTuningHead = new Label
-        {
-            Text = Strings.SideTuningHead, Left = 0, Top = 0, AutoSize = true, Font = headFont, Tag = "head",
-        };
-        var sideTuningHint = new Label
-        {
-            Text = Strings.SideTuningHint, Left = 0, Top = 24, Height = 30, Tag = "subtle",
-            AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-        var sideMinLabel = new Label
-        {
-            Text = Strings.SideSensitivityLabel, Left = 0, Top = 63, Width = 320, Height = 24,
-            TextAlign = ContentAlignment.MiddleLeft, Tag = "subtle",
-        };
-        _sideSensNum = new NumericUpDown
-        {
-            Left = 330, Top = 61, Width = 72, Height = 26, Minimum = 1, Maximum = 200,
-            Value = Math.Clamp(s.SideCrossMin, 1, 200),
-        };
-        var btnDefaultSide = new Button
-        {
-            Text = Strings.DefaultLabel, Left = 412, Top = 60, Width = 118, Height = 28, FlatStyle = FlatStyle.Flat,
-        };
-        btnDefaultSide.Click += (a, b) => _sideSensNum.Value = Settings.DefaultSideCrossMin;
-
-        var sideSlackLabel = new Label
-        {
-            Text = Strings.SideSlackLabel, Left = 0, Top = 101, Width = 320, Height = 24,
-            TextAlign = ContentAlignment.MiddleLeft, Tag = "subtle",
-        };
-        _sideSlackNum = new NumericUpDown
-        {
-            Left = 330, Top = 99, Width = 72, Height = 26, Minimum = 0, Maximum = 200,
-            Value = Math.Clamp(s.SideCrossSlack, 0, 200),
-        };
-        var btnDefaultSlack = new Button
-        {
-            Text = Strings.DefaultSlackLabel, Left = 412, Top = 98, Width = 118, Height = 28, FlatStyle = FlatStyle.Flat,
-        };
-        btnDefaultSlack.Click += (a, b) => _sideSlackNum.Value = Settings.DefaultSideCrossSlack;
-        _tips.SetToolTip(sideMinLabel, Strings.SideSensitivityHint);
-        _tips.SetToolTip(_sideSensNum, Strings.SideSensitivityHint);
-        _tips.SetToolTip(btnDefaultSide, Strings.SideSensitivityHint);
-        _tips.SetToolTip(sideSlackLabel, Strings.SideSlackHint);
-        _tips.SetToolTip(_sideSlackNum, Strings.SideSlackHint);
-        _tips.SetToolTip(btnDefaultSlack, Strings.SideSlackHint);
-        _sideTuningPanel.Controls.AddRange(new Control[]
-        {
-            sideTuningHead, sideTuningHint, sideMinLabel, _sideSensNum, btnDefaultSide,
-            sideSlackLabel, _sideSlackNum, btnDefaultSlack,
-        });
-
-        _resetCrossing = new Button
-        {
-            Text = Strings.ResetCrossing, Left = 0, Top = 838, Width = 210, Height = 30,
-            FlatStyle = FlatStyle.Flat,
-        };
-        _resetCrossing.Click += ResetLayout_Click;
-        _tips.SetToolTip(_resetCrossing, Strings.AdvancedHint);
-
-        _advancedPanel.Controls.AddRange(new Control[]
-        {
-            advancedIntro, topHead, topHint, topModes, crossingHead, crossingHint, _crossingModesPanel,
-            _behaviorHead, _deliberateCheck, _descentCheck, _sideTuningPanel, _resetCrossing,
-        });
-        _displayBodyContent.Controls.AddRange(new Control[]
-        {
-            monitorNameHead, monitorNameHint, _monitorNameBox,
-            keepOutHead, keepOutHint, _excludeList, _advancedToggle, _advancedPanel,
-        });
-
-        void LayoutBody()
-        {
-            int width = Math.Max(240, _displayBody.ClientSize.Width - 2);
-            _displayBodyContent.Width = width;
-            _excludeList.Width = _advancedToggle.Width = Math.Max(0, width - 4);
-            monitorNameHint.Width = _monitorNameBox.Width = keepOutHint.Width = Math.Max(0, width - 4);
-            _advancedPanel.Width = Math.Max(0, width - 4);
-            int advancedWidth = _advancedPanel.ClientSize.Width;
-            advancedIntro.Width = topHint.Width = crossingHint.Width = advancedWidth;
-            topModes.Width = _crossingModesPanel.Width = advancedWidth;
-            _modeAuto.Width = _modeManual.Width = _monitorList.Width = topModes.ClientSize.Width;
-            _crossingDefault.Width = _crossingCustom.Width = _crossingModesPanel.ClientSize.Width;
-            _customPathsPanel.Width = _crossingModesPanel.ClientSize.Width;
-            _fromCombo.Width = _topsCheck.Width = advancedWidth;
-            _deliberateCheck.Width = _descentCheck.Width = advancedWidth;
-            _sideTuningPanel.Width = advancedWidth;
-            sideTuningHint.Width = advancedWidth;
-        }
-        _displayBody.Resize += (a, b) => LayoutBody();
-
-        var zones = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
-            Margin = Padding.Empty, Padding = Padding.Empty,
-        };
-        zones.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        zones.RowStyles.Add(new RowStyle(SizeType.Absolute, 284f));
-        zones.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-        zones.Controls.Add(header, 0, 0);
-        zones.Controls.Add(_displayBody, 0, 1);
-        tab.Controls.Add(zones);
-        LayoutBody();
-        SetAdvancedExpanded(false);
-        RebuildMonitorUi(null, (_monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault())?.StableId);
+        var first = _map.Boundaries.FirstOrDefault();
+        if (first != null) { _tabs.SelectedIndex = 0; OpenBoundary(first); }
+    }
+    internal void OpenAdvancedForPreview()
+    {
+        _tabs.SelectedIndex = 1;
+        ToggleAdvanced(force: true);
+        var numericGrid = _advancedPanel.Controls.Cast<Control>().FirstOrDefault(c => (c.Tag as string) == "numericGrid");
+        if (numericGrid != null) BeginInvoke((Action)(() => _advancedPage.ScrollControlIntoView(numericGrid)));
     }
 
-    private string MonitorLabel(MonitorInfo m)
+    private void RebuildScreenRows()
     {
-        return GuardCore.MonitorLabel(m.Index, m.Bounds.Width, m.Bounds.Height, m.Primary, Strings.MainTag,
-            MonitorName(m));
-    }
-
-    private string MonitorName(MonitorInfo monitor) =>
-        Settings.MonitorNameFor(_monitorNames, monitor?.StableId);
-
-    private string MonitorName(string stableId)
-    {
-        string name = Settings.MonitorNameFor(_monitorNames, stableId);
-        if (!string.IsNullOrEmpty(name)) return name;
-        var monitor = _monitors.FirstOrDefault(m => SameId(m.StableId, stableId));
-        return monitor == null ? stableId : GuardCore.MonitorLabel(monitor.Index, monitor.Bounds.Width,
-            monitor.Bounds.Height, monitor.Primary, Strings.MainTag);
-    }
-
-    private void MonitorNameBox_TextChanged(object sender, EventArgs e)
-    {
-        if (_updatingMonitorName || string.IsNullOrEmpty(_selectedStableId)) return;
-
-        if (string.IsNullOrWhiteSpace(_monitorNameBox.Text)) _monitorNames.Remove(_selectedStableId);
-        else _monitorNames[_selectedStableId] = _monitorNameBox.Text;
-        RefreshMonitorNamePresentation();
-    }
-
-    private void LoadSelectedMonitorName()
-    {
-        _updatingMonitorName = true;
-        try
+        _rebuilding = true;
+        _screenRows.SuspendLayout(); _screenRows.Controls.Clear(); _screenRows.RowStyles.Clear(); _screenRows.RowCount = 0;
+        _screenRows.ColumnCount = 1;
+        int headerRow = _screenRows.RowCount++;
+        _screenRows.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
+        var header = ScreenListGrid(31);
+        header.Tag = "listHeader";
+        header.Controls.Add(ListHeader(Strings.Ui("ScreenColumn")), 0, 0);
+        header.Controls.Add(ListHeader(Strings.Ui("NameColumn")), 1, 0);
+        header.Controls.Add(ListHeader(Strings.Ui("ResolutionColumn")), 2, 0);
+        header.Controls.Add(ListHeader(Strings.Ui("PointerAccessColumn")), 3, 0);
+        _screenRows.Controls.Add(header, 0, headerRow);
+        foreach (var monitor in _monitors.OrderBy(m => m.Index))
         {
-            bool selected = !string.IsNullOrEmpty(_selectedStableId)
-                         && _monitors.Any(m => SameId(m.StableId, _selectedStableId));
-            _monitorNameBox.Enabled = selected;
-            string name = selected && _monitorNames.TryGetValue(_selectedStableId, out var value) ? value : "";
-            if (_monitorNameBox.Text != name) _monitorNameBox.Text = name;
-        }
-        finally { _updatingMonitorName = false; }
-    }
-
-    private void RefreshMonitorNamePresentation()
-    {
-        bool wasRebuilding = _rebuildingMonitorUi;
-        _rebuildingMonitorUi = true;
-        _excludeList.BeginUpdate();
-        _monitorList.BeginUpdate();
-        _topsCheck.BeginUpdate();
-        _fromCombo.BeginUpdate();
-        try
-        {
-            for (int i = 0; i < _monitors.Count; i++)
+            int row = _screenRows.RowCount++;
+            _screenRows.RowStyles.Add(new RowStyle(SizeType.Absolute, 53));
+            var panel = ScreenListGrid(53); panel.Tag = "screenRow"; panel.AccessibleName = ScreenName(monitor); panel.Paint += PaintListSeparator;
+            var screenCell = new Panel { Dock = DockStyle.Fill };
+            var chip = new NumberChip { Number = monitor.Index, Accent = monitor.Primary, Left = 0, Top = 10, Size = new Size(26, 26) };
+            screenCell.Controls.Add(chip);
+            var name = new TextBox { Text = Settings.MonitorNameFor(_draft.MonitorNames, monitor.StableId), BorderStyle = BorderStyle.None };
+            name.HandleCreated += (_, _) => Native.SendMessage(name.Handle, Native.EM_SETCUEBANNER, (IntPtr)1, Strings.Ui("OptionalName"));
+            name.TextChanged += (_, _) =>
             {
-                if (i < _excludeList.Items.Count) _excludeList.Items[i] = MonitorLabel(_monitors[i]);
-                if (i < _monitorList.Items.Count) _monitorList.Items[i] = MonitorLabel(_monitors[i]);
+                if (_rebuilding) return;
+                string clean = Settings.NormalizeMonitorName(name.Text);
+                if (clean.Length == 0) _draft.MonitorNames.Remove(monitor.StableId); else _draft.MonitorNames[monitor.StableId] = clean;
+                RefreshMap();
+            };
+            var nameFrame = new ThemedControlFrame { Dock = DockStyle.Fill, Height = 36, Margin = new Padding(0, 8, 12, 8) }; nameFrame.Host(name);
+            var resolution = new Label { Dock = DockStyle.Fill, Text = $"{monitor.Bounds.Width} × {monitor.Bounds.Height}", Tag = "subtle", TextAlign = ContentAlignment.MiddleLeft };
+            Control keep;
+            if (monitor.Primary)
+                keep = new Label { Text = Strings.Ui("MainAlwaysV2"), Dock = DockStyle.Fill, Tag = "accent", TextAlign = ContentAlignment.MiddleLeft };
+            else
+            {
+                var check = new ThemedCheckBox { Text = Strings.Ui("KeepPointerOff"), Dock = DockStyle.Fill, Height = 32,
+                    Checked = _draft.ExcludedDevices.Contains(monitor.StableId, StringComparer.OrdinalIgnoreCase) };
+                check.CheckedChanged += (_, _) =>
+                {
+                    if (_rebuilding) return;
+                    if (check.Checked) _draft.ExcludedDevices.Add(monitor.StableId);
+                    else _draft.ExcludedDevices.RemoveAll(id => Same(id, monitor.StableId));
+                    SanitizeExcluded(); RefreshMap(); RebuildScreenRows(); UpdateDrawer();
+                };
+                keep = check;
             }
-            for (int i = 0; i < _bottoms.Count && i < _fromCombo.Items.Count; i++)
-                _fromCombo.Items[i] = MonitorLabel(_bottoms[i]);
-            for (int i = 0; i < _tops.Count && i < _topsCheck.Items.Count; i++)
-                _topsCheck.Items[i] = MonitorLabel(_tops[i]);
-            _map.SetNames(_monitorNames);
+            panel.Controls.Add(screenCell, 0, 0); panel.Controls.Add(nameFrame, 1, 0); panel.Controls.Add(resolution, 2, 0); panel.Controls.Add(keep, 3, 0);
+            panel.Click += (_, _) => MonitorChosen(monitor);
+            panel.MouseEnter += (_, _) => _map.ExternalHoveredStableId = monitor.StableId;
+            panel.MouseLeave += (_, _) => _map.ExternalHoveredStableId = null;
+            _screenRows.Controls.Add(panel, 0, row);
         }
-        finally
+        _screenRows.ResumeLayout(); _rebuilding = false;
+        _screenRows.Height = Math.Max(1, 31 + Math.Max(0, _screenRows.RowCount - 1) * 53);
+        ApplyTheme();
+    }
+
+    private void UpdateScreenRowPitch(bool narrow)
+    {
+        if (_screenRows.IsDisposed || _rebuilding) return;
+        int pitch = DpiPx(narrow ? 72 : 53);
+        if (_screenRows.RowStyles.Count < 2 || Math.Abs(_screenRows.RowStyles[1].Height - pitch) < 0.1f) return;
+        for (int i = 1; i < _screenRows.RowStyles.Count; i++) _screenRows.RowStyles[i].Height = pitch;
+        _screenRows.Height = Math.Max(1, DpiPx(31) + Math.Max(0, _screenRows.RowCount - 1) * pitch);
+    }
+
+    private FlowLayoutPanel BuildAdvancedPanel()
+    {
+        var flow = new FlowLayoutPanel
         {
-            _fromCombo.EndUpdate();
-            _topsCheck.EndUpdate();
-            _monitorList.EndUpdate();
-            _excludeList.EndUpdate();
-            _rebuildingMonitorUi = wasRebuilding;
+            Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Width = 800,
+            FlowDirection = FlowDirection.TopDown, WrapContents = false,
+            Padding = Padding.Empty, Margin = Padding.Empty,
+        };
+        flow.Controls.Add(PageHeader(Strings.Ui("NavAdvanced"), Strings.Ui("AdvancedSubtitle"), 800));
+        AddSectionHeading(flow, Strings.Ui("DefaultBoundaryHead"));
+        flow.Controls.Add(DefaultRow(Strings.Ui("UpwardDefault"), _draft.UpwardBoundaryDefault, v => _draft.UpwardBoundaryDefault = v, true));
+        flow.Controls.Add(DefaultRow(Strings.Ui("SideDefault"), _draft.SideBoundaryDefault, v => _draft.SideBoundaryDefault = v, true));
+        flow.Controls.Add(DefaultRow(Strings.Ui("DownDefault"), _draft.DownwardBoundaryDefault, v => _draft.DownwardBoundaryDefault = v, false));
+
+        AddSectionHeading(flow, Strings.Ui("CrossingFeelHead"));
+        var deliberate = new ThemedCheckBox { Text = Strings.Ui("FirmPushRecommended"), Width = 790, Height = 32, Checked = _draft.DeliberateCross };
+        deliberate.CheckedChanged += (_, _) => _draft.DeliberateCross = deliberate.Checked; flow.Controls.Add(deliberate);
+        flow.Controls.Add(HelpLabel(Strings.Ui("CrossingFeelSectionHelp"), 790, 34));
+        flow.Controls.Add(_advancedToggle);
+        var numericGrid = new TableLayoutPanel { Width = 790, AutoSize = true, ColumnCount = 2, Tag = "numericGrid", Margin = Padding.Empty };
+        numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var numericRows = new[]
+        {
+            NumericRow(Strings.Ui("UpStrength"), Strings.Ui("UpStrengthHelp"), 1, 200, _draft.UpCrossMin, Settings.DefaultUpCrossMin, v => _draft.UpCrossMin = v),
+            NumericRow(Strings.Ui("UpSlack"), Strings.Ui("UpSlackHelp"), 0, 200, _draft.UpCrossSlack, Settings.DefaultUpCrossSlack, v => _draft.UpCrossSlack = v),
+            NumericRow(Strings.Ui("SideStrength"), Strings.Ui("SideStrengthHelp"), 1, 200, _draft.SideCrossMin, Settings.DefaultSideCrossMin, v => _draft.SideCrossMin = v),
+            NumericRow(Strings.Ui("SideSlackM2"), Strings.Ui("SideSlackHelpM2"), 0, 200, _draft.SideCrossSlack, Settings.DefaultSideCrossSlack, v => _draft.SideCrossSlack = v),
+            NumericRow(Strings.Ui("PassageInset"), Strings.Ui("PassageInsetHelp"), 0, 500, _draft.PassageInsetPx, Settings.DefaultPassageInsetPx, v => _draft.PassageInsetPx = v),
+            NumericRow(Strings.Ui("EdgeHoldback"), Strings.Ui("EdgeHoldbackHelpV2"), 0, 200, _draft.EdgeHoldbackPx, Settings.DefaultEdgeHoldbackPx, v => _draft.EdgeHoldbackPx = v),
+            NumericRow(Strings.Ui("SeamTolerance"), Strings.Ui("SeamToleranceHelp"), 0, 200, _draft.SeamTolerancePx, Settings.DefaultSeamTolerancePx, v => _draft.SeamTolerancePx = v),
+        };
+        for (int i = 0; i < numericRows.Length; i++) { numericGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize)); numericGrid.Controls.Add(numericRows[i], i % 2, i / 2); }
+        flow.Controls.Add(numericGrid);
+
+        AddSectionHeading(flow, Strings.Ui("SafetyHead"));
+        var safety = new ThemedCheckBox { Text = Strings.Ui("SafetyEscapes"), Width = 790, Height = 32, Checked = _draft.SafetyEscapes };
+        safety.CheckedChanged += (_, _) => { _draft.SafetyEscapes = safety.Checked; RefreshMap(); };
+        flow.Controls.Add(safety); flow.Controls.Add(HelpLabel(Strings.Ui("SafetyEscapesHelp"), 790));
+        var descent = new ThemedCheckBox { Text = Strings.Ui("GuideDownward"), Width = 790, Height = 32, Checked = _draft.DescentRouting };
+        descent.CheckedChanged += (_, _) => _draft.DescentRouting = descent.Checked;
+        flow.Controls.Add(descent); flow.Controls.Add(HelpLabel(Strings.Ui("GuideDownwardHelp"), 790));
+
+        AddSectionHeading(flow, Strings.Ui("UpperGroupHead"));
+        var auto = new RadioButton { Text = Strings.Ui("UpperAutomatic"), Width = 790, Height = 28, Checked = _draft.Mode != "Manual" };
+        int chooseCount = _monitors.Count(m => !m.Primary && !_draft.ExcludedDevices.Contains(m.StableId, StringComparer.OrdinalIgnoreCase));
+        var manual = new RadioButton { Text = string.Format(Strings.Ui("UpperManualV2"), chooseCount), Width = 790, Height = 28, Checked = _draft.Mode == "Manual" };
+        flow.Controls.Add(auto); flow.Controls.Add(manual);
+        var manualList = new FlowLayoutPanel { Width = 790, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(24, 0, 0, 8) };
+        foreach (var monitor in _monitors.Where(m => !m.Primary))
+        {
+            bool unusual = !MonitorInfo.IsAbovePrimary(monitor);
+            var check = new ThemedCheckBox { Width = 750, Height = 32, Checked = _draft.ManualMonitors.Contains(monitor.StableId, StringComparer.OrdinalIgnoreCase),
+                Enabled = !_draft.ExcludedDevices.Contains(monitor.StableId, StringComparer.OrdinalIgnoreCase),
+                Text = ScreenName(monitor) + (unusual ? " · " + Strings.Ui("UnusualUpper") : "") };
+            check.CheckedChanged += (_, _) => { if (check.Checked) AddUnique(_draft.ManualMonitors, monitor.StableId); else _draft.ManualMonitors.RemoveAll(x => Same(x, monitor.StableId)); RefreshMap(); };
+            manualList.Controls.Add(check);
         }
-        _excludeList.Invalidate();
-        _monitorList.Invalidate();
-    }
+        auto.CheckedChanged += (_, _) => { if (auto.Checked) { _draft.Mode = "AutoTop"; manualList.Enabled = false; RefreshMap(); } };
+        manual.CheckedChanged += (_, _) => { if (manual.Checked) { _draft.Mode = "Manual"; manualList.Enabled = true; RefreshMap(); } };
+        manualList.Enabled = manual.Checked; flow.Controls.Add(manualList);
 
-    private string SelectedFromKey() =>
-        _fromCombo.SelectedIndex >= 0 && _fromCombo.SelectedIndex < _bottoms.Count ? _bottoms[_fromCombo.SelectedIndex].StableId : null;
-
-    private void SetAdvancedExpanded(bool expanded)
-    {
-        _advancedExpanded = expanded;
-        _advancedPanel.Visible = expanded;
-        _advancedToggle.Text = (expanded ? "▼ " : "▶ ") + Strings.AdvancedHead;
-        _displayBodyContent.Height = expanded ? _advancedPanel.Bottom + 16 : _advancedToggle.Bottom + 4;
-        _displayBody.AutoScrollMinSize = new Size(0, _displayBodyContent.Height);
-    }
-
-    private void TopMode_CheckedChanged(object sender, EventArgs e)
-    {
-        if (_rebuildingMonitorUi || sender is RadioButton radio && !radio.Checked) return;
-        RebuildMonitorUi(SelectedFromKey(), _selectedStableId);
-    }
-
-    private void CrossingMode_CheckedChanged(object sender, EventArgs e)
-    {
-        if (_rebuildingMonitorUi || sender is RadioButton radio && !radio.Checked) return;
-        UpdateCrossingModeUi();
-        SyncMapState();
-    }
-
-    private void UpdateCrossingModeUi()
-    {
-        bool custom = _crossingCustom.Checked;
-        _customPathsPanel.Visible = custom;
-        _crossingModesPanel.Height = custom ? 212 : 66;
-        _fromCombo.Enabled = custom && _bottoms.Count > 0 && _tops.Count > 0;
-        _topsCheck.Enabled = custom && _fromCombo.SelectedIndex >= 0 && _tops.Count > 0;
-
-        int behaviorTop = _crossingModesPanel.Bottom + 18;
-        _behaviorHead.Top = behaviorTop;
-        _deliberateCheck.Top = behaviorTop + 26;
-        _descentCheck.Top = behaviorTop + 70;
-        _sideTuningPanel.Top = behaviorTop + 122;
-        _resetCrossing.Top = _sideTuningPanel.Bottom + 16;
-        _advancedPanel.Height = _resetCrossing.Bottom + 16;
-        SetAdvancedExpanded(_advancedExpanded);
-    }
-
-    private void ManualTop_ItemCheck(object sender, ItemCheckEventArgs e)
-    {
-        if (_rebuildingMonitorUi || e.Index < 0 || e.Index >= _monitors.Count) return;
-        var monitor = _monitors[e.Index];
-        if (!_modeManual.Checked || !MonitorInfo.IsAbovePrimary(monitor))
+        AddSectionHeading(flow, Strings.Ui("ResetBehavior"));
+        flow.Controls.Add(HelpLabel(Strings.Ui("ResetBehaviorHelp"), 790, 52));
+        var reset = new ThemedButton { Text = Strings.Ui("ResetBehavior"), Width = 286, Height = 36, Role = ThemedButtonRole.DangerText }; reset.Click += (_, _) =>
         {
-            e.NewValue = e.CurrentValue;
-            return;
-        }
-
-        if (e.NewValue == CheckState.Checked) _manualTops.Add(monitor.StableId);
-        else _manualTops.Remove(monitor.StableId);
-
-        if (IsHandleCreated)
-            BeginInvoke((Action)(() => RebuildMonitorUi(SelectedFromKey(), _selectedStableId)));
+            _draft.ResetLayoutConfig(); SetInlineStatus(Strings.Ui("ResetDone")); RefreshMap(); RebuildAdvancedContents();
+        };
+        flow.Controls.Add(reset);
+        return flow;
     }
 
-    private bool ManualCanToggle(int index) =>
-        _modeManual.Checked && index >= 0 && index < _monitors.Count && MonitorInfo.IsAbovePrimary(_monitors[index]);
-
-    private bool ExcludeCanToggle(int index)
+    private void ResizeAdvanced(int width)
     {
-        if (index < 0 || index >= _monitors.Count) return false;
-        var primary = _monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault();
-        return primary != null && !SameId(_monitors[index].StableId, primary.StableId);
-    }
-
-    private void ExcludeList_ItemCheck(object sender, ItemCheckEventArgs e)
-    {
-        if (e.Index < 0 || e.Index >= _monitors.Count) return;
-        var monitor = _monitors[e.Index];
-        if (!ExcludeCanToggle(e.Index))
+        if (_advancedPanel == null) return;
+        _advancedWidth = Math.Max(DpiPx(420), width);
+        _advancedPanel.Width = _advancedWidth;
+        foreach (Control child in _advancedPanel.Controls)
         {
-            e.NewValue = CheckState.Unchecked;
-            return;
-        }
-        if (_rebuildingMonitorUi) return;
-
-        if (e.NewValue == CheckState.Checked) _excluded.Add(monitor.StableId);
-        else _excluded.Remove(monitor.StableId);
-        SyncMapState();
-    }
-
-    private void ExcludeRowClicked(int index)
-    {
-        if (index < 0 || index >= _monitors.Count) return;
-        SelectMonitor(_monitors[index], flash: true, selectAsFrom: false);
-    }
-
-    private void MapMonitorClicked(MonitorInfo monitor) =>
-        SelectMonitor(monitor, flash: true, selectAsFrom: _crossingCustom.Checked);
-
-    private void SelectMonitor(MonitorInfo monitor, bool flash, bool selectAsFrom)
-    {
-        if (monitor == null) return;
-        _selectedStableId = monitor.StableId;
-        _map.SelectedStableId = monitor.StableId;
-
-        int allIndex = _monitors.FindIndex(m => SameId(m.StableId, monitor.StableId));
-        if (allIndex >= 0)
-        {
-            _excludeList.SelectedIndex = allIndex;
-            if (_advancedExpanded) _monitorList.SelectedIndex = allIndex;
-        }
-
-        if (selectAsFrom)
-        {
-            int fromIndex = _bottoms.FindIndex(m => SameId(m.StableId, monitor.StableId));
-            if (fromIndex >= 0) _fromCombo.SelectedIndex = fromIndex;
-        }
-
-        LoadSelectedMonitorName();
-        if (flash) IdentifyOverlay.Flash(monitor, MonitorName(monitor), SelectedTheme(), this);
-    }
-
-    private void MapMonitorHovered(MonitorInfo monitor)
-    {
-        if (monitor == null) return;
-        int allIndex = _monitors.FindIndex(m => SameId(m.StableId, monitor.StableId));
-        if (allIndex >= 0)
-        {
-            _excludeList.SelectedIndex = allIndex;
-            if (_advancedExpanded) _monitorList.SelectedIndex = allIndex;
-        }
-        int topIndex = _tops.FindIndex(m => SameId(m.StableId, monitor.StableId));
-        if (_advancedExpanded && _crossingCustom.Checked && topIndex >= 0)
-            _topsCheck.SelectedIndex = topIndex;
-    }
-
-    private void HoverMapFromList(ListBox list, IReadOnlyList<MonitorInfo> source, Point point)
-    {
-        int index = list.IndexFromPoint(point);
-        _map.ExternalHoveredStableId = index >= 0 && index < source.Count ? source[index].StableId : null;
-    }
-
-    private void LoadTopsForSelectedFrom()
-    {
-        string from = SelectedFromKey();
-        _rules.TryGetValue(from ?? "", out var allowed);
-        bool wasRebuilding = _rebuildingMonitorUi;
-        _rebuildingMonitorUi = true;
-        try
-        {
-            for (int i = 0; i < _topsCheck.Items.Count && i < _tops.Count; i++)
+            child.Margin = new Padding(0, child.Margin.Top, 0, child.Margin.Bottom);
+            child.Width = _advancedWidth;
+            if (child is FlowLayoutPanel manualList)
             {
-                bool on = allowed != null && allowed.Contains(_tops[i].StableId);
-                _topsCheck.SetItemChecked(i, on);
+                foreach (Control option in manualList.Controls)
+                    option.Width = Math.Max(DpiPx(200), _advancedWidth - manualList.Padding.Horizontal);
             }
         }
-        finally { _rebuildingMonitorUi = wasRebuilding; }
+        _advancedPanel.PerformLayout();
     }
 
-    private void TopsCheck_ItemCheck(object sender, ItemCheckEventArgs e)
+    private void BuildShortcutsTab(TabPage page)
     {
-        if (_rebuildingMonitorUi || e.Index < 0 || e.Index >= _tops.Count) return;
-        string from = SelectedFromKey();
-        if (from == null) return;
-        if (!_rules.TryGetValue(from, out var set)) { set = new HashSet<string>(); _rules[from] = set; }
-        string to = _tops[e.Index].StableId;
-        if (e.NewValue == CheckState.Checked) set.Add(to); else set.Remove(to);
-        SyncMapState();
-    }
-
-    private void ResetLayout_Click(object sender, EventArgs e)
-    {
-        _rebuildingMonitorUi = true;
-        _manualTops.Clear();
-        _rules.Clear();
-        _modeAuto.Checked = true;
-        _modeManual.Checked = false;
-        _crossingDefault.Checked = true;
-        _crossingCustom.Checked = false;
-        _rebuildingMonitorUi = false;
-        RebuildMonitorUi(null, _selectedStableId);
-    }
-
-    private void RecomputeTopology()
-    {
-        _tops.Clear();
-        var manualLive = _monitors
-            .Where(m => MonitorInfo.IsAbovePrimary(m) && _manualTops.Contains(m.StableId))
-            .ToList();
-        _tops.AddRange(_modeManual.Checked
-            ? manualLive
-            : _monitors.Where(MonitorInfo.IsAbovePrimary));
-        var topSet = new HashSet<string>(_tops.Select(m => m.StableId));
-        _bottoms.Clear();
-        _bottoms.AddRange(_monitors.Where(m => !topSet.Contains(m.StableId)));
-    }
-
-    private void RebuildMonitorUi(string preserveFromStableId, string preserveSelectedStableId)
-    {
-        _rebuildingMonitorUi = true;
-        _displayBodyContent.SuspendLayout();
-        _excludeList.BeginUpdate();
-        _monitorList.BeginUpdate();
-        _topsCheck.BeginUpdate();
-        try
+        var flow = PageFlow(page);
+        flow.Controls.Add(PageHeader(Strings.Ui("NavShortcuts"), Strings.Ui("ShortcutSubtitle"), 800));
+        var header = new TableLayoutPanel { Width = 800, Height = 32, ColumnCount = 3, Margin = Padding.Empty, Tag = "listHeader" };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 238)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+        header.Controls.Add(new Label { Text = Strings.Ui("ShortcutActionColumn"), Dock = DockStyle.Fill, Tag = "faint", TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        header.Controls.Add(new Label { Text = Strings.Ui("ShortcutColumn"), Dock = DockStyle.Fill, Tag = "faint", TextAlign = ContentAlignment.MiddleLeft }, 1, 0);
+        header.Controls.Add(new Label { Text = Strings.Clear, Dock = DockStyle.Fill, Tag = "faint", TextAlign = ContentAlignment.MiddleCenter }, 2, 0);
+        flow.Controls.Add(header);
+        var specs = new[]
         {
-            RecomputeTopology();
-            var primary = _monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault();
-            if (primary != null) _excluded.Remove(primary.StableId);
-
-            _excludeList.ClearItems();
-            _monitorList.ClearItems();
-            foreach (var monitor in _monitors)
-            {
-                int excludeIndex = _excludeList.Items.Add(MonitorLabel(monitor));
-                _excludeList.SetItemChecked(excludeIndex, !monitor.Primary && _excluded.Contains(monitor.StableId));
-
-                int manualIndex = _monitorList.Items.Add(MonitorLabel(monitor));
-                _monitorList.SetItemChecked(manualIndex,
-                    MonitorInfo.IsAbovePrimary(monitor) && _manualTops.Contains(monitor.StableId));
-            }
-
-            _fromCombo.Items.Clear();
-            foreach (var bottom in _bottoms) _fromCombo.Items.Add(MonitorLabel(bottom));
-            _topsCheck.Items.Clear();
-            foreach (var top in _tops) _topsCheck.Items.Add(MonitorLabel(top));
-
-            _monitorList.Enabled = _modeManual.Checked;
-            int fromIndex = _bottoms.FindIndex(m => SameId(m.StableId, preserveFromStableId));
-            if (fromIndex < 0 && primary != null)
-                fromIndex = _bottoms.FindIndex(m => SameId(m.StableId, primary.StableId));
-            if (fromIndex < 0 && _bottoms.Count > 0) fromIndex = 0;
-            _fromCombo.SelectedIndex = fromIndex;
-
-            var selected = _monitors.FirstOrDefault(m => SameId(m.StableId, preserveSelectedStableId)) ?? primary;
-            _selectedStableId = selected?.StableId;
-            _excludeList.SelectedIndex = selected == null ? -1 : _monitors.FindIndex(m => SameId(m.StableId, selected.StableId));
-            _monitorList.SelectedIndex = _excludeList.SelectedIndex;
-
-            _map.SetMonitors(_monitors);
-            _map.SetNames(_monitorNames);
-            _map.SelectedStableId = _selectedStableId;
-            LoadSelectedMonitorName();
+            (Strings.HotkeyHead, Strings.HotkeyHint), (Strings.GameHotkeyHead, Strings.GameHotkeyHint),
+            (Strings.PauseHotkeyHead, Strings.PauseHotkeyHint), (Strings.SideHotkeyHead, Strings.SideHotkeyHint),
+        };
+        for (int i = 0; i < specs.Length; i++)
+        {
+            int index = i;
+            var row = new TableLayoutPanel { Width = 800, Height = 83, ColumnCount = 3, Margin = Padding.Empty, Tag = "listRow", Padding = new Padding(0, 8, 0, 8) };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 238)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            row.Paint += PaintListSeparator;
+            var copy = new Panel { Dock = DockStyle.Fill };
+            var required = i == 0 ? Strings.Ui("RequiredStatus") : Strings.Ui("OptionalStatus");
+            var head = new Label { Text = specs[i].Item1 + "  ·  " + required, Left = 0, Top = 4, Width = 440, Height = 22, Font = new Font("Segoe UI Semibold", 9.5f) };
+            var help = new Label { Text = specs[i].Item2 + (i == 1 ? " " + Strings.Ui("GameModeSuffix") : ""), Left = 0, Top = 27, Width = 445, Height = 36, Tag = "subtle" };
+            copy.Controls.Add(head); copy.Controls.Add(help);
+            var box = new TextBox { ReadOnly = true, TextAlign = HorizontalAlignment.Center, Cursor = Cursors.Hand, Font = new Font("Segoe UI Semibold", 9f), BorderStyle = BorderStyle.None };
+            box.Text = HotkeyText(index); box.KeyDown += (_, e) => CaptureHotkey(index, e);
+            var frame = new ThemedControlFrame { Dock = DockStyle.Fill, Height = 36, Margin = new Padding(0, 14, 8, 14), Tag = "shortcutFrame" }; frame.Host(box);
+            var clear = new ThemedButton { Text = Strings.Clear, Dock = DockStyle.Fill, Height = 36, Role = ThemedButtonRole.Quiet, Margin = new Padding(4, 14, 0, 14) };
+            clear.Click += (_, _) => { ClearHotkey(index); box.Text = HotkeyText(index); UpdateShortcutErrors(); };
+            if (i == 0) { clear.Enabled = false; clear.AccessibleName = Strings.Ui("RequiredClearReason"); _tips.SetToolTip(clear, Strings.Ui("RequiredClearReason")); }
+            row.Controls.Add(copy, 0, 0); row.Controls.Add(frame, 1, 0); row.Controls.Add(clear, 2, 0);
+            flow.Controls.Add(row); _hotkeyBoxes[i] = box;
         }
-        finally
-        {
-            _topsCheck.EndUpdate();
-            _monitorList.EndUpdate();
-            _excludeList.EndUpdate();
-            _displayBodyContent.ResumeLayout();
-            _rebuildingMonitorUi = false;
-        }
-
-        LoadTopsForSelectedFrom();
-        UpdateCrossingModeUi();
-        SyncMapState();
-        _excludeList.Invalidate();
-        _monitorList.Invalidate();
+        flow.Controls.Add(HelpLabel(Strings.Ui("ShortcutsHealthy"), 800, 32));
     }
 
-    private void SyncMapState()
+    private (ComboBox Language, ComboBox Theme, CheckBox StartGate, CheckBox StartSide, CheckBox AutoStart, CheckBox StartConfine, CheckBox StartPaused) BuildGeneralTab(TabPage page)
     {
-        string from = _crossingCustom.Checked ? SelectedFromKey() : null;
-        _rules.TryGetValue(from ?? "", out var allowed);
-        _map.SetState(_excluded, _tops.Select(m => m.StableId), from,
-            _crossingCustom.Checked ? allowed : null, _crossingCustom.Checked);
-        _map.SelectedStableId = _selectedStableId;
+        var flow = PageFlow(page); flow.Controls.Add(PageHeader(Strings.Ui("NavGeneral"), Strings.Ui("GeneralSubtitle"), 800));
+        AddSectionHeading(flow, Strings.StartupHead);
+        var gate = new ThemedCheckBox { Text = Strings.StartGateClosed, Width = 800, Height = 32, Checked = _draft.StartGateClosed };
+        var side = new ThemedCheckBox { Text = Strings.StartSideContainOn, Width = 800, Height = 32, Checked = _draft.StartSideContainOn };
+        var auto = new ThemedCheckBox { Text = Strings.StartWithWindows, Width = 800, Height = 32, Checked = _draft.AutoStart };
+        flow.Controls.Add(gate); flow.Controls.Add(side); flow.Controls.Add(auto);
+        _tips.SetToolTip(gate, Strings.StartGateClosedTip); _tips.SetToolTip(side, Strings.StartSideContainTip); _tips.SetToolTip(auto, Strings.StartWithWindowsTip);
+        var more = new ThemedButton { Text = "›  " + Strings.Ui("MoreStartupChoices"), Width = 800, Height = 36, Role = ThemedButtonRole.Quiet, TextAlign = ContentAlignment.MiddleLeft };
+        var morePanel = new Panel { Width = 800, Height = 206, Visible = false, Tag = "surface" };
+        var confine = new ThemedCheckBox { Text = Strings.Ui("StartConfineOn"), Left = 0, Top = 0, Width = 790, Height = 32, Checked = _draft.StartConfineOn };
+        var confineHelp = new Label { Text = Strings.Ui("StartConfineHelp"), Left = 28, Top = 31, Width = 760, Height = 30, Tag = "subtle" };
+        var paused = new ThemedCheckBox { Text = Strings.Ui("StartPaused"), Left = 0, Top = 64, Width = 790, Height = 32, Checked = _draft.StartPaused };
+        var pausedHelp = new Label { Text = Strings.Ui("StartPausedHelp"), Left = 28, Top = 95, Width = 760, Height = 38, Tag = "subtle" };
+        var warning = new Label { Left = 0, Top = 138, Width = 790, Height = 64, Tag = "warning", Text = Strings.Ui("StartupConfineWarning") };
+        void UpdateWarning() { bool active = confine.Checked && auto.Checked; warning.Enabled = active; warning.Text = active ? Strings.Ui("StartupConfineWarning") : ""; }
+        confine.CheckedChanged += (_, _) => UpdateWarning(); auto.CheckedChanged += (_, _) => UpdateWarning(); UpdateWarning();
+        morePanel.Controls.Add(confine); morePanel.Controls.Add(confineHelp); morePanel.Controls.Add(paused); morePanel.Controls.Add(pausedHelp); morePanel.Controls.Add(warning);
+        more.Click += (_, _) => { morePanel.Visible = !morePanel.Visible; more.Text = (morePanel.Visible ? "⌄  " : "›  ") + Strings.Ui("MoreStartupChoices"); };
+        flow.Controls.Add(more); flow.Controls.Add(morePanel);
+        AddSectionHeading(flow, Strings.AppearanceHead);
+        var row = new TableLayoutPanel { Width = 800, Height = 78, ColumnCount = 2, Tag = "appearanceGrid" };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var langLabel = new Label { Text = Strings.LanguageLabel, Left = 0, Top = 0, Width = 310, Height = 24, Tag = "subtle" };
+        var themeLabel = new Label { Text = Strings.ThemeLabel, Left = 0, Top = 0, Width = 310, Height = 24, Tag = "subtle" };
+        var lang = new ThemedComboBox { Left = 0, Top = 28, Width = 370, Height = 36 };
+        lang.Items.AddRange(new object[] { Strings.LangAuto, Strings.LangEnglish, Strings.LangTurkish }); lang.SelectedIndex = _draft.Language switch { "en" => 1, "tr" => 2, _ => 0 };
+        var theme = new ThemedComboBox { Left = 0, Top = 28, Width = 370, Height = 36 };
+        theme.Items.AddRange(new object[] { Strings.ThemeSystem, Strings.ThemeLight, Strings.ThemeDark }); theme.SelectedIndex = _draft.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
+        var left = new Panel { Dock = DockStyle.Fill }; left.Controls.Add(lang); left.Controls.Add(langLabel);
+        var right = new Panel { Dock = DockStyle.Fill }; right.Controls.Add(theme); right.Controls.Add(themeLabel);
+        row.Controls.Add(left, 0, 0); row.Controls.Add(right, 1, 0); flow.Controls.Add(row);
+        theme.SelectedIndexChanged += (_, _) => { _draft.Theme = theme.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" }; _theme = Theming.Resolve(_draft.Theme); ApplyTheme(); };
+        AddSectionHeading(flow, Strings.Ui("BackupHead"));
+        flow.Controls.Add(HelpLabel(Strings.Ui("BackupHelpV2"), 800, 44));
+        var backupRow = new FlowLayoutPanel { Width = 800, Height = 48, FlowDirection = FlowDirection.LeftToRight };
+        var export = new ThemedButton { Text = Strings.ExportLabel, Width = 170, Height = 36, Role = ThemedButtonRole.Secondary }; export.Click += Export_Click;
+        var import = new ThemedButton { Text = Strings.ImportLabel, Width = 170, Height = 36, Role = ThemedButtonRole.Secondary }; import.Click += Import_Click;
+        backupRow.Controls.Add(export); backupRow.Controls.Add(import); flow.Controls.Add(backupRow);
+        return (lang, theme, gate, side, auto, confine, paused);
     }
 
-    private void DrawExcludeItem(DrawItemEventArgs e)
+    private FlowLayoutPanel PageFlow(TabPage page)
     {
-        if (e.Index < 0 || e.Index >= _monitors.Count) return;
-        var theme = SelectedTheme();
-        var monitor = _monitors[e.Index];
-        var primary = _monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault();
-        bool isPrimary = primary != null && SameId(monitor.StableId, primary.StableId);
-        bool selected = (e.State & DrawItemState.Selected) != 0;
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = Padding.Empty };
+        page.Controls.Add(flow); return flow;
+    }
 
-        Color background = selected ? (isPrimary ? theme.Border : theme.Accent) : theme.Surface;
-        using (var brush = new SolidBrush(background)) e.Graphics.FillRectangle(brush, e.Bounds);
+    private Control DefaultRow(string label, BoundaryDefault value, Action<BoundaryDefault> set, bool automatic)
+    {
+        var row = new TableLayoutPanel { Width = 790, Height = 44, ColumnCount = 2, Margin = Padding.Empty };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+        row.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        var combo = new ThemedComboBox { Dock = DockStyle.Fill, Height = 36, Margin = new Padding(0, 4, 0, 4) };
+        if (automatic) combo.Items.Add(Strings.Ui("DefaultAutomatic"));
+        combo.Items.AddRange(new object[] { Strings.Ui("DefaultFree"), Strings.Ui("DefaultPush"), Strings.Ui("DefaultBlocked") });
+        var values = automatic ? new[] { BoundaryDefault.Automatic, BoundaryDefault.Free, BoundaryDefault.Push, BoundaryDefault.Blocked }
+                               : new[] { BoundaryDefault.Free, BoundaryDefault.Push, BoundaryDefault.Blocked };
+        combo.SelectedIndex = Math.Max(0, Array.IndexOf(values, value));
+        combo.SelectedIndexChanged += (_, _) => { if (combo.SelectedIndex >= 0) { set(values[combo.SelectedIndex]); RefreshMap(); } };
+        row.Controls.Add(combo, 1, 0); return row;
+    }
 
-        int box = 14;
-        int boxY = e.Bounds.Top + (e.Bounds.Height - box) / 2;
-        var boxRect = new Rectangle(e.Bounds.Left + 4, boxY, box, box);
-        if (isPrimary)
+    private Control NumericRow(string label, string help, int min, int max, int value, int defaultValue, Action<int> set)
+    {
+        int helpHeight = Math.Max(36, TextRenderer.MeasureText(help, Font, new Size(335, 0), TextFormatFlags.WordBreak).Height + 4);
+        const int labelWidth = 190;
+        int labelHeight = Math.Max(28, TextRenderer.MeasureText(label, Font, new Size(labelWidth, 0),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Height + 4);
+        int helpTop = Math.Max(42, 5 + labelHeight + 4);
+        var panel = new Panel { Width = 385, Height = helpTop + helpHeight, Tag = "advancedNumeric", Margin = new Padding(0, 0, 10, 8) };
+        panel.Controls.Add(new Label { Text = label, Left = 0, Top = 5, Width = labelWidth, Height = labelHeight });
+        var number = new ThemedNumericUpDown { Dock = DockStyle.Fill, Minimum = min, Maximum = max, Value = Math.Clamp(value, min, max) };
+        number.ValueChanged += (_, _) => { set((int)number.Value); RefreshMap(); };
+        var numberHost = new Panel { Left = 194, Top = 2, Width = 82, Height = 36, Tag = "surface2" };
+        numberHost.Controls.Add(number);
+        var spinnerRail = new ThemedSpinnerRail { Owner = number, Dock = DockStyle.Right, Width = 20 };
+        numberHost.Controls.Add(spinnerRail); spinnerRail.BringToFront();
+        var reset = new ThemedButton { Text = Strings.Ui("UseDefault"), Width = 98, Height = 32, Left = 282, Top = 2, Role = ThemedButtonRole.Quiet, Tag = "numericReset" }; reset.Click += (_, _) => number.Value = defaultValue;
+        panel.Controls.Add(numberHost); panel.Controls.Add(reset);
+        panel.Controls.Add(new Label { Text = help, Left = 0, Top = helpTop, Width = 375, Height = helpHeight, Tag = "subtle" });
+        return panel;
+    }
+
+    private void OpenBoundary(BoundaryView boundary)
+    {
+        if (boundary == null) return;
+        _boundary = boundary; _map.SelectedBoundary = boundary;
+        ConfigureEndpoints();
+        _draft.BoundaryTipSeen = true;
+        if (_inlineStatus.Text == Strings.Ui("BoundaryTip")) SetInlineStatus(Strings.Ui("UnsavedFooter"));
+        _screenSplit.Visible = true;
+        LayoutBoundaryDrawer();
+        UpdateDrawer();
+        BeginInvoke((Action)(() =>
         {
-            using var dash = new Pen(theme.Subtle, 2f);
-            e.Graphics.DrawLine(dash, boxRect.Left + 2, boxRect.Top + box / 2, boxRect.Right - 2, boxRect.Top + box / 2);
+            _bodyFlow.ScrollControlIntoView(_screenSplit);
+            Rectangle hint = _bodyFlow.RectangleToClient(_mapHint.RectangleToScreen(_mapHint.ClientRectangle));
+            if (hint.Top < 0) _bodyFlow.VerticalScroll.Value = Math.Max(0, _bodyFlow.VerticalScroll.Value + hint.Top);
+        }));
+    }
+
+    private void ConfigureEndpoints()
+    {
+        if (_boundary.VerticalConnection)
+        {
+            bool firstUp = _boundary.FirstToSecondDirection == BoundaryDirection.Up;
+            _primary = firstUp
+                ? new(_boundary.First, _boundary.Second, BoundaryDirection.Up, _boundary.FirstToSecond)
+                : new(_boundary.Second, _boundary.First, BoundaryDirection.Up, _boundary.SecondToFirst);
+            _reverse = firstUp
+                ? new(_boundary.Second, _boundary.First, BoundaryDirection.Down, _boundary.SecondToFirst)
+                : new(_boundary.First, _boundary.Second, BoundaryDirection.Down, _boundary.FirstToSecond);
         }
         else
         {
-            var state = _excludeList.GetItemChecked(e.Index)
-                ? System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal
-                : System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal;
-            CheckBoxRenderer.DrawCheckBox(e.Graphics, boxRect.Location, state);
+            _primary = new(_boundary.First, _boundary.Second, _boundary.FirstToSecondDirection, _boundary.FirstToSecond);
+            _reverse = new(_boundary.Second, _boundary.First, _boundary.SecondToFirstDirection, _boundary.SecondToFirst);
         }
-
-        string label = MonitorLabel(monitor) + (isPrimary ? $" — {Strings.MainAlwaysAvailable}" : "");
-        Color foreground = isPrimary ? theme.Subtle : (selected ? Color.White : theme.Text);
-        var textRect = new Rectangle(boxRect.Right + 6, e.Bounds.Top,
-            Math.Max(0, e.Bounds.Right - boxRect.Right - 8), e.Bounds.Height);
-        TextRenderer.DrawText(e.Graphics, label, _excludeList.Font, textRect, foreground,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis |
-            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
-        e.DrawFocusRectangle();
     }
 
-    private void DrawManualTopItem(DrawItemEventArgs e)
+    private void UpdateDrawer()
     {
-        if (e.Index < 0 || e.Index >= _monitors.Count) return;
-        var theme = SelectedTheme();
-        var monitor = _monitors[e.Index];
-        bool eligible = MonitorInfo.IsAbovePrimary(monitor);
-        bool interactive = eligible && _modeManual.Checked;
-        bool selected = interactive && (e.State & DrawItemState.Selected) != 0;
-
-        using (var brush = new SolidBrush(selected ? theme.Accent : theme.Surface))
-            e.Graphics.FillRectangle(brush, e.Bounds);
-
-        int box = 14;
-        int boxY = e.Bounds.Top + (e.Bounds.Height - box) / 2;
-        var boxRect = new Rectangle(e.Bounds.Left + 4, boxY, box, box);
-        bool isChecked = _monitorList.GetItemChecked(e.Index);
-        var state = interactive
-            ? (isChecked ? System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal : System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal)
-            : (isChecked ? System.Windows.Forms.VisualStyles.CheckBoxState.CheckedDisabled : System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedDisabled);
-        CheckBoxRenderer.DrawCheckBox(e.Graphics, boxRect.Location, state);
-
-        string label = MonitorLabel(monitor) + (eligible ? "" : $" — {Strings.NotAbovePrimary}");
-        Color foreground = interactive ? (selected ? Color.White : theme.Text) : theme.Subtle;
-        var textRect = new Rectangle(boxRect.Right + 6, e.Bounds.Top,
-            Math.Max(0, e.Bounds.Right - boxRect.Right - 8), e.Bounds.Height);
-        TextRenderer.DrawText(e.Graphics, label, _monitorList.Font, textRect, foreground,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis |
-            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
-        e.DrawFocusRectangle();
-    }
-
-    private void DisplaySettingsChanged(object sender, EventArgs e)
-    {
-        if (IsDisposed || Disposing || !IsHandleCreated) return;
-        void Debounce()
+        if (_boundary == null) return;
+        _rebuilding = true;
+        _endpointFrom.Text = ChipText(_primary.From);
+        _endpointTo.Text = ChipText(_primary.To);
+        _pairSeparator.Text = _boundary.VerticalConnection ? "↕" : "↔";
+        _drawerTitle.Text = Strings.Ui("DrawerTitle");
+        _drawerMeta.Text = _boundary.GapPx > _draft.SeamTolerancePx
+            ? string.Format(Strings.Ui("EditorMeetGap"), _boundary.GapPx) : Strings.Ui("EditorMeetTouching");
+        bool horizontal = !_boundary.VerticalConnection;
+        bool splitTruth = horizontal && DirectionsDiffer();
+        if (splitTruth) _separateExpanded = true;
+        _drawerDirection.Text = splitTruth ? Strings.Ui("DifferentByDirection") : horizontal ? Strings.Ui("BothDirections") : string.Format(Strings.Ui("GoingUpInto"), ScreenName(_primary.To));
+        _returnLine.Text = horizontal ? "" : ResolvedBehavior(_reverse) switch
         {
-            if (IsDisposed || Disposing) return;
-            _displayRefreshTimer.Stop();
-            _displayRefreshTimer.Start();
+            BoundaryBehavior.Blocked => Strings.Ui("ComingDownBlocked"),
+            BoundaryBehavior.Push => Strings.Ui("ComingDownPush"),
+            _ => Strings.Ui("ComingDownFree"),
+        };
+        _separateLink.Enabled = horizontal;
+        if (!horizontal) _separateExpanded = false;
+        _separateLink.Text = (_separateExpanded ? "⌄  " : "›  ") + (splitTruth ? Strings.Ui("DifferentByDirection") : Strings.Ui("SetDirectionsSeparately"));
+
+        bool excluded = _draft.ExcludedDevices.Contains(_primary.To.StableId, StringComparer.OrdinalIgnoreCase) ||
+                        (horizontal && _draft.ExcludedDevices.Contains(_primary.From.StableId, StringComparer.OrdinalIgnoreCase));
+        _allowScreen.Enabled = excluded;
+        _modeTiles.Enabled = !excluded;
+        _overallLink.Enabled = !excluded;
+        _separateLink.Enabled = horizontal && !excluded;
+        _whenLink.Enabled = !excluded;
+        _automaticControl.Enabled = !excluded;
+        _alwaysControl.Enabled = !excluded;
+        if (excluded) _drawerDirection.Text = Strings.Ui("BlockedByKeepOut");
+
+        var selected = ResolvedBehavior(_primary);
+        _freeTile.Selected = !splitTruth && selected == BoundaryBehavior.Free;
+        _pushTile.Selected = !splitTruth && selected is BoundaryBehavior.Push or BoundaryBehavior.OverallFeel;
+        _blockedTile.Selected = !splitTruth && selected == BoundaryBehavior.Blocked;
+        var primaryRule = FindRule(_primary);
+        _overallLink.Text = primaryRule == null ? Strings.Ui("UsingOverallBehavior") : Strings.Ui("UseOverallBehavior");
+        _overallLink.Enabled = primaryRule != null && !excluded;
+        var control = primaryRule?.Control ?? BoundaryControl.Automatic;
+        _automaticControl.Checked = control == BoundaryControl.Automatic;
+        _alwaysControl.Checked = control == BoundaryControl.Always;
+        BuildSeparateRows();
+        UpdateLiveStatus();
+        ReserveDrawerStatusHeight();
+        _rebuilding = false;
+        LayoutBoundaryDrawer();
+        ApplyTheme();
+    }
+
+    private void BuildSeparateRows()
+    {
+        _separatePanel.SuspendLayout(); _separatePanel.Controls.Clear(); _separatePanel.RowStyles.Clear(); _separatePanel.RowCount = 0;
+        if (!_separateExpanded) { _separatePanel.Visible = false; _separatePanel.ResumeLayout(); return; }
+        _separatePanel.Visible = true;
+        AddDirectionRow(_primary); AddDirectionRow(_reverse);
+        _separatePanel.ResumeLayout();
+    }
+
+    private void AddDirectionRow(BoundaryEndpoint endpoint)
+    {
+        int row = _separatePanel.RowCount++;
+        _separatePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+        var panel = new Panel { Dock = DockStyle.Fill, Tag = "surface2" };
+        panel.Controls.Add(new Label { Text = string.Format(Strings.Ui("DirectionFromTo"), ScreenName(endpoint.From), ScreenName(endpoint.To)), Left = 0, Top = 0, Width = 190, Height = 72, Font = new Font("Segoe UI Semibold", 8.75f), TextAlign = ContentAlignment.MiddleLeft });
+        var modes = new[] { BoundaryBehavior.Free, BoundaryBehavior.Push, BoundaryBehavior.Blocked };
+        for (int i = 0; i < modes.Length; i++)
+        {
+            var behavior = modes[i];
+            var tile = NewModeTile(behavior, BehaviorTitle(behavior), "", true);
+            tile.Left = 198 + i * 195; tile.Top = 5; tile.Width = 188; tile.Height = 66;
+            tile.Selected = ResolvedBehavior(endpoint) == behavior;
+            tile.Click += (_, _) => { SetEndpointBehavior(endpoint, behavior); RefreshMap(); UpdateDrawer(); };
+            panel.Controls.Add(tile);
         }
+        _separatePanel.Controls.Add(panel, 0, row);
+    }
+
+    private ModeTile NewModeTile(BoundaryBehavior behavior, string title, string help, bool compact = false)
+    {
+        var tile = new ModeTile
+        {
+            Behavior = behavior, Title = title, Help = help,
+            Width = compact ? 188 : 254, Height = compact ? 66 : 78,
+            Margin = compact ? new Padding(0, 0, 7, 0) : new Padding(0, 0, 8, 0),
+        };
+        tile.SetTheme(_theme); tile.Click += (_, _) => { if (!compact) ChoosePrimaryBehavior(behavior); }; return tile;
+    }
+
+    private void ChoosePrimaryBehavior(BoundaryBehavior behavior)
+    {
+        if (_boundary == null) return;
+        SetEndpointBehavior(_primary, behavior);
+        if (!_boundary.VerticalConnection) { SetEndpointBehavior(_reverse, behavior); _separateExpanded = false; }
+        else if (_boundary.VerticalConnection && FindRule(_reverse) == null) SetEndpointBehavior(_reverse, BoundaryBehavior.Free);
+        RefreshMap(); UpdateDrawer();
+    }
+
+    private void SetEndpointBehavior(BoundaryEndpoint endpoint, BoundaryBehavior behavior)
+    {
+        var rule = FindRule(endpoint);
+        if (rule == null)
+        {
+            rule = new BoundaryRule { FromStableId = endpoint.From.StableId, ToStableId = endpoint.To.StableId,
+                Direction = endpoint.Direction, Control = BoundaryControl.Automatic };
+            _draft.BoundaryRules.Add(rule);
+        }
+        rule.Behavior = behavior;
+    }
+
+    private void SetControl(BoundaryControl control)
+    {
+        var targets = !_boundary.VerticalConnection && !_separateExpanded ? new[] { _primary, _reverse } : new[] { _primary };
+        foreach (var endpoint in targets)
+        {
+            var rule = FindRule(endpoint);
+            if (rule != null) rule.Control = control;
+        }
+        RefreshMap(); UpdateLiveStatus();
+    }
+
+    private void UseOverall()
+    {
+        RemoveRule(_primary);
+        if (!_boundary.VerticalConnection && !_separateExpanded) RemoveRule(_reverse);
+        RefreshMap(); UpdateDrawer();
+    }
+
+    private void ToggleSeparate()
+    {
+        if (_boundary == null || _boundary.VerticalConnection) return;
+        _separateExpanded = !_separateExpanded; BuildSeparateRows();
+    }
+
+    private void ToggleWhen()
+    {
+        _whenExpanded = !_whenExpanded; _whenPanel.Visible = _whenExpanded;
+    }
+
+    private void AllowBoundaryScreen()
+    {
+        if (_boundary == null) return;
+        _draft.ExcludedDevices.RemoveAll(id => Same(id, _primary.To.StableId) || Same(id, _primary.From.StableId));
+        RebuildScreenRows(); RefreshMap(); UpdateDrawer();
+    }
+
+    private void UpdateLiveStatus()
+    {
+        if (_boundary == null || _drawerStatus == null) return;
+        string status = "";
+        if (_primary.Runtime?.SafetyDemoted == true) status = string.Format(Strings.Ui("StatusSafety"), ScreenName(_primary.From));
+        else if (_runtimeState != null)
+        {
+            var state = _runtimeState();
+            var rule = FindRule(_primary);
+            var chosen = ResolvedBehavior(_primary);
+            if (rule?.Control != BoundaryControl.Always && _primary.Direction == BoundaryDirection.Up && !state.UpwardPassageOpen && chosen != BoundaryBehavior.Blocked)
+                status = Strings.Ui("StatusUpClosed");
+            else if (rule?.Control != BoundaryControl.Always && _primary.Direction is BoundaryDirection.Left or BoundaryDirection.Right && !state.SideProtectionOn && chosen != BoundaryBehavior.Free)
+                status = Strings.Ui("StatusSideOff");
+        }
+        _drawerStatus.Text = status;
+    }
+
+    private void RefreshMap()
+    {
+        _map?.SetModel(_monitors, _draft, _draft.MonitorNames);
+        if (_mapHint != null && _monitors.Count(m => !_draft.ExcludedDevices.Contains(m.StableId, StringComparer.OrdinalIgnoreCase)) > 1)
+        {
+            _mapHint.Text = Strings.Ui("MapHintV2");
+            UpdateBoundaryTipVisibility();
+        }
+        if (_boundary != null)
+        {
+            _boundary = _map.FindBoundary(_primary.From.StableId, _primary.To.StableId, _primary.Direction);
+            if (_boundary != null) { ConfigureEndpoints(); _map.SelectedBoundary = _boundary; }
+        }
+    }
+
+    private void CloseDrawer()
+    {
+        if (!_screenSplit.Visible) return;
+        _screenSplit.Visible = false; _screenSplit.Height = 0; _boundary = null; _map.SelectedBoundary = null; _map.Focus();
+    }
+
+    private void LayoutBoundaryDrawer()
+    {
+        if (_screenSplit == null || !_screenSplit.Visible || _screenSplit.Width <= 0) return;
+        _screenSplit.Width = Math.Max(DpiPx(420), _bodyFlow.ClientSize.Width - _bodyFlow.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+        int width = Math.Max(DpiPx(430), _screenSplit.ClientSize.Width - DpiPx(28));
+        foreach (Control child in _drawerFlow.Controls) child.Width = width;
+        LayoutDrawerQuestionText();
+        _modeTiles.Width = width;
+        int tileWidth = Math.Max(DpiPx(150), (width - DpiPx(16)) / 3);
+        foreach (ModeTile tile in _modeTiles.Controls) tile.Width = tileWidth;
+        _separatePanel.Width = width; _whenPanel.Width = width;
+        int preferred = _drawerFlow.GetPreferredSize(new Size(width, 0)).Height + _drawer.Padding.Vertical + DpiPx(2);
+        _screenSplit.Height = Math.Max(DpiPx(245), preferred);
+    }
+
+    private int DpiPx(int logicalPixels) => (int)Math.Round(logicalPixels * DeviceDpi / 96f);
+
+    private void MonitorChosen(MonitorInfo monitor)
+    {
+        if (monitor == null) return;
+        // Clicking a screen only SELECTS/highlights it — identification (the on-screen overlay) is
+        // triggered exclusively by the "Identify all screens" button (owner request 2026-07-15).
+        _map.SelectedStableId = monitor.StableId;
+    }
+
+    private void HoverRow(string stableId)
+    {
+        foreach (Control panel in _screenRows.Controls) panel.Tag = "screenRow";
+    }
+
+    private void ToggleAdvanced(bool? force = null)
+    {
+        _advancedExpanded = force ?? !_advancedExpanded;
+        var numericGrid = _advancedPanel?.Controls.Cast<Control>().FirstOrDefault(c => (c.Tag as string) == "numericGrid");
+        if (numericGrid != null) numericGrid.Visible = _advancedExpanded;
+        _advancedToggle.Text = (_advancedExpanded ? "⌄  " : "›  ") + Strings.Ui("FineTunePixels");
+        if (_advancedExpanded)
+        {
+            _advancedPanel.PerformLayout();
+            _advancedPage.ScrollControlIntoView(_advancedToggle);
+        }
+    }
+
+    private void Save_Click(object sender, EventArgs e)
+    {
+        SyncSimpleControls();
+        _draft.Normalize();
+        if (!ValidPrimaryHotkey()) { ShowInline(Strings.ValidationPickModifier); return; }
+        if (HasDuplicateHotkeys()) { UpdateShortcutErrors(); return; }
+        var issues = _draft.ValidateNoSeal(_monitors);
+        if (_draft.HasRepairableImportErrors || issues.Length > 0)
+        {
+            if (issues.Length > 0)
+            {
+                _pendingIssue = issues[0];
+                ShowInline(string.Format(Strings.Ui("InlineSealError"), ScreenName(issues[0].StableId)), true);
+            }
+            else ShowInline(Strings.ImportInvalid);
+            return;
+        }
+        Result = _draft.DeepClone();
+        DialogResult = DialogResult.OK;
+    }
+
+    private BoundaryValidationIssue _pendingIssue;
+    private void OpenValidationBoundary(object sender, EventArgs e)
+    {
+        if (_pendingIssue == null) return;
+        var boundary = _map.FindBoundary(_pendingIssue.StableId, _pendingIssue.FocusToStableId, _pendingIssue.FocusDirection);
+        if (boundary != null) { _tabs.SelectedIndex = 0; OpenBoundary(boundary); }
+    }
+
+    private void ShowInline(string text, bool action = false)
+    {
+        SetInlineStatus(text, true, action);
+    }
+
+    private void SetInlineStatus(string text, bool error = false, bool action = false)
+    {
+        if (_inlineStatus == null) return;
+        _inlineStatusIsError = error;
+        _inlineStatus.Text = text ?? "";
+        _inlineStatus.ForeColor = error ? _theme.Danger : _theme.Faint;
+        _inlineAction.Enabled = action;
+        _inlineAction.Text = action ? Strings.Ui("OpenBoundary") : "";
+    }
+
+    private void UpdateBoundaryTipVisibility()
+    {
+        if (_inlineStatus == null || _tabs == null) return;
+        bool showingTip = _inlineStatus.Text == Strings.Ui("BoundaryTip");
+        if (_tabs.SelectedIndex != 0)
+        {
+            if (showingTip) SetInlineStatus("");
+            return;
+        }
+        if (_inlineStatus.Text.Length == 0 && !_draft.BoundaryTipSeen && !_draft.BoundaryRules.Any() &&
+            _monitors.Count(m => !_draft.ExcludedDevices.Contains(m.StableId, StringComparer.OrdinalIgnoreCase)) > 1)
+            SetInlineStatus(Strings.Ui("BoundaryTip"));
+    }
+
+    private void SyncSimpleControls()
+    {
+        _draft.StartGateClosed = _startGate.Checked; _draft.StartSideContainOn = _startSide.Checked; _draft.AutoStart = _autoStart.Checked;
+        _draft.StartConfineOn = _startConfine.Checked; _draft.StartPaused = _startPaused.Checked;
+        _draft.Language = _langCombo.SelectedIndex switch { 1 => "en", 2 => "tr", _ => "auto" };
+        _draft.Theme = _themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" };
+    }
+
+    private void Export_Click(object sender, EventArgs e)
+    {
+        SyncSimpleControls();
+        if (!ValidateDraftForBackup()) return;
+        string path = PickBackupPath();
+        if (!string.IsNullOrEmpty(path)) WriteBackupFile(path);
+    }
+
+    private string PickBackupPath()
+    {
+        using var dialog = new SaveFileDialog { Title = Strings.ExportTitle, Filter = Strings.SettingsFileFilter,
+            FileName = "MouseFence-settings.json", DefaultExt = "json", AddExtension = true };
+        return dialog.ShowDialog(this) == DialogResult.OK ? dialog.FileName : null;
+    }
+
+    private bool ValidateDraftForBackup()
+    {
+        var issues = _draft.ValidateNoSeal(_monitors);
+        if (issues.Length == 0) return true;
+        _pendingIssue = issues[0];
+        ShowInline(string.Format(Strings.Ui("InlineSealError"), ScreenName(issues[0].StableId)), true);
+        return false;
+    }
+
+    private bool WriteBackupFile(string path)
+    {
         try
         {
-            if (InvokeRequired) BeginInvoke((Action)Debounce);
-            else Debounce();
+            File.WriteAllText(path, JsonSerializer.Serialize(_draft, new JsonSerializerOptions { WriteIndented = true }));
+            SetInlineStatus(Strings.Ui("BackupDone"));
+            return true;
         }
-        catch (InvalidOperationException) { }
+        catch { ShowInline(Strings.Ui("ExportFailed")); return false; }
     }
 
-    private void DisplayRefreshTimer_Tick(object sender, EventArgs e)
+    private void Import_Click(object sender, EventArgs e)
     {
-        _displayRefreshTimer.Stop();
-        List<MonitorInfo> fresh;
-        try { fresh = MonitorInfo.All(); }
-        catch { return; }
-
-        string preserveFrom = SelectedFromKey();
-        string preserveSelected = _selectedStableId;
-        _monitors.Clear();
-        _monitors.AddRange(fresh);
-        RebuildMonitorUi(preserveFrom, preserveSelected);
-        _layoutChangedBanner.Visible = true;
-        _layoutChangedBanner.BringToFront();
+        string path = PickRestorePath();
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            string json = File.ReadAllText(path);
+            var imported = JsonSerializer.Deserialize<Settings>(json);
+            if (imported == null) { ShowInline(Strings.ImportInvalid); return; }
+            int version = Settings.ReadVersion(json); imported.Normalize();
+            if (version < Settings.CurrentSettingsVersion) imported.MigrateLayoutKeysToStable(_monitors);
+            var issues = imported.ValidateNoSeal(_monitors);
+            if (imported.HasRepairableImportErrors || issues.Length > 0)
+            {
+                CopySettings(imported, _draft);
+                LoadDraftIntoControls();
+                if (issues.Length > 0) { _pendingIssue = issues[0]; ShowInline(string.Format(Strings.Ui("InlineSealError"), ScreenName(issues[0].StableId)), true); }
+                else ShowInline(Strings.ImportInvalid);
+                return;
+            }
+            bool confirmed = RestoreConfirmForTests?.Invoke() ?? MessageBox.Show(this, Strings.ImportConfirm, Strings.SettingsTitle,
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+            if (!confirmed) return;
+            CopySettings(imported, _draft);
+            Result = _draft.DeepClone(); DialogResult = DialogResult.OK;
+        }
+        catch { ShowInline(Strings.ImportInvalid); }
     }
 
-    private static bool SameId(string a, string b) =>
-        string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
-
-    private Theme SelectedTheme() => Theming.Resolve(_themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" });
-
-    private void DrawTab(object sender, DrawItemEventArgs e)
+    private string PickRestorePath()
     {
-        var t = SelectedTheme();
-        var rect = _tabs.GetTabRect(e.Index);
-        bool sel = e.Index == _tabs.SelectedIndex;
-        using (var bg = new SolidBrush(sel ? t.Surface : t.Back))
-            e.Graphics.FillRectangle(bg, rect);
-        if (sel)
-            using (var bar = new SolidBrush(t.Accent))
-                e.Graphics.FillRectangle(bar, rect.X, rect.Bottom - 2, rect.Width, 2);
-        TextRenderer.DrawText(e.Graphics, _tabs.TabPages[e.Index].Text, _tabs.Font, rect,
-            sel ? t.Accent : t.Subtle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        if (RestorePathPickerForTests != null) return RestorePathPickerForTests();
+        using var dialog = new OpenFileDialog { Title = Strings.ImportTitle, Filter = Strings.SettingsFileFilter, CheckFileExists = true };
+        return dialog.ShowDialog(this) == DialogResult.OK ? dialog.FileName : null;
     }
 
-    private void ApplyThemeLive()
+    private static void CopySettings(Settings source, Settings target)
     {
-        var theme = SelectedTheme();
-        Theming.Apply(this, theme);
-        _tips.BackColor = theme.Surface;
-        _tips.ForeColor = theme.Text;
-        _map?.SetTheme(theme);
-        _tabs.Invalidate();
-        Invalidate(true);
+        var json = JsonSerializer.Serialize(source);
+        var copy = JsonSerializer.Deserialize<Settings>(json);
+        foreach (var property in typeof(Settings).GetProperties().Where(p => p.CanRead && p.CanWrite && p.SetMethod?.IsPublic == true))
+            property.SetValue(target, property.GetValue(copy));
+        target.Normalize();
+    }
+
+    private void LoadDraftIntoControls()
+    {
+        _rebuilding = true;
+        _startGate.Checked = _draft.StartGateClosed; _startSide.Checked = _draft.StartSideContainOn; _autoStart.Checked = _draft.AutoStart;
+        _startConfine.Checked = _draft.StartConfineOn; _startPaused.Checked = _draft.StartPaused;
+        _langCombo.SelectedIndex = _draft.Language switch { "en" => 1, "tr" => 2, _ => 0 };
+        _themeCombo.SelectedIndex = _draft.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
+        for (int i = 0; i < _hotkeyBoxes.Length; i++) _hotkeyBoxes[i].Text = HotkeyText(i);
+        _rebuilding = false;
+        RebuildScreenRows(); RebuildAdvancedContents(); RefreshMap(); CloseDrawer();
+    }
+
+    private void CaptureHotkey(int index, KeyEventArgs e)
+    {
+        e.SuppressKeyPress = true; e.Handled = true;
+        Keys key = e.KeyCode is Keys.ControlKey or Keys.Menu or Keys.ShiftKey or Keys.LWin or Keys.RWin ? Keys.None : e.KeyCode;
+        bool win = e.KeyCode is Keys.LWin or Keys.RWin;
+        SetHotkey(index, key, e.Control, e.Alt, e.Shift, win);
+        _hotkeyBoxes[index].Text = HotkeyText(index);
+        UpdateShortcutErrors();
+    }
+
+    private void SetHotkey(int i, Keys key, bool ctrl, bool alt, bool shift, bool win)
+    {
+        switch (i)
+        {
+            case 0: _draft.HotKey = key; _draft.ModCtrl = ctrl; _draft.ModAlt = alt; _draft.ModShift = shift; _draft.ModWin = win; break;
+            case 1: _draft.ConfineHotKey = key; _draft.ConfineModCtrl = ctrl; _draft.ConfineModAlt = alt; _draft.ConfineModShift = shift; _draft.ConfineModWin = win; break;
+            case 2: _draft.PauseHotKey = key; _draft.PauseModCtrl = ctrl; _draft.PauseModAlt = alt; _draft.PauseModShift = shift; _draft.PauseModWin = win; break;
+            case 3: _draft.SideHotKey = key; _draft.SideModCtrl = ctrl; _draft.SideModAlt = alt; _draft.SideModShift = shift; _draft.SideModWin = win; break;
+        }
+    }
+
+    private void ClearHotkey(int i) => SetHotkey(i, Keys.None, false, false, false, false);
+    private string HotkeyText(int i)
+    {
+        (Keys key, bool c, bool a, bool s, bool w) = i switch
+        {
+            0 => (_draft.HotKey, _draft.ModCtrl, _draft.ModAlt, _draft.ModShift, _draft.ModWin),
+            1 => (_draft.ConfineHotKey, _draft.ConfineModCtrl, _draft.ConfineModAlt, _draft.ConfineModShift, _draft.ConfineModWin),
+            2 => (_draft.PauseHotKey, _draft.PauseModCtrl, _draft.PauseModAlt, _draft.PauseModShift, _draft.PauseModWin),
+            _ => (_draft.SideHotKey, _draft.SideModCtrl, _draft.SideModAlt, _draft.SideModShift, _draft.SideModWin),
+        };
+        var parts = new List<string>(); if (c) parts.Add("Ctrl"); if (a) parts.Add("Alt"); if (s) parts.Add("Shift"); if (w) parts.Add("Win"); if (key != Keys.None) parts.Add(key.ToString());
+        return parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
+    }
+
+    private bool ValidPrimaryHotkey() => _draft.HotKey != Keys.None && (_draft.ModCtrl || _draft.ModAlt || _draft.ModShift || _draft.ModWin);
+
+    private bool HasDuplicateHotkeys()
+    {
+        var chords = new[]
+        {
+            (_draft.HotKey, _draft.ModCtrl, _draft.ModAlt, _draft.ModShift, _draft.ModWin),
+            (_draft.ConfineHotKey, _draft.ConfineModCtrl, _draft.ConfineModAlt, _draft.ConfineModShift, _draft.ConfineModWin),
+            (_draft.PauseHotKey, _draft.PauseModCtrl, _draft.PauseModAlt, _draft.PauseModShift, _draft.PauseModWin),
+            (_draft.SideHotKey, _draft.SideModCtrl, _draft.SideModAlt, _draft.SideModShift, _draft.SideModWin),
+        }.Where(x => x.Item1 != Keys.None).ToList();
+        return chords.Count != chords.Distinct().Count();
+    }
+
+    private void RebuildAdvancedContents()
+    {
+        bool visible = _advancedPanel.Visible;
+        using var fresh = BuildAdvancedPanel();
+        _advancedPanel.SuspendLayout(); _advancedPanel.Controls.Clear();
+        while (fresh.Controls.Count > 0)
+        {
+            var child = fresh.Controls[0]; fresh.Controls.Remove(child); _advancedPanel.Controls.Add(child);
+        }
+        _advancedPanel.Visible = visible; _advancedPanel.ResumeLayout(true); ResizeAdvanced(_advancedWidth); ApplyTheme();
+    }
+
+    private void SanitizeExcluded()
+    {
+        var ids = _monitors.Select(m => m.StableId).ToList();
+        string primary = (_monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault())?.StableId;
+        _draft.ExcludedDevices = GuardCore.SanitizeExcluded(ids, primary,
+            new HashSet<string>(_draft.ExcludedDevices, StringComparer.OrdinalIgnoreCase), out _);
+    }
+
+    private BoundaryRule FindRule(BoundaryEndpoint e) => _draft.BoundaryRules.LastOrDefault(r => Same(r.FromStableId, e.From.StableId) && Same(r.ToStableId, e.To.StableId) && r.Direction == e.Direction);
+    private void RemoveRule(BoundaryEndpoint e) => _draft.BoundaryRules.RemoveAll(r => Same(r.FromStableId, e.From.StableId) && Same(r.ToStableId, e.To.StableId) && r.Direction == e.Direction);
+    private BoundaryBehavior ResolvedBehavior(BoundaryEndpoint e)
+    {
+        var saved = FindRule(e)?.Behavior;
+        if (saved == BoundaryBehavior.OverallFeel) return BoundaryBehavior.Push;
+        if (saved is BoundaryBehavior.Free or BoundaryBehavior.Push or BoundaryBehavior.Blocked) return saved.Value;
+        return e.Runtime?.Behavior ?? BoundaryBehavior.Free;
+    }
+    private bool DirectionsDiffer() => ResolvedBehavior(_primary) != ResolvedBehavior(_reverse) || FindRule(_primary)?.Control != FindRule(_reverse)?.Control;
+    private string BehaviorTitle(BoundaryBehavior b) => b switch { BoundaryBehavior.Blocked => Strings.Ui("NeverCrosses"), BoundaryBehavior.Push => Strings.Ui("NeedsFirmPush"), _ => Strings.Ui("CrossesFreely") };
+    private string ScreenName(string id) => ScreenName(_monitors.FirstOrDefault(m => Same(m.StableId, id)));
+    private string ScreenName(MonitorInfo m)
+    {
+        if (m == null) return "";
+        string name = Settings.MonitorNameFor(_draft.MonitorNames, m.StableId);
+        return name.Length > 0 ? name : (m.Primary ? Strings.Ui("MainWord") : string.Format(Strings.Ui("DefaultScreenName"), m.Index));
+    }
+    private string ChipText(MonitorInfo m) => $"{m.Index} · {ScreenName(m)}";
+
+    private void SelectRelativeTab(int current, int delta)
+    {
+        int next = (current + delta + _tabItems.Length) % _tabItems.Length;
+        _tabs.SelectedIndex = next;
+        _tabItems[next].Focus();
+    }
+
+    private void UpdateTabStrip()
+    {
+        if (_tabItems == null) return;
+        foreach (var item in _tabItems) item.SetState(_theme, item.Index == _tabs.SelectedIndex);
+        _tabStrip?.Invalidate();
+    }
+
+    private void PaintRoundedCard(object sender, PaintEventArgs e)
+    {
+        if (sender is not Control card || card.Width < 3 || card.Height < 3) return;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var path = Rounded(new Rectangle(0, 0, card.Width - 1, card.Height - 1), 8);
+        using var fill = new SolidBrush(_theme.Surface);
+        using var border = new Pen(_theme.Border);
+        e.Graphics.FillPath(fill, path);
+        e.Graphics.DrawPath(border, path);
+    }
+
+    private void PaintDrawerCard(object sender, PaintEventArgs e)
+    {
+        if (_drawer.Width < 2 || _drawer.Height < 2) return;
+        using var border = new Pen(_theme.AccentLine);
+        e.Graphics.DrawRectangle(border, 0, 0, _drawer.Width - 1, _drawer.Height - 1);
+    }
+
+    private void ApplyTheme()
+    {
+        if (IsDisposed) return;
+        Theming.Apply(this, _theme); _map?.SetTheme(_theme);
+        _tips.BackColor = _theme.Surface; _tips.ForeColor = _theme.Text;
+        foreach (var tile in AllControls(this).OfType<ModeTile>()) tile.SetTheme(_theme);
+        foreach (var chip in AllControls(this).OfType<NumberChip>()) chip.SetTheme(_theme);
+        foreach (var close in AllControls(this).OfType<DrawerCloseButton>()) close.SetTheme(_theme);
+        foreach (var combo in AllControls(this).OfType<ThemedComboBox>()) combo.SetTheme(_theme);
+        foreach (var link in AllControls(this).OfType<LinkLabel>())
+        {
+            link.LinkColor = _theme.Accent;
+            link.ActiveLinkColor = _theme.Accent;
+            link.VisitedLinkColor = _theme.Accent;
+            link.DisabledLinkColor = _theme.Subtle;
+        }
+        if (_advancedToggle != null)
+        {
+            _advancedToggle.ForeColor = _theme.Accent;
+            _advancedToggle.FlatAppearance.MouseOverBackColor = _theme.AccentWeak;
+        }
+        ThemeScrollbars(_bodyFlow);
+        ThemeScrollbars(_drawerFlow);
+        ThemeScrollbars(_shortcutsPage);
+        ThemeScrollbars(_generalPage);
+        _mapLegend?.SetTheme(_theme);
+        if (_inlineStatus != null) _inlineStatus.ForeColor = _inlineStatusIsError ? _theme.Danger : _theme.Faint;
+        UpdateTabStrip();
+        _tabs.Invalidate(); Invalidate(true);
+    }
+
+    private void ThemeScrollbars(Control control)
+    {
+        if (control?.IsHandleCreated == true)
+            _ = Native.SetWindowTheme(control.Handle, _theme.IsDark ? "DarkMode_Explorer" : "Explorer", null);
+    }
+
+    private static IEnumerable<Control> AllControls(Control root)
+    {
+        foreach (Control c in root.Controls) { yield return c; foreach (var child in AllControls(c)) yield return child; }
     }
 
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        Theming.DarkTitleBar(this, SelectedTheme().IsDark);
-    }
-
-    protected override void OnFormClosed(FormClosedEventArgs e)
-    {
-        SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged;
-        _displayRefreshTimer.Stop();
-        _displayRefreshTimer.Dispose();
-        base.OnFormClosed(e);
-    }
-
-    private void HotkeyBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        e.SuppressKeyPress = true;
-        e.Handled = true;
-        _mc = e.Control; _ma = e.Alt; _ms = e.Shift;
-        var kc = e.KeyCode;
-        if (kc is Keys.ControlKey or Keys.Menu or Keys.ShiftKey) { _key = Keys.None; UpdateHotkeyText(); return; }
-        if (kc is Keys.LWin or Keys.RWin) { _mw = true; _key = Keys.None; UpdateHotkeyText(); return; }
-        _key = kc;
-        UpdateHotkeyText();
-    }
-
-    private void UpdateHotkeyText()
-    {
-        var parts = new List<string>();
-        if (_mc) parts.Add("Ctrl");
-        if (_ma) parts.Add("Alt");
-        if (_ms) parts.Add("Shift");
-        if (_mw) parts.Add("Win");
-        if (_key != Keys.None) parts.Add(_key.ToString());
-        _hotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
-    }
-
-    private void GameHotkeyBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        e.SuppressKeyPress = true;
-        e.Handled = true;
-        _gc = e.Control; _ga = e.Alt; _gs = e.Shift;
-        var kc = e.KeyCode;
-        if (kc is Keys.ControlKey or Keys.Menu or Keys.ShiftKey) { _gkey = Keys.None; UpdateGameHotkeyText(); return; }
-        if (kc is Keys.LWin or Keys.RWin) { _gw = true; _gkey = Keys.None; UpdateGameHotkeyText(); return; }
-        _gkey = kc;
-        UpdateGameHotkeyText();
-    }
-
-    private void UpdateGameHotkeyText()
-    {
-        var parts = new List<string>();
-        if (_gc) parts.Add("Ctrl");
-        if (_ga) parts.Add("Alt");
-        if (_gs) parts.Add("Shift");
-        if (_gw) parts.Add("Win");
-        if (_gkey != Keys.None) parts.Add(_gkey.ToString());
-        _gameHotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
-    }
-
-    private void PauseHotkeyBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        e.SuppressKeyPress = true;
-        e.Handled = true;
-        _pc = e.Control; _pa = e.Alt; _ps = e.Shift;
-        var kc = e.KeyCode;
-        if (kc is Keys.ControlKey or Keys.Menu or Keys.ShiftKey) { _pkey = Keys.None; UpdatePauseHotkeyText(); return; }
-        if (kc is Keys.LWin or Keys.RWin) { _pw = true; _pkey = Keys.None; UpdatePauseHotkeyText(); return; }
-        _pkey = kc;
-        UpdatePauseHotkeyText();
-    }
-
-    private void UpdatePauseHotkeyText()
-    {
-        var parts = new List<string>();
-        if (_pc) parts.Add("Ctrl");
-        if (_pa) parts.Add("Alt");
-        if (_ps) parts.Add("Shift");
-        if (_pw) parts.Add("Win");
-        if (_pkey != Keys.None) parts.Add(_pkey.ToString());
-        _pauseHotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
-    }
-
-    private void SideHotkeyBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        e.SuppressKeyPress = true;
-        e.Handled = true;
-        _sc = e.Control; _sa = e.Alt; _ss = e.Shift;
-        var kc = e.KeyCode;
-        if (kc is Keys.ControlKey or Keys.Menu or Keys.ShiftKey) { _skey = Keys.None; UpdateSideHotkeyText(); return; }
-        if (kc is Keys.LWin or Keys.RWin) { _sw = true; _skey = Keys.None; UpdateSideHotkeyText(); return; }
-        _skey = kc;
-        UpdateSideHotkeyText();
-    }
-
-    private void UpdateSideHotkeyText()
-    {
-        var parts = new List<string>();
-        if (_sc) parts.Add("Ctrl");
-        if (_sa) parts.Add("Alt");
-        if (_ss) parts.Add("Shift");
-        if (_sw) parts.Add("Win");
-        if (_skey != Keys.None) parts.Add(_skey.ToString());
-        _sideHotkeyBox.Text = parts.Count == 0 ? Strings.HotkeyPressKeys : string.Join(" + ", parts);
-    }
-
-    private void Ok_Click(object sender, EventArgs e)
-    {
-        bool anyMod = _mc || _ma || _ms || _mw;
-        if (_key == Keys.None || !anyMod)
+        // Native child handles now exist. Reapply the complete walk so persistent chrome such as the footer
+        // cannot retain the light visual-style surfaces it received while its handles were being realized.
+        ApplyTheme();
+        var virtualScreen = SystemInformation.VirtualScreen;
+        if (Left >= virtualScreen.Right || Top >= virtualScreen.Bottom)
         {
-            MessageBox.Show(Strings.ValidationPickModifier, "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            DialogResult = DialogResult.None;
+            Theming.DarkTitleBar(this, _theme);
             return;
         }
-
-        Result = BuildResult();
-        var sealedScreens = Result.ValidateNoSeal(_monitors);
-        if (Result.HasRepairableImportErrors || sealedScreens.Length > 0)
-        {
-            string message = sealedScreens.Length > 0
-                ? string.Format(Strings.NoSealValidation, MonitorName(sealedScreens[0].StableId))
-                : Strings.ImportInvalid;
-            MessageBox.Show(this, message, "MouseFence",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            Result = null;
-            DialogResult = DialogResult.None;
-        }
+        var area = Screen.FromControl(this).WorkingArea;
+        Size = new Size(Math.Min(Width, (int)(area.Width * .9)), Math.Min(Height, (int)(area.Height * .9)));
+        Location = new Point(Math.Max(area.Left, Math.Min(Left, area.Right - Width)), Math.Max(area.Top, Math.Min(Top, area.Bottom - Height)));
+        Theming.DarkTitleBar(this, _theme);
     }
 
-    /// <summary>Snapshot the current dialog selections into a <see cref="Settings"/> (shared by Save and Export).</summary>
-    private Settings BuildResult()
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        var res = new Settings
-        {
-            SettingsVersion = Settings.CurrentSettingsVersion,
-            ModCtrl = _mc, ModAlt = _ma, ModShift = _ms, ModWin = _mw, HotKey = _key,
-            StartGateClosed = _startActive.Checked,
-            AutoStart = _autoStart.Checked,
-            Mode = _modeManual.Checked ? "Manual" : "AutoTop",
-            Language = _langCombo.SelectedIndex switch { 1 => "en", 2 => "tr", _ => "auto" },
-            Theme = _themeCombo.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" },
-            ConfineModCtrl = _gc, ConfineModAlt = _ga, ConfineModShift = _gs, ConfineModWin = _gw, ConfineHotKey = _gkey,
-            PauseModCtrl = _pc, PauseModAlt = _pa, PauseModShift = _ps, PauseModWin = _pw, PauseHotKey = _pkey,
-            SideModCtrl = _sc, SideModAlt = _sa, SideModShift = _ss, SideModWin = _sw, SideHotKey = _skey,
-            StartSideContainOn = _startSideActive.Checked,
-            SideCrossMin = (int)_sideSensNum.Value,
-            SideCrossSlack = (int)_sideSlackNum.Value,
-            DeliberateCross = _deliberateCheck.Checked,
-            DescentRouting = _descentCheck.Checked,
-            StartConfineOn = _source.StartConfineOn,
-            StartPaused = _source.StartPaused,
-            UpwardBoundaryDefault = _crossingCustom.Checked ? BoundaryDefault.Blocked : BoundaryDefault.Automatic,
-            SideBoundaryDefault = _source.SideBoundaryDefault,
-            DownwardBoundaryDefault = _source.DownwardBoundaryDefault,
-            UpCrossMin = _source.UpCrossMin,
-            UpCrossSlack = _source.UpCrossSlack,
-            PassageInsetPx = _source.PassageInsetPx,
-            EdgeHoldbackPx = _source.EdgeHoldbackPx,
-            SeamTolerancePx = _source.SeamTolerancePx,
-            SafetyEscapes = _source.SafetyEscapes,
-            BoundaryTipSeen = _source.BoundaryTipSeen,
-        };
+        if (keyData == Keys.Escape && _screenSplit.Visible) { CloseDrawer(); return true; }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
 
-        if (res.Mode == "Manual")
+    private bool _resourcesDisposed;
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !_resourcesDisposed)
         {
-            foreach (var id in _manualTops.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            _resourcesDisposed = true;
+            SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged;
+            _runtimeTimer.Stop(); _runtimeTimer.Dispose();
+            _displayRefreshTimer.Stop(); _displayRefreshTimer.Dispose();
+            _tips.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
+    private void DisplaySettingsChanged(object sender, EventArgs e)
+    {
+        if (!IsHandleCreated || IsDisposed) return;
+        BeginInvoke((Action)(() => { _displayRefreshTimer.Stop(); _displayRefreshTimer.Start(); }));
+    }
+
+    private void DisplayRefreshTimer_Tick(object sender, EventArgs e)
+    {
+        _displayRefreshTimer.Stop(); _monitors.Clear(); _monitors.AddRange(MonitorInfo.All()); SanitizeExcluded(); RebuildScreenRows(); RefreshMap(); CloseDrawer();
+        SetInlineStatus(Strings.LayoutChangedBanner);
+    }
+
+    private void ResizeV2Layout()
+    {
+        if (_bodyFlow == null || _bodyFlow.IsDisposed) return;
+        bool narrow = ClientSize.Width < DpiPx(900);
+        int horizontal = DpiPx(narrow ? 18 : 28);
+        _bodyFlow.Padding = new Padding(horizontal, DpiPx(23), horizontal, DpiPx(32));
+        int width = Math.Max(DpiPx(420), _bodyFlow.ClientSize.Width - _bodyFlow.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+        foreach (Control child in _bodyFlow.Controls) child.Width = width;
+        LayoutScreenSectionText();
+        _map.Height = Math.Clamp((int)Math.Round(_bodyFlow.ClientSize.Height * .39), DpiPx(220), DpiPx(300));
+        _screenRows.Width = width;
+        UpdateScreenRowPitch(narrow);
+        ReflowScreenRows(narrow);
+        foreach (var page in new[] { _advancedPage, _shortcutsPage, _generalPage })
+        {
+            int pageWidth = Math.Max(DpiPx(420), page.ClientSize.Width - page.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+            foreach (Control child in page.Controls) child.Width = pageWidth;
+            if (page != _advancedPage)
             {
-                var live = _monitors.FirstOrDefault(m => SameId(m.StableId, id));
-                if (live == null || MonitorInfo.IsAbovePrimary(live))
-                    res.ManualMonitors.Add(id);   // keep unplugged edits dormant; never apply a live ineligible row
+                var flow = page.Controls.OfType<FlowLayoutPanel>().FirstOrDefault();
+                if (flow != null) foreach (Control child in flow.Controls) child.Width = pageWidth;
             }
         }
-
-        // Preserve every v4 rule the temporary v3 editor cannot represent. It only edits migrated OverallFeel/Up
-        // allowances; M2 replaces this glue with the complete directional drawer.
-        res.BoundaryRules.AddRange(_source.BoundaryRules.Where(r =>
-            r.Direction != BoundaryDirection.Up || r.Behavior != BoundaryBehavior.OverallFeel)
-            .Select(r => new BoundaryRule { FromStableId = r.FromStableId, ToStableId = r.ToStableId,
-                Direction = r.Direction, Behavior = r.Behavior, Control = r.Control }));
-        if (_crossingCustom.Checked)
-            foreach (var kv in _rules.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
-                foreach (var to in kv.Value.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                    res.BoundaryRules.Add(new BoundaryRule { FromStableId = kv.Key, ToStableId = to,
-                        Direction = BoundaryDirection.Up, Behavior = BoundaryBehavior.OverallFeel,
-                        Control = BoundaryControl.Automatic });
-
-        // Carry the walled-off displays so a Save/Export doesn't silently drop them (binding fix #5).
-        res.ExcludedDevices.AddRange(_excluded.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-
-        // Keep names for unplugged displays too: they remain dormant until that same StableId returns.
-        foreach (var pair in _monitorNames.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        ResizeAdvanced(Math.Max(DpiPx(420), _advancedPage.ClientSize.Width - _advancedPage.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth));
+        var numericGrid = _advancedPanel.Controls.Cast<Control>().OfType<TableLayoutPanel>().FirstOrDefault(c => (c.Tag as string) == "numericGrid");
+        if (numericGrid != null) ReflowGrid(numericGrid, narrow, Math.Max(DpiPx(420), _advancedWidth));
+        var appearanceGrid = _generalPage.Controls.Cast<Control>().SelectMany(AllControls).OfType<TableLayoutPanel>().FirstOrDefault(c => (c.Tag as string) == "appearanceGrid");
+        if (appearanceGrid != null) ReflowGrid(appearanceGrid, narrow, Math.Max(DpiPx(420), _generalPage.ClientSize.Width - _generalPage.Padding.Horizontal));
+        if (narrow)
         {
-            string name = Settings.NormalizeMonitorName(pair.Value);
-            if (!string.IsNullOrWhiteSpace(pair.Key) && name.Length > 0)
-                res.MonitorNames[pair.Key] = name;
+            _modeTiles.FlowDirection = FlowDirection.TopDown; _modeTiles.Height = DpiPx(250);
+            foreach (ModeTile tile in _modeTiles.Controls) { tile.Width = Math.Max(DpiPx(220), width - DpiPx(28)); tile.Height = DpiPx(78); }
         }
-
-        return res;
+        else
+        {
+            _modeTiles.FlowDirection = FlowDirection.LeftToRight; _modeTiles.Height = DpiPx(84);
+        }
+        if (_screenSplit.Visible) LayoutBoundaryDrawer();
     }
 
-    // Export the current dialog state to a settings.json-format file the user picks.
-    private void Export_Click(object sender, EventArgs e)
+    private void LayoutScreenSectionText()
     {
-        using var dlg = new SaveFileDialog
+        if (_screenSection == null || _screenSectionHelp == null) return;
+        int gap = DpiPx(12), right = DpiPx(10);
+        int titleWidth = MeasureSingleLineWidth(_screenSectionTitle);
+        _screenSectionTitle.Width = Math.Min(titleWidth, Math.Max(DpiPx(80), _screenSection.ClientSize.Width / 2));
+        int minimumLeft = _screenSectionTitle.Right + gap;
+        FitRightAlignedText(_screenSectionHelp, minimumLeft, right);
+    }
+
+    private void LayoutDrawerQuestionText()
+    {
+        if (_overallLink?.Parent == null) return;
+        int gap = DpiPx(12), right = DpiPx(4);
+        FitRightAlignedText(_overallLink, Math.Min(DpiPx(260), _overallLink.Parent.ClientSize.Width / 2), right);
+        _drawerDirection.Width = Math.Max(DpiPx(120), _overallLink.Left - gap - _drawerDirection.Left);
+    }
+
+    private void FitRightAlignedText(Label label, int minimumLeft, int rightPadding)
+    {
+        int available = Math.Max(DpiPx(80), label.Parent.ClientSize.Width - minimumLeft - rightPadding);
+        label.Width = Math.Min(MeasureSingleLineWidth(label), available);
+        label.Left = Math.Max(minimumLeft, label.Parent.ClientSize.Width - rightPadding - label.Width);
+        int measuredHeight = TextRenderer.MeasureText(label.Text, label.Font, new Size(label.Width, 0),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Height;
+        label.Height = Math.Max(DpiPx(20), measuredHeight + DpiPx(2));
+    }
+
+    private int MeasureSingleLineWidth(Label label)
+    {
+        int rendered = TextRenderer.MeasureText(label.Text, label.Font, Size.Empty,
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Width + DpiPx(4);
+        return Math.Max(rendered, label.GetPreferredSize(Size.Empty).Width);
+    }
+
+    private void ReflowScreenRows(bool narrow)
+    {
+        var rows = _screenRows.Controls.OfType<TableLayoutPanel>().ToList();
+        if (rows.Count == 0) return;
+        rows[0].Visible = !narrow;
+        foreach (var row in rows.Skip(1))
         {
-            Title = Strings.ExportTitle,
-            Filter = Strings.SettingsFileFilter,
-            FileName = "MouseFence-settings.json",
-            DefaultExt = "json",
-            AddExtension = true,
-        };
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-        try
-        {
-            var draft = BuildResult();
-            var sealedScreens = draft.ValidateNoSeal(_monitors);
-            if (draft.HasRepairableImportErrors || sealedScreens.Length > 0)
+            var screen = row.GetControlFromPosition(0, 0);
+            var name = row.GetControlFromPosition(1, 0);
+            var resolution = row.GetControlFromPosition(2, 0) ?? row.GetControlFromPosition(1, 1);
+            var access = row.GetControlFromPosition(3, 0);
+            if (screen == null || name == null || resolution == null || access == null) continue;
+            row.SuspendLayout(); row.RowStyles.Clear(); row.ColumnStyles.Clear();
+            if (narrow)
             {
-                string message = sealedScreens.Length > 0
-                    ? string.Format(Strings.NoSealValidation, MonitorName(sealedScreens[0].StableId))
-                    : Strings.ImportInvalid;
-                MessageBox.Show(this, message,
-                                "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                row.RowCount = 2; row.RowStyles.Add(new RowStyle(SizeType.Percent, 58)); row.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 0)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176));
+                row.SetCellPosition(screen, new TableLayoutPanelCellPosition(0, 0)); row.SetRowSpan(screen, 2);
+                row.SetCellPosition(name, new TableLayoutPanelCellPosition(1, 0));
+                row.SetCellPosition(resolution, new TableLayoutPanelCellPosition(1, 1));
+                row.SetCellPosition(access, new TableLayoutPanelCellPosition(3, 0)); row.SetRowSpan(access, 2);
             }
-            var json = JsonSerializer.Serialize(draft, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(dlg.FileName, json);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            else
+            {
+                row.RowCount = 1; row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+                row.SetRowSpan(screen, 1); row.SetRowSpan(access, 1);
+                row.SetCellPosition(screen, new TableLayoutPanelCellPosition(0, 0)); row.SetCellPosition(name, new TableLayoutPanelCellPosition(1, 0));
+                row.SetCellPosition(resolution, new TableLayoutPanelCellPosition(2, 0)); row.SetCellPosition(access, new TableLayoutPanelCellPosition(3, 0));
+            }
+            row.ResumeLayout(true);
         }
     }
 
-    // Import a settings.json-format file: validate, confirm, then hand it back through the normal Save path
-    // (tray persists it and reconfigures the barrier). Same format as Export -> a round-trip just works.
-    private void Import_Click(object sender, EventArgs e)
+    private static void ReflowGrid(TableLayoutPanel grid, bool narrow, int width)
     {
-        using var dlg = new OpenFileDialog
+        var controls = grid.Controls.Cast<Control>().ToList();
+        grid.SuspendLayout(); grid.ColumnStyles.Clear(); grid.RowStyles.Clear(); grid.Width = width;
+        grid.ColumnCount = narrow ? 1 : 2;
+        for (int i = 0; i < grid.ColumnCount; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / grid.ColumnCount));
+        grid.RowCount = narrow ? controls.Count : (controls.Count + 1) / 2;
+        if ((grid.Tag as string) == "appearanceGrid") grid.Height = narrow ? 156 : 78;
+        for (int i = 0; i < controls.Count; i++) grid.SetCellPosition(controls[i], new TableLayoutPanelCellPosition(narrow ? 0 : i % 2, narrow ? i : i / 2));
+        grid.ResumeLayout(true);
+    }
+
+    private void ReserveDrawerStatusHeight()
+    {
+        if (_drawerStatus == null) return;
+        int width = Math.Max(DpiPx(220), _drawerStatus.Width);
+        _drawerStatus.Height = DrawerStatusCandidates().Max(text => TextRenderer.MeasureText(text, _drawerStatus.Font,
+            new Size(width, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height) + DpiPx(4);
+    }
+
+    private string[] DrawerStatusCandidates()
+    {
+        string longestName = _monitors.Select(ScreenName).OrderByDescending(n => n?.Length ?? 0).FirstOrDefault() ?? "";
+        return new[]
         {
-            Title = Strings.ImportTitle,
-            Filter = Strings.SettingsFileFilter,
-            CheckFileExists = true,
+            Strings.Ui("StatusUpClosed"), Strings.Ui("StatusSideOff"),
+            string.Format(Strings.Ui("StatusSafety"), longestName), Strings.Ui("BlockedByKeepOut"),
+            Strings.Ui("SavedInactive"), " "
         };
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-
-        Settings imported;
-        string json;
-        try
-        {
-            json = File.ReadAllText(dlg.FileName);
-            imported = JsonSerializer.Deserialize<Settings>(json);
-        }
-        catch
-        {
-            json = "";
-            imported = null;
-        }
-        if (imported == null)
-        {
-            MessageBox.Show(this, Strings.ImportInvalid, "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-        if (MessageBox.Show(this, Strings.ImportConfirm, "MouseFence", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-            return;
-
-        int importedVersion = Settings.ReadVersion(json);
-        imported.Normalize();
-        if (importedVersion < Settings.CurrentSettingsVersion)
-        {
-            imported.MigrateLayoutKeysToStable(_monitors);
-            imported.SettingsVersion = Settings.CurrentSettingsVersion;
-        }
-        var sealedScreens = imported.ValidateNoSeal(_monitors);
-        if (imported.HasRepairableImportErrors || sealedScreens.Length > 0)
-        {
-            string message = sealedScreens.Length > 0
-                ? string.Format(Strings.NoSealValidation, MonitorName(sealedScreens[0].StableId))
-                : Strings.ImportInvalid;
-            MessageBox.Show(this, message, "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-        Result = imported;
-        DialogResult = DialogResult.OK;   // closes the dialog; the tray saves + reconfigures via the existing path
     }
 
-    /// <summary>
-    /// Checked list whose mouse behavior is intentionally conservative: a row click selects/identifies, and only a
-    /// click in the checkbox column (or Space) changes the check state.
-    /// </summary>
-    private sealed class GlyphCheckedListBox : ListBox
+    private void UpdateShortcutErrors()
     {
-        private readonly List<CheckState> _states = new();
-
-        [System.ComponentModel.Browsable(false)]
-        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-        public Func<int, bool> ToggleAllowed { get; set; }
-        public bool ToggleAnywhere;
-        public event Action<int> RowClicked;
-        public event ItemCheckEventHandler ItemCheck;
-
-        public void ClearItems()
+        foreach (var frame in _hotkeyBoxes.Where(box => box != null).Select(box => box.Parent).OfType<ThemedControlFrame>())
         {
-            Items.Clear();
-            _states.Clear();
+            frame.Error = false; frame.AccessibleDescription = ""; frame.Invalidate();
+        }
+        var chordRows = Enumerable.Range(0, 4).Select(i => (Index: i, Text: HotkeyText(i), Name: ShortcutName(i)))
+            .Where(item => !string.Equals(item.Text, Strings.HotkeyPressKeys, StringComparison.Ordinal)).ToList();
+        var duplicate = chordRows.GroupBy(item => item.Text, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => (First: group.MinBy(item => item.Index), Later: group.MaxBy(item => item.Index)))
+            .OrderBy(pair => pair.Later.Index).FirstOrDefault();
+        if (duplicate.Later.Text != null)
+        {
+            string message = string.Format(Strings.Ui("DuplicateShortcutsNamed"), duplicate.First.Name, duplicate.Later.Name);
+            if (_hotkeyBoxes[duplicate.Later.Index]?.Parent is ThemedControlFrame frame)
+            {
+                frame.Error = true; frame.AccessibleDescription = message; frame.Invalidate();
+            }
+            SetInlineStatus(message, true);
+        }
+    }
+
+    private string ShortcutName(int index) => index switch
+    {
+        0 => Strings.HotkeyHead,
+        1 => Strings.GameHotkeyHead,
+        2 => Strings.PauseHotkeyHead,
+        _ => Strings.SideHotkeyHead,
+    };
+
+    private static TableLayoutPanel ScreenListGrid(int height)
+    {
+        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Height = height, ColumnCount = 4, Margin = Padding.Empty, Padding = new Padding(8, 0, 8, 0) };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        return grid;
+    }
+
+    private static Label ListHeader(string text) => new() { Text = text, Dock = DockStyle.Fill, Tag = "faint", TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI Semibold", 7.5f) };
+
+    private void PaintListSeparator(object sender, PaintEventArgs e)
+    {
+        if (sender is not Control control) return;
+        using var pen = new Pen(_theme.Border); e.Graphics.DrawLine(pen, 0, 0, control.Width, 0);
+    }
+
+    private static Panel PageHeader(string title, string subtitle, int width)
+    {
+        var panel = new Panel { Width = width, Height = 70, Margin = Padding.Empty };
+        panel.Controls.Add(new Label { Text = title, Left = 0, Top = 0, Width = width, Height = 29, Font = new Font("Segoe UI Semibold", 18f), Tag = "head" });
+        panel.Controls.Add(new Label { Text = subtitle, Left = 0, Top = 34, Width = width, Height = 28, Tag = "subtle" });
+        return panel;
+    }
+
+    private static void AddSectionHeading(Control flow, string text) => flow.Controls.Add(new Label { Text = text, Width = 790, Height = 46, Padding = new Padding(0, 16, 0, 0), Font = new Font("Segoe UI Semibold", 10.5f), Tag = "head" });
+    private static Label HelpLabel(string text, int width, int height = 30) => new() { Text = text, Width = width, Height = height, Tag = "subtle" };
+    private static Button FlatButton(string text, int width) => new() { Text = text, Width = width, Height = 32, FlatStyle = FlatStyle.Flat, Margin = new Padding(4, 0, 4, 0) };
+    private static Button LinkButton(string text, int width, int height) => new() { Text = text, Width = width, Height = height, FlatStyle = FlatStyle.Flat, FlatAppearance = { BorderSize = 0 }, Cursor = Cursors.Hand };
+    private static void AddUnique(List<string> list, string value) { if (!list.Contains(value, StringComparer.OrdinalIgnoreCase)) list.Add(value); }
+    private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private sealed class SidebarButton : Button
+    {
+        private Theme _theme = Theme.Light;
+        private bool _selected;
+        private bool _hovered;
+        public int Index { get; }
+        public event Action<int, int> SelectionRequested;
+
+        public SidebarButton(string text, int index)
+        {
+            Text = text;
+            Index = index;
+            TabStop = true;
+            Cursor = Cursors.Hand;
+            AccessibleRole = AccessibleRole.PageTab;
+            AccessibleName = text;
+            FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         }
 
-        public bool GetItemChecked(int index) =>
-            index >= 0 && index < _states.Count && _states[index] == CheckState.Checked;
-
-        public void SetItemChecked(int index, bool value)
+        public void SetState(Theme theme, bool selected)
         {
-            while (_states.Count < Items.Count) _states.Add(CheckState.Unchecked);
-            if (index < 0 || index >= Items.Count) throw new ArgumentOutOfRangeException(nameof(index));
-            var current = _states[index];
-            var requested = value ? CheckState.Checked : CheckState.Unchecked;
-            if (current == requested) return;
-            var args = new ItemCheckEventArgs(index, requested, current);
-            ItemCheck?.Invoke(this, args);
-            _states[index] = args.NewValue;
-            Invalidate(GetItemRectangle(index));
+            _theme = theme;
+            _selected = selected;
+            AccessibleDefaultActionDescription = selected ? "" : Text;
+            Invalidate();
         }
 
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            Focus();
-            int index = IndexFromPoint(e.Location);
-            if (index < 0) return;
-            SelectedIndex = index;
-            RowClicked?.Invoke(index);
-            if (e.Button == MouseButtons.Left && (ToggleAnywhere || e.X <= 24) && (ToggleAllowed?.Invoke(index) ?? true))
-                SetItemChecked(index, !GetItemChecked(index));
-            Invalidate(GetItemRectangle(index));
-        }
-
+        protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override bool IsInputKey(Keys keyData) =>
+            (keyData & Keys.KeyCode) is Keys.Up or Keys.Down or Keys.Left or Keys.Right || base.IsInputKey(keyData);
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Space && SelectedIndex >= 0)
+            if (e.KeyCode is Keys.Left or Keys.Right or Keys.Up or Keys.Down)
             {
+                SelectionRequested?.Invoke(Index, e.KeyCode is Keys.Left or Keys.Up ? -1 : 1);
                 e.Handled = true;
-                e.SuppressKeyPress = true;
-                if (ToggleAllowed?.Invoke(SelectedIndex) ?? true)
-                    SetItemChecked(SelectedIndex, !GetItemChecked(SelectedIndex));
-                return;
+            }
+            else if (e.KeyCode is Keys.Enter or Keys.Space)
+            {
+                OnClick(EventArgs.Empty);
+                e.Handled = true;
             }
             base.OnKeyDown(e);
         }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(_theme.Sidebar);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var path = Rounded(rect, 6);
+            using var fill = new SolidBrush(_selected ? _theme.AccentWeak : _hovered ? _theme.Surface2 : _theme.Sidebar);
+            e.Graphics.FillPath(fill, path);
+            Color text = _selected ? _theme.Accent : _hovered ? _theme.Text : _theme.Subtle;
+            using var font = new Font("Segoe UI Semibold", 9f, _selected ? FontStyle.Bold : FontStyle.Regular);
+            var textRect = new Rectangle(10, 0, Width - 18, Height);
+            TextRenderer.DrawText(e.Graphics, Text, font, textRect, text,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(4, 4, Width - 8, Height - 8), _theme.Text, _selected ? _theme.AccentWeak : _theme.Sidebar);
+        }
+        protected override AccessibleObject CreateAccessibilityInstance() => new SidebarAccessibleObject(this);
+        private sealed class SidebarAccessibleObject : ControlAccessibleObject
+        {
+            private readonly SidebarButton _owner;
+            public SidebarAccessibleObject(SidebarButton owner) : base(owner) => _owner = owner;
+            public override AccessibleStates State => base.State | (_owner._selected ? AccessibleStates.Selected : AccessibleStates.None);
+        }
+    }
+
+    /// <summary>The native TabControl remains the page host, but contributes no header or page-frame chrome.</summary>
+    private sealed class FlatTabControl : TabControl
+    {
+        public FlatTabControl()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer, true);
+        }
+
+        public override Rectangle DisplayRectangle => ClientRectangle;
+
+        protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(BackColor);
+        protected override void OnPaint(PaintEventArgs e) => e.Graphics.Clear(BackColor);
+    }
+
+    private sealed class DrawerCloseButton : Control
+    {
+        private Theme _theme = Theme.Light;
+        private bool _hovered;
+        public DrawerCloseButton()
+        {
+            Text = "×";
+            TabStop = true;
+            Cursor = Cursors.Hand;
+            AccessibleRole = AccessibleRole.PushButton;
+            DoubleBuffered = true;
+        }
+        public void SetTheme(Theme theme) { _theme = theme; Invalidate(); }
+        protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode is Keys.Enter or Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; }
+            base.OnKeyDown(e);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            if (_hovered)
+            {
+                using var hover = new SolidBrush(_theme.AccentWeak);
+                e.Graphics.FillEllipse(hover, 2, 0, Width - 4, Height - 2);
+            }
+            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, _hovered ? _theme.Accent : _theme.Subtle,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            if (Focused) ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(3, 2, Width - 6, Height - 4), _theme.Text, Color.Transparent);
+        }
+    }
+
+    /// <summary>LinkLabel's stock disabled renderer embosses text on dark surfaces; keep disabled semantics with flat ink.</summary>
+    private sealed class FlatLinkLabel : LinkLabel
+    {
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            if (Enabled) { base.OnPaint(e); return; }
+            e.Graphics.Clear(BackColor);
+            var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
+                        TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+            flags |= TextAlign switch
+            {
+                ContentAlignment.TopCenter or ContentAlignment.MiddleCenter or ContentAlignment.BottomCenter => TextFormatFlags.HorizontalCenter,
+                ContentAlignment.TopRight or ContentAlignment.MiddleRight or ContentAlignment.BottomRight => TextFormatFlags.Right,
+                _ => TextFormatFlags.Left,
+            };
+            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, DisabledLinkColor, flags);
+        }
+    }
+
+    private sealed class MapLegend : Control
+    {
+        private Theme _theme = Theme.Light;
+        public MapLegend() { DoubleBuffered = true; Font = new Font("Segoe UI", 8.25f); }
+        public void SetTheme(Theme theme) { _theme = theme; BackColor = theme.Back; ForeColor = theme.Subtle; Invalidate(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            int x = 0;
+            x = DrawLegendItem(e.Graphics, x, "star", Strings.Ui("LegendMainM2"));
+            x = DrawLegendItem(e.Graphics, x + 18, "hatch", Strings.Ui("LegendKeepOutM2"));
+            DrawLegendItem(e.Graphics, x + 18, "dot", Strings.Ui("LegendCrossingM2"));
+        }
+        private int DrawLegendItem(Graphics g, int x, string glyph, string text)
+        {
+            var swatch = new Rectangle(x, 6, 16, 16);
+            if (glyph == "star")
+                TextRenderer.DrawText(g, "★", Font, swatch, _theme.Star, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            else if (glyph == "hatch")
+            {
+                using var back = new SolidBrush(_theme.Surface);
+                using var hatch = new HatchBrush(HatchStyle.ForwardDiagonal, _theme.Danger, _theme.Surface);
+                using var border = new Pen(_theme.Border);
+                g.FillRectangle(back, swatch); g.FillRectangle(hatch, swatch); g.DrawRectangle(border, swatch);
+            }
+            else
+            {
+                using var ring = new Pen(_theme.Surface2, 2);
+                using var dot = new SolidBrush(_theme.Subtle);
+                g.FillEllipse(dot, x + 3, 9, 10, 10); g.DrawEllipse(ring, x + 3, 9, 10, 10);
+            }
+            int width = TextRenderer.MeasureText(g, text, Font, Size.Empty, TextFormatFlags.NoPadding).Width;
+            TextRenderer.DrawText(g, text, Font, new Rectangle(x + 21, 3, width + 2, 22), _theme.Subtle,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            return x + 23 + width;
+        }
+    }
+
+    private sealed class NumberChip : Control
+    {
+        public int Number; public bool Accent; private Theme _theme = Theme.Light;
+        public NumberChip() { DoubleBuffered = true; Font = new Font("Segoe UI Semibold", 9f); }
+        public void SetTheme(Theme theme) { _theme = theme; Invalidate(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), 6);
+            using var brush = new SolidBrush(Accent ? _theme.AccentWeak : _theme.Chip); e.Graphics.FillPath(brush, path);
+            TextRenderer.DrawText(e.Graphics, Number.ToString(), Font, ClientRectangle, Accent ? _theme.Accent : _theme.ChipText,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+    }
+
+    private sealed class ModeTile : Control
+    {
+        public BoundaryBehavior Behavior; public string Title = ""; public string Help = "";
+        private bool _selected; private Theme _theme = Theme.Light;
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool Selected { get => _selected; set { _selected = value; Invalidate(); } }
+        public ModeTile() { DoubleBuffered = true; Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.PushButton; }
+        public void SetTheme(Theme theme) { _theme = theme; BackColor = theme.Surface; ForeColor = theme.Text; AccessibleName = Title + ". " + Help; Invalidate(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var path = Rounded(new Rectangle(1, 1, Width - 3, Height - 3), 8);
+            using var fill = new SolidBrush(Selected ? _theme.AccentWeak : _theme.Surface); e.Graphics.FillPath(fill, path);
+            using var border = new Pen(Selected ? _theme.Accent : _theme.Border, Selected ? 1.8f : 1f); e.Graphics.DrawPath(border, path);
+            DrawGlyph(e.Graphics, new Point(22, Height / 2));
+            bool shortTile = Height < 60 && Help.Length > 0;
+            var titleRect = new Rectangle(44, Help.Length == 0 ? 4 : shortTile ? 2 : 10, Width - 52, Help.Length == 0 ? Height - 8 : shortTile ? 19 : 22);
+            TextRenderer.DrawText(e.Graphics, Title, new Font(Font, FontStyle.Bold), titleRect, Selected ? _theme.Accent : _theme.Text,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            if (Help.Length > 0)
+            {
+                var helpRect = shortTile
+                    ? new Rectangle(44, 21, Width - 52, Height - 24)
+                    : new Rectangle(44, 31, Width - 52, Height - 35);
+                TextRenderer.DrawText(e.Graphics, Help, Font, helpRect, _theme.Subtle,
+                    TextFormatFlags.Left | (shortTile ? TextFormatFlags.SingleLine : TextFormatFlags.WordBreak) |
+                    TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            }
+            if (Focused) ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(4, 4, Width - 8, Height - 8), _theme.Text, Color.Transparent);
+        }
+        private void DrawGlyph(Graphics g, Point p)
+        {
+            if (Behavior == BoundaryBehavior.Blocked) { using var pen = new Pen(_theme.Text, 5); g.DrawLine(pen, p.X - 8, p.Y, p.X + 8, p.Y); }
+            else if (Behavior == BoundaryBehavior.Push) { using var b = new SolidBrush(_theme.Accent); g.FillPolygon(b, new[] { new Point(p.X, p.Y - 8), new Point(p.X + 8, p.Y), new Point(p.X, p.Y + 8), new Point(p.X - 8, p.Y) }); }
+            else { using var pen = new Pen(_theme.Accent, 2); g.DrawEllipse(pen, p.X - 7, p.Y - 7, 14, 14); }
+        }
+        protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode is Keys.Enter or Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; } base.OnKeyDown(e); }
+    }
+
+    private static GraphicsPath Rounded(Rectangle r, int radius)
+    {
+        int d = Math.Max(2, Math.Min(radius * 2, Math.Min(r.Width, r.Height)));
+        var p = new GraphicsPath(); p.AddArc(r.Left, r.Top, d, d, 180, 90); p.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.Left, r.Bottom - d, d, d, 90, 90); p.CloseFigure(); return p;
     }
 }

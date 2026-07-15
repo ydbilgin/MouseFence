@@ -62,6 +62,24 @@ bool InRect((int L, int T, int R, int B) rect, int x, int y) =>
 bool IsLegalWallResult(GuardCore c, int x, int y) =>
     c.Monitors.Any(m => InRect(m, x, y)) && !c.Forbidden.Any(f => InRect(f, x, y));
 
+IEnumerable<Control> DescendantsAndSelf(Control root)
+{
+    yield return root;
+    foreach (Control child in root.Controls)
+        foreach (var descendant in DescendantsAndSelf(child))
+            yield return descendant;
+}
+
+void ShowOffscreen(Form form)
+{
+    form.StartPosition = FormStartPosition.Manual;
+    form.Location = new Point(SystemInformation.VirtualScreen.Right + 2000, SystemInformation.VirtualScreen.Bottom + 2000);
+    form.Opacity = 0;
+    form.Show();
+    Application.DoEvents();
+    form.PerformLayout();
+}
+
 void SetLast(GuardCore c, int x, int y)
 {
     c.LastX = x;
@@ -104,6 +122,373 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     var r = Move(c, 3600, -20, true);
     Check("right-screen void: up into void is blocked & clamped to Y=0",
         r.act == GuardAction.Block && r.by == 0 && !r.onTop, $"act={r.act} by={r.by} onTop={r.onTop}");
+}
+
+// M2 transaction: constructing/editing the dialog works on a true deep draft and cannot touch the live object.
+{
+    var live = new Settings
+    {
+        Mode = "Manual", ManualMonitors = new List<string> { "top" },
+        MonitorNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["top"] = "Studio" },
+        BoundaryRules = new List<BoundaryRule> { new() { FromStableId = "main", ToStableId = "top",
+            Direction = BoundaryDirection.Up, Behavior = BoundaryBehavior.Push, Control = BoundaryControl.Automatic } },
+    };
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "top", Device = @"\\.\DISPLAY2", Index = 1, Bounds = new Native.RECT { Left = 0, Top = -100, Right = 100, Bottom = 0 } },
+        new() { StableId = "main", Device = @"\\.\DISPLAY1", Index = 2, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+    };
+    using var form = new SettingsForm(live, monitors);
+    var draft = form.DraftForTests;
+    draft.ManualMonitors.Clear(); draft.MonitorNames["top"] = "Changed"; draft.BoundaryRules[0].Behavior = BoundaryBehavior.Blocked;
+    bool isolated = live.ManualMonitors.SequenceEqual(new[] { "top" }) && live.MonitorNames["top"] == "Studio"
+        && live.BoundaryRules[0].Behavior == BoundaryBehavior.Push
+        && !ReferenceEquals(live.ManualMonitors, draft.ManualMonitors)
+        && !ReferenceEquals(live.MonitorNames, draft.MonitorNames)
+        && !ReferenceEquals(live.BoundaryRules[0], draft.BoundaryRules[0]);
+    Check("M2 settings transaction: form owns a nested deep draft and Cancel cannot mutate live settings", isolated);
+}
+
+// B2 footer regression: every footer child must receive the resolved theme, not its constructor-time light default.
+{
+    Strings.Use("en");
+    using var form = new SettingsForm(new Settings { Language = "en", Theme = "Dark" }, new List<MonitorInfo>())
+    {
+        StartPosition = FormStartPosition.Manual,
+        Location = new Point(SystemInformation.VirtualScreen.Right + 2000, SystemInformation.VirtualScreen.Bottom + 2000),
+        Opacity = 0,
+    };
+    form.Show(); Application.DoEvents(); form.PerformLayout();
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var status = (Label)typeof(SettingsForm).GetField("_inlineStatus", flags).GetValue(form);
+    var footer = status.Parent;
+    var themedButtons = footer.Controls.OfType<ThemedButton>().ToList();
+    var themeField = typeof(ThemedButton).GetField("_theme", flags);
+    using var footerBitmap = new Bitmap(footer.Width, footer.Height);
+    footer.DrawToBitmap(footerBitmap, footer.ClientRectangle);
+    var paintedFills = themedButtons.Select(button => footerBitmap.GetPixel(button.Left + 5, button.Top + button.Height / 2)).ToList();
+    bool painted = paintedFills.All(color => color == Theme.Dark.Surface2 || color == Theme.Dark.DisabledSurface || color == Theme.Dark.Accent);
+    bool enrolled = footer.BackColor == Theme.Dark.Surface && status.BackColor == Theme.Dark.Surface
+        && themedButtons.Count == 3 && themedButtons.All(button => (Theme)themeField.GetValue(button) == Theme.Dark) && painted;
+    Check("B2 footer: dark surface, status, validation action, Cancel, and Save are enrolled in theming",
+        enrolled,
+        $"footer={footer.BackColor} status={status.BackColor} buttons={themedButtons.Count} fills=[{string.Join(",", paintedFills)}] themes=[{string.Join(",", themedButtons.Select(button => themeField.GetValue(button)))}]");
+}
+
+// Fable v2 acceptance: Advanced is a first-class page, its physical-pixel fold is deterministic,
+// and the boundary editor is a full-width inline row with statically placed disclosures.
+foreach (string language in new[] { "en", "tr" })
+{
+    Strings.Use(language);
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "top", Device = @"\\.\DISPLAY2", Index = 1, Bounds = new Native.RECT { Left = 0, Top = -900, Right = 1600, Bottom = 0 } },
+        new() { StableId = "main", Device = @"\\.\DISPLAY1", Index = 2, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 1920, Bottom = 1080 } },
+        new() { StableId = "right", Device = @"\\.\DISPLAY3", Index = 3, Bounds = new Native.RECT { Left = 1920, Top = 0, Right = 3200, Bottom = 1024 } },
+        new() { StableId = "left", Device = @"\\.\DISPLAY4", Index = 4, Bounds = new Native.RECT { Left = -1280, Top = 0, Right = 0, Bottom = 1024 } },
+        new() { StableId = "far-top", Device = @"\\.\DISPLAY5", Index = 5, Bounds = new Native.RECT { Left = 1600, Top = -768, Right = 2624, Bottom = 0 } },
+    };
+    using var form = new SettingsForm(new Settings { Language = language, DownwardBoundaryDefault = BoundaryDefault.Blocked }, monitors)
+    {
+        StartPosition = FormStartPosition.Manual,
+        Location = new Point(SystemInformation.VirtualScreen.Right + 2000, SystemInformation.VirtualScreen.Bottom + 2000),
+        Opacity = 0,
+    };
+    form.Show(); Application.DoEvents();
+    form.ClientSize = new Size(1064 * form.DeviceDpi / 96, 712 * form.DeviceDpi / 96);
+    Application.DoEvents(); form.PerformLayout();
+
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var toggle = (Button)typeof(SettingsForm).GetField("_advancedToggle", flags).GetValue(form);
+    var panel = (Control)typeof(SettingsForm).GetField("_advancedPanel", flags).GetValue(form);
+    var tabs = (TabControl)typeof(SettingsForm).GetField("_tabs", flags).GetValue(form);
+    var advancedPage = (TabPage)typeof(SettingsForm).GetField("_advancedPage", flags).GetValue(form);
+    bool fourPages = tabs.TabCount == 4 && tabs.TabPages[1] == advancedPage;
+    bool initialChevron = toggle.Text.StartsWith("›  ", StringComparison.Ordinal);
+    form.SelectTab(1); Application.DoEvents(); form.PerformLayout();
+    toggle.PerformClick(); Application.DoEvents(); form.PerformLayout();
+    panel.PerformLayout();
+    var numericGrid = panel.Controls.Cast<Control>().First(c => (c.Tag as string) == "numericGrid");
+    bool revealed = tabs.SelectedIndex == 1 && panel.Visible && numericGrid.Visible && toggle.Text.StartsWith("⌄  ", StringComparison.Ordinal);
+
+    form.OpenFirstBoundaryForPreview();
+    Application.DoEvents(); form.PerformLayout(); panel.PerformLayout();
+    var returnLine = (Label)typeof(SettingsForm).GetField("_returnLine", flags).GetValue(form);
+    bool truthfulReturn = returnLine.Text == Strings.Ui("ComingDownBlocked");
+    var drawerFlow = (FlowLayoutPanel)typeof(SettingsForm).GetField("_drawerFlow", flags).GetValue(form);
+    var editorHost = (Panel)typeof(SettingsForm).GetField("_screenSplit", flags).GetValue(form);
+    var body = (FlowLayoutPanel)typeof(SettingsForm).GetField("_bodyFlow", flags).GetValue(form);
+    var whenLink = (LinkLabel)typeof(SettingsForm).GetField("_whenLink", flags).GetValue(form);
+    var separateLink = (LinkLabel)typeof(SettingsForm).GetField("_separateLink", flags).GetValue(form);
+    Rectangle whenInDrawer = drawerFlow.RectangleToClient(whenLink.RectangleToScreen(whenLink.ClientRectangle));
+    bool drawerFits = editorHost.Visible && whenLink.Visible && separateLink.Visible && !separateLink.Enabled
+        && whenInDrawer.Top >= 0 && whenInDrawer.Bottom <= drawerFlow.ClientSize.Height
+        && editorHost.Width >= body.ClientSize.Width - body.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - 8;
+    bool resetsContained = panel.Controls.Cast<Control>().SelectMany(DescendantsAndSelf)
+        .OfType<Button>().Where(button => (button.Tag as string) == "numericReset")
+        .All(button => button.Right <= button.Parent.ClientSize.Width + 1);
+    bool contained = !advancedPage.HorizontalScroll.Visible
+        && panel.Controls.Cast<Control>().All(c => c.Right <= panel.ClientSize.Width + 1)
+        && resetsContained;
+    form.SelectTab(1); Application.DoEvents();
+    toggle.PerformClick(); Application.DoEvents();
+    bool collapsed = panel.Visible && !numericGrid.Visible && toggle.Text.StartsWith("›  ", StringComparison.Ordinal);
+    Check($"v2 shell ({language}): four-page nav, physical-pixel fold, full-width inline editor, static disclosures",
+        fourPages && initialChevron && revealed && truthfulReturn && drawerFits && contained && collapsed,
+        $"pages={fourPages} initial={initialChevron} revealed={revealed} truthfulReturn={truthfulReturn} drawerFits={drawerFits} contained={contained} resetsContained={resetsContained} collapsed={collapsed} panelVisible={panel.Visible} toggle='{toggle.Text}' " +
+        $"bodyClient={body.ClientSize.Width} editor={editorHost.Width} panel={panel.Width}/{panel.ClientSize.Width} " +
+        $"childMax={panel.Controls.Cast<Control>().DefaultIfEmpty().Max(c => c?.Right ?? 0)} hscroll={advancedPage.HorizontalScroll.Visible}");
+}
+
+// B2 FIX2: the inherited and active overall-behavior links must receive their full measured single-line width.
+foreach (string language in new[] { "en", "tr" })
+{
+    Strings.Use(language);
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "left", Device = @"\\.\DISPLAY1", Index = 1, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new() { StableId = "right", Device = @"\\.\DISPLAY2", Index = 2, Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+    };
+    using var form = new SettingsForm(new Settings { Language = language }, monitors)
+    {
+        StartPosition = FormStartPosition.Manual,
+        Location = new Point(SystemInformation.VirtualScreen.Right + 2000, SystemInformation.VirtualScreen.Bottom + 2000),
+        Opacity = 0,
+    };
+    form.Show(); Application.DoEvents(); form.ClientSize = new Size(1064, 712); form.PerformLayout();
+    form.OpenFirstBoundaryForPreview(); Application.DoEvents(); form.PerformLayout();
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var overall = (LinkLabel)typeof(SettingsForm).GetField("_overallLink", flags).GetValue(form);
+    int RequiredWidth() => Math.Max(
+        TextRenderer.MeasureText(overall.Text, overall.Font, Size.Empty,
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Width + 4 * form.DeviceDpi / 96,
+        overall.GetPreferredSize(Size.Empty).Width);
+    int measured = RequiredWidth();
+    Check($"B2 FIX2 ({language}): inherited overall-behavior link receives its full measured width",
+        overall.Width >= measured,
+        $"text='{overall.Text}' width={overall.Width} measured={measured} left={overall.Left} parent={overall.Parent.ClientSize.Width} dpi={form.DeviceDpi}");
+
+    var freeTile = (Control)typeof(SettingsForm).GetField("_freeTile", flags).GetValue(form);
+    freeTile.GetType().GetMethod("OnClick", flags).Invoke(freeTile, new object[] { EventArgs.Empty });
+    Application.DoEvents(); form.PerformLayout(); measured = RequiredWidth();
+    Check($"B2 FIX2 ({language}): active overall-behavior link receives its full measured width",
+        overall.Text == Strings.Ui("UseOverallBehavior") && overall.Width >= measured,
+        $"text='{overall.Text}' width={overall.Width} measured={measured} left={overall.Left} parent={overall.Parent.ClientSize.Width} dpi={form.DeviceDpi}");
+}
+
+// FIX4 restore/import transaction: the form owns a draft, and only a confirmed valid import produces Result.
+{
+    Strings.Use("en");
+    string path = Path.Combine(Path.GetTempPath(), $"MouseFence-valid-restore-{Guid.NewGuid():N}.json");
+    try
+    {
+        using (var source = new SettingsForm(new Settings { Language = "en", UpCrossMin = 20 }, new List<MonitorInfo>()))
+            source.BackupToFileForTests(path);
+        var live = new Settings { Language = "en", UpCrossMin = 3 };
+        using var form = new SettingsForm(live, new List<MonitorInfo>());
+        int confirmations = 0;
+        form.RestorePathPickerForTests = () => path;
+        form.RestoreConfirmForTests = () => { confirmations++; return true; };
+        form.RestoreFromFileForTests();
+        Check("B2 restore: a confirmed valid exported file produces the replacement Result without mutating live settings",
+            confirmations == 1 && form.DialogResult == DialogResult.OK && form.Result?.UpCrossMin == 20 && live.UpCrossMin == 3,
+            $"confirmations={confirmations} dialog={form.DialogResult} result={form.Result?.UpCrossMin} live={live.UpCrossMin}");
+    }
+    finally { if (File.Exists(path)) File.Delete(path); }
+}
+{
+    Strings.Use("en");
+    string path = Path.Combine(Path.GetTempPath(), $"MouseFence-repairable-restore-{Guid.NewGuid():N}.json");
+    try
+    {
+        File.WriteAllText(path, "{\"SettingsVersion\":4,\"UpCrossMin\":60,\"UpwardBoundaryDefault\":\"Surprise\"}");
+        var live = new Settings { Language = "en", UpCrossMin = 3, UpwardBoundaryDefault = BoundaryDefault.Automatic };
+        using var form = new SettingsForm(live, new List<MonitorInfo>());
+        int confirmations = 0;
+        form.RestorePathPickerForTests = () => path;
+        form.RestoreConfirmForTests = () => { confirmations++; return true; };
+        form.RestoreFromFileForTests();
+        Check("B2 restore: repairable-invalid import remains a draft and leaves live settings untouched",
+            confirmations == 0 && form.Result == null && form.DraftForTests.HasRepairableImportErrors
+            && form.DraftForTests.UpCrossMin == 60 && live.UpCrossMin == 3,
+            $"confirmations={confirmations} result={form.Result != null} repairable={form.DraftForTests.HasRepairableImportErrors} draft={form.DraftForTests.UpCrossMin} live={live.UpCrossMin}");
+
+        form.DraftForTests.UpwardBoundaryDefault = BoundaryDefault.Automatic;
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        typeof(SettingsForm).GetMethod("Save_Click", flags).Invoke(form, new object[] { form, EventArgs.Empty });
+        Check("B2 restore: repairing the imported draft permits a valid apply Result while the caller-owned live object stays isolated",
+            form.DialogResult == DialogResult.OK && form.Result?.UpCrossMin == 60
+            && !form.Result.HasRepairableImportErrors && live.UpCrossMin == 3,
+            $"dialog={form.DialogResult} result={form.Result?.UpCrossMin} resultRepairable={form.Result?.HasRepairableImportErrors} live={live.UpCrossMin}");
+    }
+    finally { if (File.Exists(path)) File.Delete(path); }
+}
+
+// Fold-in A: differing horizontal rules have no false primary selection; a primary choice reunifies the pair.
+{
+    Strings.Use("en");
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "left", Index = 1, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new() { StableId = "right", Index = 2, Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+    };
+    var settings = new Settings
+    {
+        BoundaryRules = new List<BoundaryRule>
+        {
+            new() { FromStableId = "left", ToStableId = "right", Direction = BoundaryDirection.Right, Behavior = BoundaryBehavior.Push, Control = BoundaryControl.Automatic },
+            new() { FromStableId = "right", ToStableId = "left", Direction = BoundaryDirection.Left, Behavior = BoundaryBehavior.Free, Control = BoundaryControl.Automatic },
+        },
+    };
+    using var form = new SettingsForm(settings, monitors);
+    ShowOffscreen(form);
+    form.OpenFirstBoundaryForPreview();
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var caption = (Label)typeof(SettingsForm).GetField("_drawerDirection", flags).GetValue(form);
+    var tiles = new[] { "_freeTile", "_pushTile", "_blockedTile" }
+        .Select(name => typeof(SettingsForm).GetField(name, flags).GetValue(form)).ToArray();
+    bool selected(object tile) => (bool)tile.GetType().GetProperty("Selected").GetValue(tile);
+    Check("B2 split-direction: differing pair shows Different by direction and no selected primary tile",
+        caption.Text == Strings.Ui("DifferentByDirection") && tiles.All(tile => !selected(tile)),
+        $"caption='{caption.Text}' selected=[{string.Join(",", tiles.Select(selected))}]");
+
+    var blocked = tiles[2];
+    blocked.GetType().GetMethod("OnClick", flags).Invoke(blocked, new object[] { EventArgs.Empty });
+    var pairRules = form.DraftForTests.BoundaryRules.Where(rule =>
+        (rule.FromStableId == "left" && rule.ToStableId == "right") || (rule.FromStableId == "right" && rule.ToStableId == "left")).ToList();
+    Check("B2 split-direction: selecting a primary tile reunifies both directions",
+        caption.Text == Strings.Ui("BothDirections") && selected(blocked) && pairRules.Count == 2
+        && pairRules.All(rule => rule.Behavior == BoundaryBehavior.Blocked),
+        $"caption='{caption.Text}' selected={selected(blocked)} rules=[{string.Join(",", pairRules.Select(rule => rule.Behavior))}]");
+}
+
+// Fold-in B: status text exists only when live runtime state changes the selected/inherited effective behavior.
+{
+    Strings.Use("en");
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "left", Index = 1, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new() { StableId = "right", Index = 2, Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+    };
+    bool sideProtectionOn = true;
+    using var form = new SettingsForm(new Settings(), monitors,
+        () => new SettingsRuntimeState(UpwardPassageOpen: true, SideProtectionOn: sideProtectionOn, Paused: false));
+    ShowOffscreen(form);
+    form.OpenFirstBoundaryForPreview();
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var status = (Label)typeof(SettingsForm).GetField("_drawerStatus", flags).GetValue(form);
+    var overall = (LinkLabel)typeof(SettingsForm).GetField("_overallLink", flags).GetValue(form);
+    Check("B2 status slot: plain inherited behavior agreeing with live state is empty",
+        overall.Text == Strings.Ui("UsingOverallBehavior") && status.Text.Length == 0,
+        $"overall='{overall.Text}' status='{status.Text}'");
+    sideProtectionOn = false;
+    typeof(SettingsForm).GetMethod("UpdateLiveStatus", flags).Invoke(form, null);
+    Check("B2 status slot: live result diverging from the selected tile is non-empty",
+        status.Text == Strings.Ui("StatusSideOff"), $"status='{status.Text}'");
+}
+
+// Fold-in C/D: frozen numeric help copy is present in the actual grid, and every actual status candidate fits the reserve.
+foreach (string language in new[] { "en", "tr" })
+{
+    Strings.Use(language);
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "left", Index = 1, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new() { StableId = "right", Index = 2, Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+    };
+    using var form = new SettingsForm(new Settings { Language = language,
+        MonitorNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["left"] = "Twenty Four Character Name" } }, monitors);
+    ShowOffscreen(form);
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var advanced = (Control)typeof(SettingsForm).GetField("_advancedPanel", flags).GetValue(form);
+    var numericGrid = advanced.Controls.Cast<Control>().First(control => (control.Tag as string) == "numericGrid");
+    var numericText = DescendantsAndSelf(numericGrid).OfType<Label>().Select(label => label.Text).ToHashSet();
+    string strength = language == "en" ? "3 = default · 20 = firm · 60 = very firm."
+        : "3 = varsayılan · 20 = sıkı · 60 = çok sıkı.";
+    string holdback = language == "en"
+        ? "0 = exactly at the edge (default). Applies wherever the pointer is stopped — Never crosses and a failed firm push alike. These are physical pixels."
+        : "0 = tam kenarda (varsayılan). İşaretçinin durdurulduğu her yerde uygulanır: hem Asla geçmez hem de başarısız sıkı itiş için. Bunlar fiziksel piksellerdir.";
+    Check($"B2 numeric helpers ({language}): frozen strength and hold-back sentences are present in the Advanced grid",
+        Strings.Ui("UpStrengthHelp") == strength && Strings.Ui("EdgeHoldbackHelpV2") == holdback
+        && numericText.Contains(strength) && numericText.Contains(holdback));
+
+    form.OpenFirstBoundaryForPreview(); form.PerformLayout();
+    var drawerStatus = (Label)typeof(SettingsForm).GetField("_drawerStatus", flags).GetValue(form);
+    int reserveWidth = Math.Max(220 * form.DeviceDpi / 96, drawerStatus.Width);
+    var measured = form.DrawerStatusCandidatesForTests.Select(text => TextRenderer.MeasureText(text, drawerStatus.Font,
+        new Size(reserveWidth, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height + 4 * form.DeviceDpi / 96).ToList();
+    Check($"B2 status reserve ({language}): allocated height fits every locale/width candidate",
+        measured.All(height => drawerStatus.Height >= height),
+        $"reserved={drawerStatus.Height} measured=[{string.Join(",", measured)}] width={reserveWidth}");
+}
+
+// Fold-in E: duplicate resolution consistently marks the later-recorded row and names both actions in the footer.
+{
+    Strings.Use("en");
+    var settings = new Settings
+    {
+        HotKey = Keys.Up, ModCtrl = true, ModAlt = true,
+        PauseHotKey = Keys.Up, PauseModCtrl = true, PauseModAlt = true,
+    };
+    using var form = new SettingsForm(settings, new List<MonitorInfo>());
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var boxes = (TextBox[])typeof(SettingsForm).GetField("_hotkeyBoxes", flags).GetValue(form);
+    var frames = boxes.Select(box => (ThemedControlFrame)box.Parent).ToArray();
+    string expected = string.Format(Strings.Ui("DuplicateShortcutsNamed"), Strings.HotkeyHead, Strings.PauseHotkeyHead);
+    Check("B2 duplicate chord: later-recorded row is flagged and footer names both conflicting actions",
+        !frames[0].Error && frames[2].Error && frames.Where((_, index) => index != 2).All(frame => !frame.Error)
+        && form.InlineStatusForTests == expected,
+        $"errors=[{string.Join(",", frames.Select(frame => frame.Error))}] footer='{form.InlineStatusForTests}' expected='{expected}'");
+}
+
+{
+    Strings.Use("en");
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "top", Device = @"\\.\DISPLAY2", Index = 1, Bounds = new Native.RECT { Left = 0, Top = -100, Right = 100, Bottom = 0 } },
+        new() { StableId = "main", Device = @"\\.\DISPLAY1", Index = 2, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+    };
+    using var form = new SettingsForm(new Settings { Language = "en" }, monitors);
+    string path = Path.Combine(Path.GetTempPath(), $"MouseFence-m2p2-{Guid.NewGuid():N}.json");
+    try
+    {
+        bool wrote = form.BackupToFileForTests(path);
+        var restored = File.Exists(path) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(path)) : null;
+        Check("M2 polish backup: successful write persists the draft and posts localized success feedback",
+            wrote && restored != null && form.InlineStatusForTests == Strings.Ui("BackupDone"),
+            $"wrote={wrote} restored={restored != null} status='{form.InlineStatusForTests}'");
+    }
+    finally
+    {
+        if (File.Exists(path)) File.Delete(path);
+    }
+}
+
+{
+    string normalized = Settings.NormalizeMonitorName("  " + string.Concat(Enumerable.Repeat("e\u0301", 30)) + "\tStudio\r\n  ");
+    int elements = System.Globalization.StringInfo.ParseCombiningCharacters(normalized).Length;
+    Check("M2 screen names: tabs/newlines become one line and the limit is 24 Unicode text elements",
+        elements == 24 && !normalized.Contains('\t') && !normalized.Contains('\r') && !normalized.Contains('\n'),
+        $"elements={elements} value={normalized}");
+}
+
+// M2 map: the same compiler-backed pair is mouse/keyboard reachable and represented by virtual accessible children.
+{
+    var settings = new Settings();
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "top", Index = 1, Bounds = new Native.RECT { Left = 0, Top = -100, Right = 100, Bottom = 0 } },
+        new() { StableId = "main", Index = 2, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+    };
+    using var map = new MonitorMapControl { Size = new Size(400, 180) };
+    map.SetModel(monitors, settings);
+    using var bmp = new Bitmap(map.Width, map.Height); map.DrawToBitmap(bmp, map.ClientRectangle);
+    var boundary = map.Boundaries.Single();
+    var accessible = map.AccessibilityObject;
+    Check("M2 map: one tab stop exposes screens and boundary as accessible virtual children with 24x24 target",
+        map.TabStop && boundary.HitTarget.Width >= 24 && boundary.HitTarget.Height >= 24
+        && accessible.GetChildCount() == monitors.Count + 1
+        && accessible.GetChild(monitors.Count).Name.Contains(Strings.Ui("DrawerTitle"), StringComparison.Ordinal));
 }
 
 // Owner's exact July 2026 layout with the 800x600 dummy DISCONNECTED. The right monitor starts at Y=58,
