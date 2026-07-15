@@ -1,4 +1,5 @@
 using System.Threading;
+using System.Globalization;
 
 namespace MouseFence;
 
@@ -16,7 +17,9 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             int tab = args.Length >= 4 && int.TryParse(args[3], out var ti) ? ti : 0;
             string lang = args.Length >= 5 ? args[4] : "en";
-            Screenshot.CaptureSettings(args[1], args.Length >= 3 ? args[2] : null, tab, lang);
+            float scale = args.Length >= 6 && float.TryParse(args[5], NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var parsedScale) ? parsedScale : 1f;
+            Screenshot.CaptureSettings(args[1], args.Length >= 3 ? args[2] : null, tab, lang, scale);
             return;
         }
 

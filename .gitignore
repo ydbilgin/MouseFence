@@ -28,3 +28,5 @@ desktop.ini
 # Playwright MCP session artifacts
 .playwright-mcp/
 mockup-*.png
+scratchpad/
+STAGING/*.png

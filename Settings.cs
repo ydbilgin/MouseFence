@@ -196,6 +196,15 @@ public sealed class Settings
         return fresh;
     }
 
+    /// <summary>Creates a transaction-safe copy, including every nested collection and boundary rule.</summary>
+    public Settings DeepClone()
+    {
+        var json = JsonSerializer.Serialize(this);
+        var clone = JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
+        clone.Normalize();
+        return clone;
+    }
+
     /// <summary>
     /// Normalize deserialized/imported data and migrate the pre-v3 implicit crossing-path meaning. When the persisted
     /// field is absent, an old non-empty UpLinks list means Custom; an old empty list means Default.
@@ -285,8 +294,12 @@ public sealed class Settings
         if (Mode is not ("AutoTop" or "Manual")) Mode = "AutoTop";
     }
 
-    internal static string NormalizeMonitorName(string value) =>
-        value?.Replace('\r', ' ').Replace('\n', ' ').Trim() ?? "";
+    internal static string NormalizeMonitorName(string value)
+    {
+        string clean = value?.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ').Trim() ?? "";
+        int[] elements = System.Globalization.StringInfo.ParseCombiningCharacters(clean);
+        return elements.Length <= 24 ? clean : clean[..elements[24]];
+    }
 
     internal static string MonitorNameFor(IReadOnlyDictionary<string, string> names, string stableId)
     {

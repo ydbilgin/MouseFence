@@ -332,7 +332,8 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenSettings()
     {
-        using var f = new SettingsForm(_settings, MonitorInfo.All());
+        using var f = new SettingsForm(_settings, MonitorInfo.All(), () => new SettingsRuntimeState(
+            _guard.GateOpen, _guard.SideContain, !_guard.Enabled));
         if (f.ShowDialog() != DialogResult.OK) return;
 
         _hotkey.Unregister();
