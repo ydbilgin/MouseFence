@@ -163,16 +163,19 @@ Console.WriteLine("MouseFence barrier logic — scenario tests\n");
     var status = (Label)typeof(SettingsForm).GetField("_inlineStatus", flags).GetValue(form);
     var footer = status.Parent;
     var themedButtons = footer.Controls.OfType<ThemedButton>().ToList();
+    var visibleButtons = themedButtons.Where(button => button.Visible).ToList();
+    var inlineAction = (ThemedButton)typeof(SettingsForm).GetField("_inlineAction", flags).GetValue(form);
     var themeField = typeof(ThemedButton).GetField("_theme", flags);
     using var footerBitmap = new Bitmap(footer.Width, footer.Height);
     footer.DrawToBitmap(footerBitmap, footer.ClientRectangle);
-    var paintedFills = themedButtons.Select(button => footerBitmap.GetPixel(button.Left + 5, button.Top + button.Height / 2)).ToList();
+    var paintedFills = visibleButtons.Select(button => footerBitmap.GetPixel(button.Left + 5, button.Top + button.Height / 2)).ToList();
     bool painted = paintedFills.All(color => color == Theme.Dark.Surface2 || color == Theme.Dark.DisabledSurface || color == Theme.Dark.Accent);
     bool enrolled = footer.BackColor == Theme.Dark.Surface && status.BackColor == Theme.Dark.Surface
-        && themedButtons.Count == 3 && themedButtons.All(button => (Theme)themeField.GetValue(button) == Theme.Dark) && painted;
+        && themedButtons.Count == 3 && visibleButtons.Count == 2 && !inlineAction.Visible
+        && themedButtons.All(button => (Theme)themeField.GetValue(button) == Theme.Dark) && painted;
     Check("B2 footer: dark surface, status, validation action, Cancel, and Save are enrolled in theming",
         enrolled,
-        $"footer={footer.BackColor} status={status.BackColor} buttons={themedButtons.Count} fills=[{string.Join(",", paintedFills)}] themes=[{string.Join(",", themedButtons.Select(button => themeField.GetValue(button)))}]");
+        $"footer={footer.BackColor} status={status.BackColor} buttons={themedButtons.Count}/{visibleButtons.Count} actionVisible={inlineAction.Visible} fills=[{string.Join(",", paintedFills)}] themes=[{string.Join(",", themedButtons.Select(button => themeField.GetValue(button)))}]");
 }
 
 // Fable v2 acceptance: Advanced is a first-class page, its physical-pixel fold is deterministic,
@@ -385,6 +388,125 @@ foreach (string language in new[] { "en", "tr" })
     typeof(SettingsForm).GetMethod("UpdateLiveStatus", flags).Invoke(form, null);
     Check("B2 status slot: live result diverging from the selected tile is non-empty",
         status.Text == Strings.Ui("StatusSideOff"), $"status='{status.Text}'");
+}
+
+// Owner v2 refinement: a kept-out target is not Free/Push/Blocked. The editor keeps its geometry,
+// clears every selection, explains the stronger screen-level rule, and offers one primary recovery action.
+foreach (string language in new[] { "en", "tr" })
+{
+    Strings.Use(language);
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "left", Index = 1, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new() { StableId = "right", Index = 2, Bounds = new Native.RECT { Left = 100, Top = 0, Right = 200, Bottom = 100 } },
+    };
+    using var form = new SettingsForm(new Settings
+    {
+        Language = language,
+        ExcludedDevices = new List<string> { "right" },
+        MonitorNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["right"] = "Studio" },
+    }, monitors);
+    ShowOffscreen(form);
+    form.OpenFirstBoundaryForPreview();
+    Application.DoEvents(); form.PerformLayout();
+
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var tiles = new[] { "_freeTile", "_pushTile", "_blockedTile" }
+        .Select(name => (Control)typeof(SettingsForm).GetField(name, flags).GetValue(form)).ToArray();
+    bool selected(Control tile) => (bool)tile.GetType().GetProperty("Selected").GetValue(tile);
+    var status = (Label)typeof(SettingsForm).GetField("_drawerStatus", flags).GetValue(form);
+    var caption = (Label)typeof(SettingsForm).GetField("_drawerDirection", flags).GetValue(form);
+    var allow = (ThemedButton)typeof(SettingsForm).GetField("_allowScreen", flags).GetValue(form);
+    string expected = string.Format(Strings.Ui("ExcludedTargetExplanation"), "Studio");
+    bool truthfulExcluded = tiles.All(tile => !tile.Enabled && !selected(tile))
+        && caption.Text == Strings.Ui("BlockedByKeepOut") && status.Text == expected
+        && allow.Enabled && allow.Role == ThemedButtonRole.Primary
+        && allow.AccessibleDescription == expected;
+
+    allow.PerformClick(); Application.DoEvents(); form.PerformLayout();
+    bool recovered = !form.DraftForTests.ExcludedDevices.Contains("right", StringComparer.OrdinalIgnoreCase)
+        && tiles.All(tile => tile.Enabled) && tiles.Count(selected) == 1
+        && !allow.Enabled && allow.Role == ThemedButtonRole.Quiet;
+    Check($"owner excluded-target editor ({language}): no false selection, plain explanation, primary Allow path",
+        truthfulExcluded && recovered,
+        $"truthful={truthfulExcluded} recovered={recovered} selected=[{string.Join(",", tiles.Select(selected))}] status='{status.Text}' expected='{expected}' allow={allow.Enabled}/{allow.Role}");
+}
+
+// Required follow-up: vertical editors normalize the primary direction to Up, so the lower endpoint is
+// `_primary.From`. Excluding that endpoint must suppress the crossing controls just like any other target.
+{
+    Strings.Use("en");
+    var monitors = new List<MonitorInfo>
+    {
+        new() { StableId = "lower", Index = 1, Primary = true, Bounds = new Native.RECT { Left = 0, Top = 0, Right = 100, Bottom = 100 } },
+        new() { StableId = "upper", Index = 2, Bounds = new Native.RECT { Left = 0, Top = -100, Right = 100, Bottom = 0 } },
+    };
+    using var form = new SettingsForm(new Settings
+    {
+        ExcludedDevices = new List<string> { "lower" },
+        MonitorNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["lower"] = "Lower" },
+    }, monitors);
+    ShowOffscreen(form);
+    form.OpenFirstBoundaryForPreview();
+    Application.DoEvents(); form.PerformLayout();
+
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var tiles = new[] { "_freeTile", "_pushTile", "_blockedTile" }
+        .Select(name => (Control)typeof(SettingsForm).GetField(name, flags).GetValue(form)).ToArray();
+    bool selected(Control tile) => (bool)tile.GetType().GetProperty("Selected").GetValue(tile);
+    var status = (Label)typeof(SettingsForm).GetField("_drawerStatus", flags).GetValue(form);
+    var allow = (ThemedButton)typeof(SettingsForm).GetField("_allowScreen", flags).GetValue(form);
+    string expected = string.Format(Strings.Ui("ExcludedTargetExplanation"), "Lower");
+    bool blocked = tiles.All(tile => !tile.Enabled && !selected(tile))
+        && status.Text == expected && allow.Enabled && allow.Role == ThemedButtonRole.Primary;
+
+    allow.PerformClick(); Application.DoEvents(); form.PerformLayout();
+    bool recovered = !form.DraftForTests.ExcludedDevices.Contains("lower", StringComparer.OrdinalIgnoreCase)
+        && tiles.All(tile => tile.Enabled) && tiles.Count(selected) == 1;
+    Check("owner excluded-target editor: excluded lower endpoint blocks a vertical boundary and can be allowed",
+        blocked && recovered,
+        $"blocked={blocked} recovered={recovered} selected=[{string.Join(",", tiles.Select(selected))}] status='{status.Text}' expected='{expected}' allow={allow.Enabled}/{allow.Role}");
+}
+
+// Owner v2 refinement follow-up: surplus height belongs to the map. Both resting modes keep the final
+// content close to the footer, and the larger acceptance viewport must produce a strictly taller map.
+{
+    Strings.Use("en");
+    (int MapHeight, int BodyHeight, int ListBand, int DrawerBand, Padding BodyPadding, int MapWidth) Measure(Size clientSize)
+    {
+        using var form = new SettingsForm(Screenshot.DemoSettings("Light", "en"), Screenshot.DemoMonitors());
+        ShowOffscreen(form);
+        form.ClientSize = clientSize;
+        Application.DoEvents(); form.PerformLayout();
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var body = (FlowLayoutPanel)typeof(SettingsForm).GetField("_bodyFlow", flags).GetValue(form);
+        var map = (Control)typeof(SettingsForm).GetField("_map", flags).GetValue(form);
+        var rows = (Control)typeof(SettingsForm).GetField("_screenRows", flags).GetValue(form);
+        int listBottom = body.RectangleToClient(rows.RectangleToScreen(rows.ClientRectangle)).Bottom;
+        int mapHeight = map.Height;
+
+        form.OpenFirstBoundaryForPreview(hideScreenList: true);
+        Application.DoEvents(); form.PerformLayout();
+        var drawer = (Control)typeof(SettingsForm).GetField("_screenSplit", flags).GetValue(form);
+        int drawerBottom = body.RectangleToClient(drawer.RectangleToScreen(drawer.ClientRectangle)).Bottom;
+        return (mapHeight, body.ClientSize.Height,
+            Math.Max(0, body.ClientSize.Height - listBottom), Math.Max(0, body.ClientSize.Height - drawerBottom),
+            body.Padding, map.Width);
+    }
+
+    var compact = Measure(new Size(1600, 1040));
+    var maximized = Measure(new Size(2560, 1352));
+    bool compactBandsFit = compact.ListBand <= compact.BodyHeight * .12 + 2
+        && compact.DrawerBand <= compact.BodyHeight * .12 + 2;
+    bool maximizedBandsFit = maximized.ListBand <= maximized.BodyHeight * .12 + 2
+        && maximized.DrawerBand <= maximized.BodyHeight * .12 + 2;
+    bool centeredMeasure = compact.MapWidth <= 1240 + 1 && maximized.MapWidth <= 1240 + 1
+        && Math.Abs(compact.BodyPadding.Left - compact.BodyPadding.Right) <= 2
+        && Math.Abs(maximized.BodyPadding.Left - maximized.BodyPadding.Right) <= 2;
+    Check("owner large-window composition: leftover map grows and list/drawer footer bands stay within 12%",
+        compactBandsFit && maximizedBandsFit && maximized.MapHeight > compact.MapHeight && centeredMeasure,
+        $"1600x1040 map={compact.MapHeight} body={compact.BodyHeight} bands={compact.ListBand}/{compact.DrawerBand} padding={compact.BodyPadding}; " +
+        $"2560x1352 map={maximized.MapHeight} body={maximized.BodyHeight} bands={maximized.ListBand}/{maximized.DrawerBand} padding={maximized.BodyPadding}");
 }
 
 // Fold-in C/D: frozen numeric help copy is present in the actual grid, and every actual status candidate fits the reserve.
@@ -1756,6 +1878,17 @@ var DUMMY = (2560, 0, 3360, 600);
         $"excludedCount={excludedCount} dupAExcluded={dupAExcluded} dupBUsable={dupBUsable} pruned={pruned}");
 }
 
+// Exact clones share every desktop coordinate. Excluding the non-primary clone must not make the surviving primary's
+// same pixels forbidden; otherwise the first hook event is pushed outside the entire virtual desktop.
+{
+    var clone = (L: 0, T: 0, R: 100, B: 100);
+    var c = NewMonitorAwareWall(new[] { clone }, clone);
+    var r = Move(c, 50, 50, true);
+    Check("wall-off clone overlap: usable clone geometry wins and the first event stays on-screen",
+        r.act == GuardAction.Pass && r.bx == 50 && r.by == 50 && InRect(clone, r.bx, r.by),
+        $"act={r.act} bx={r.bx} by={r.by}");
+}
+
 // 14) STABLE-KEY identity for manual top monitors and UpLinks: the SAME physical monitors keep their rules when
 //     Windows renumbers \\.\DISPLAYn. Production now stores ManualMonitors/UpLinks by StableId, just like excludes.
 {
@@ -2445,6 +2578,21 @@ GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop
         $"act={r.act} bx={r.bx} by={r.by} onTop={r.onTop}");
 }
 {
+    // The target is already beyond Top.R, but the movement segment crosses Top.B at x=150, inside the top. Routing
+    // must use that intersection, not the endpoint X, or a fast diagonal tick lands on the wrong lower screen.
+    var s = new Settings { DownwardBoundaryDefault = BoundaryDefault.Free, PassageInsetPx = 0 };
+    var screens = GraphScreens(("top", 0, -100, 200, 0, false), ("landing", 0, 0, 100, 100, true),
+                               ("wrong", 100, 0, 300, 100, false));
+    var c = GraphCore(s, screens, hasTop: true);
+    c.DescentRouting = true;
+    c.DescentRoutes.Add((screens[0].Bounds, screens[1].Bounds));
+    Move(c, 50, -50, true);
+    var r = Move(c, 250, 50, true);
+    Check("M1 descent routing: fast diagonal uses the local-edge intersection after endpoint leaves the top X-span",
+        r.act == GuardAction.Block && r.bx == 99 && r.by == 50 && !r.onTop,
+        $"act={r.act} bx={r.bx} by={r.by} onTop={r.onTop}");
+}
+{
     var automatic = new Settings { UpwardBoundaryDefault = BoundaryDefault.Blocked, PassageInsetPx = 0 };
     automatic.BoundaryRules.Add(new BoundaryRule { FromStableId = "bottom", ToStableId = "top", Direction = BoundaryDirection.Up,
         Behavior = BoundaryBehavior.Free, Control = BoundaryControl.Automatic });
@@ -2457,6 +2605,37 @@ GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop
     Check("M1 engine: Automatic follows the live Up switch while Always ignores it",
         blocked.act == GuardAction.Block && allowed.act == GuardAction.Pass,
         $"automatic={blocked.act} always={allowed.act}");
+}
+{
+    // The authorized-landing resolver must use the same live Automatic state as transition matching. A persisted
+    // Blocked side default is free while side protection is OFF; a static compile-time landing set must not undo it.
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Blocked, PassageInsetPx = 0,
+        SafetyEscapes = false };
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("b", 100, 0, 200, 100, false));
+    var c = GraphCore(s, screens); Move(c, 50, 50, true, side: false);
+    var protectionOff = Move(c, 150, 50, true, side: false);
+    c = GraphCore(s, screens); Move(c, 50, 50, true, side: true);
+    var protectionOn = Move(c, 150, 50, true, side: true);
+    Check("M1 engine: Automatic Blocked side rule becomes end-to-end Free only while side protection is off",
+        protectionOff.act == GuardAction.Pass && protectionOff.bx == 150
+        && protectionOn.act == GuardAction.Block && InRect(screens[0].Bounds, protectionOn.bx, protectionOn.by),
+        $"off=({protectionOff.act},{protectionOff.bx},{protectionOff.by}) on=({protectionOn.act},{protectionOn.bx},{protectionOn.by})");
+}
+{
+    // A fast diagonal enters the right screen and the top-right screen at their shared corner in one event. The first
+    // Right edge is Free, but its transitive landing set must not walk through B's Automatic Up edge while Up is closed.
+    var s = new Settings { SideBoundaryDefault = BoundaryDefault.Free,
+        UpwardBoundaryDefault = BoundaryDefault.Automatic, PassageInsetPx = 0, SafetyEscapes = false };
+    var screens = GraphScreens(("a", 0, 0, 100, 100, true), ("b", 100, 0, 200, 100, false),
+                               ("top", 100, -100, 200, 0, false));
+    var c = GraphCore(s, screens, hasTop: true); Move(c, 50, 50, gate: false, side: false);
+    var closed = Move(c, 150, -50, gate: false, side: false);
+    c = GraphCore(s, screens, hasTop: true); Move(c, 50, 50, gate: true, side: false);
+    var open = Move(c, 150, -50, gate: true, side: false);
+    Check("M1 engine: transitive authorized landing honors the live Up toggle on downstream edges",
+        closed.act == GuardAction.Block && InRect(screens[1].Bounds, closed.bx, closed.by)
+        && open.act == GuardAction.Pass && InRect(screens[2].Bounds, open.bx, open.by),
+        $"closed=({closed.act},{closed.bx},{closed.by}) open=({open.act},{open.bx},{open.by})");
 }
 {
     var dormant = new Settings { SettingsVersion = Settings.CurrentSettingsVersion, SafetyEscapes = false };
@@ -2536,6 +2715,46 @@ GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop
         $"act={sealedByExpert.act} bx={sealedByExpert.bx} by={sealedByExpert.by} issues={validation?.Length} error={validationError?.GetType().Name}");
 }
 {
+    // Geometry safety is broader than the legacy sole-up escape. This lower screen has a real side neighbour, so
+    // AntiTrap does not classify it as isolated; nevertheless every authored exit is Blocked and Compile must keep
+    // the widest demoted exit usable even while the ordinary Up toggle is closed.
+    var s = new Settings { UpwardBoundaryDefault = BoundaryDefault.Blocked,
+        SideBoundaryDefault = BoundaryDefault.Blocked, PassageInsetPx = 0, SafetyEscapes = true };
+    var screens = GraphScreens(("top", 0, -100, 200, 0, false), ("lower", 0, 0, 200, 100, true),
+                               ("side", 200, 0, 250, 100, false));
+    var compiled = BoundaryGraph.Compile(s, screens);
+    var safetyExit = compiled.Transitions.Single(t => t.FromStableId == "lower"
+        && t.ToStableId == "top" && t.Direction == BoundaryDirection.Up);
+    var c = GraphCore(s, screens, hasTop: true); Move(c, 100, 50, gate: false);
+    var escaped = Move(c, 100, -20, gate: false);
+    Check("M1 anti-trap: geometry-demoted Up exit remains Push while the ordinary Up toggle is closed",
+        safetyExit.SafetyDemoted && !safetyExit.SoleUpSafetyEscape
+        && escaped.act == GuardAction.Pass && InRect(screens[0].Bounds, escaped.bx, escaped.by),
+        $"demoted={safetyExit.SafetyDemoted} sole={safetyExit.SoleUpSafetyEscape} act={escaped.act} bx={escaped.bx} by={escaped.by}");
+}
+{
+    // Persisted Free makes the graph look unsealed, but Automatic Up becomes Blocked when the live toggle closes.
+    // The side neighbour prevents legacy sole-up classification and its own Always rule is Blocked, so geometry safety
+    // must also analyze the restrictive live-toggle state and preserve one exit.
+    var s = new Settings { UpwardBoundaryDefault = BoundaryDefault.Blocked,
+        SideBoundaryDefault = BoundaryDefault.Blocked, PassageInsetPx = 0, SafetyEscapes = true };
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "lower", ToStableId = "top",
+        Direction = BoundaryDirection.Up, Behavior = BoundaryBehavior.Free, Control = BoundaryControl.Automatic });
+    s.BoundaryRules.Add(new BoundaryRule { FromStableId = "lower", ToStableId = "side",
+        Direction = BoundaryDirection.Right, Behavior = BoundaryBehavior.Blocked, Control = BoundaryControl.Always });
+    var screens = GraphScreens(("top", 0, -100, 200, 0, false), ("lower", 0, 0, 200, 100, true),
+                               ("side", 200, 0, 250, 100, false));
+    var compiled = BoundaryGraph.Compile(s, screens);
+    var safetyExit = compiled.Transitions.Single(t => t.FromStableId == "lower"
+        && t.ToStableId == "top" && t.Direction == BoundaryDirection.Up);
+    var c = GraphCore(s, screens, hasTop: true); Move(c, 100, 50, gate: false);
+    var escaped = Move(c, 100, -20, gate: false);
+    Check("M1 anti-trap: live Up closure cannot seal an otherwise-Free Automatic exit",
+        safetyExit.SafetyDemoted && !safetyExit.SoleUpSafetyEscape
+        && escaped.act == GuardAction.Pass && InRect(screens[0].Bounds, escaped.bx, escaped.by),
+        $"demoted={safetyExit.SafetyDemoted} sole={safetyExit.SoleUpSafetyEscape} act={escaped.act} bx={escaped.bx} by={escaped.by}");
+}
+{
     const string fieldlessLegacy =
         "{\"CrossingPathMode\":\"Custom\",\"UpLinks\":[{\"FromDevice\":\"bottom\",\"ToDevice\":\"top\"}]}";
     var migrated = JsonSerializer.Deserialize<Settings>(fieldlessLegacy);
@@ -2598,6 +2817,52 @@ GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop
         && byRawFirst.OrderBy(x => x.Key).SequenceEqual(byRawSecond.OrderBy(x => x.Key)));
 }
 
+// ---- public docs: deterministic synthetic layout + faithful off-screen capture ----
+{
+    var demo = Screenshot.DemoMonitors();
+    var demoSettings = Screenshot.DemoSettings("Dark", "en");
+    Check("docs demo: fixed three-screen geometry and neutral identities never depend on live monitor enumeration",
+        demo.Count == 3
+        && demo.Select(m => m.StableId).SequenceEqual(new[] { "demo-main", "demo-top", "demo-laptop" })
+        && demo.Select(m => m.Index).SequenceEqual(new[] { 1, 2, 3 })
+        && demo[0].Primary && demo[0].Bounds.Width == 2560 && demo[0].Bounds.Height == 1440
+        && demo[1].Bounds.Bottom == demo[0].Bounds.Top
+        && demo[2].Bounds.Left == demo[0].Bounds.Right
+        && demoSettings.MonitorNames["demo-main"] == "Main"
+        && demoSettings.MonitorNames["demo-top"] == "Top"
+        && demoSettings.MonitorNames["demo-laptop"] == "Laptop"
+        && demoSettings.ExcludedDevices.SequenceEqual(new[] { "demo-laptop" }));
+
+    string path = Path.Combine(Path.GetTempPath(), $"MouseFence-demo-capture-{Guid.NewGuid():N}.png");
+    try
+    {
+        Screenshot.CaptureSettings(path, "Dark", -1, "en", 1f, useDemoLayout: true);
+        using var capture = new Bitmap(path);
+        int bright = 0, sampled = 0;
+        for (int y = Math.Max(0, capture.Height - 58); y < capture.Height - 10; y += 2)
+        for (int x = 18; x < capture.Width - 18; x += 2)
+        {
+            var pixel = capture.GetPixel(x, y);
+            if (pixel.R >= 245 && pixel.G >= 245 && pixel.B >= 245) bright++;
+            sampled++;
+        }
+        int brandInk = 0;
+        for (int y = 12; y < Math.Min(56, capture.Height); y++)
+        for (int x = 40; x < Math.Min(160, capture.Width); x++)
+        {
+            var pixel = capture.GetPixel(x, y);
+            if (pixel.R >= 120 && pixel.G >= 120 && pixel.B >= 120) brandInk++;
+        }
+        Check("docs capture: synthetic dark client is aligned and owner-drawn controls stay themed",
+            bright < sampled / 100 && brandInk >= 40,
+            $"bright={bright}/{sampled} brandInk={brandInk} path={path}");
+    }
+    finally
+    {
+        try { File.Delete(path); } catch { }
+    }
+}
+
 // ---- localization parity: every key exists in BOTH languages (no cross-language fallback) ----
 {
     var en = new HashSet<string>(Strings.EnglishKeys);
@@ -2621,6 +2886,51 @@ GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop
         if (!ok) break;
     }
     Check("i18n: placeholder arity matches across EN and TR", ok, bad);
+}
+
+// ===== BUGHUNT (owner's REAL captured geometry) — the VOID BELOW the right monitor + the EXCLUDED dummy =====
+// Physical px: left(-1920,71,0,1151) top(-488,-1440,2952,0) main*(0,0,2560,1440) right(2560,58,4480,1138).
+// right is 58px down-offset AND 1080 tall next to main's 1440 -> a ~1920x302 VOID sits directly below it
+// (X 2560..4480, Y 1138..1440) = the historical "cursor disappears bottom-right" region. dummy(4480,845,
+// 5280,1445) is EXCLUDED (Forbidden). The existing "reporter" tests cover the top-right corner; these cover
+// the bottom void + the dummy, which they don't. Every decided landing must be a usable, non-forbidden pixel.
+{
+    var usable = new List<(int L, int T, int R, int B)>
+    {
+        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0), (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+    };
+    GuardCore Rig()
+    {
+        var c = new GuardCore
+        {
+            HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) },
+            HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
+            Monitors = usable, Forbidden = new List<(int L, int T, int R, int B)> { (4480, 845, 5280, 1445) },
+        };
+        c.Reset();
+        return c;
+    }
+    { var c = Rig(); SetLast(c, 3500, 1130); var r = Move(c, 3500, 1300, true, true);
+      Check("bughunt real-geo: drift down off right's bottom into the void lands on a usable monitor (never disappears)",
+            IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
+    { var c = Rig(); SetLast(c, 3500, 1130); var r = Move(c, 3600, 1439, true, true);
+      Check("bughunt real-geo: deep eased flick to the void's bottom lands legal",
+            IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
+    { var c = Rig(); SetLast(c, 2000, 700); var r = Move(c, 3500, 1400, true, true);
+      Check("bughunt real-geo: ease-teleport main -> void below right never lands in the void",
+            IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
+    { var c = Rig(); SetLast(c, 4400, 1000); var r = Move(c, 4900, 1100, true, true);
+      Check("bughunt real-geo: move into the EXCLUDED dummy is kept out (usable, not dummy)",
+            IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
+    { var c = Rig(); SetLast(c, 4400, 1100); var r = Move(c, 4900, 1440, true, true);
+      Check("bughunt real-geo: teleport deep into the dummy's bottom is kept out, lands legal",
+            IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
+    { var c = Rig(); SetLast(c, 2559, 1200); var r = Move(c, 2700, 1300, true, true);
+      Check("bughunt real-geo: the main/right/void corner move lands legal",
+            IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
+    { var c = Rig(); SetLast(c, 3500, 60); var r = Move(c, 3500, 20, true, true);
+      Check("bughunt real-geo: thin void above right (Y 0..58) lands legal",
+            IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
 }
 
 Console.WriteLine();
