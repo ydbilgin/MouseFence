@@ -35,6 +35,7 @@ public sealed class SettingsForm : Form
 
     private readonly Settings _draft;
     private readonly Func<SettingsRuntimeState> _runtimeState;
+    private readonly bool _showWithoutActivation;
     private readonly List<MonitorInfo> _monitors = new();
     private readonly ToolTip _tips = new();
     private readonly System.Windows.Forms.Timer _runtimeTimer = new() { Interval = 400 };
@@ -72,7 +73,7 @@ public sealed class SettingsForm : Form
     private readonly LinkLabel _separateLink;
     private readonly LinkLabel _overallLink;
     private readonly LinkLabel _whenLink;
-    private readonly Button _allowScreen;
+    private readonly ThemedButton _allowScreen;
     private readonly FlowLayoutPanel _modeTiles;
     private readonly TableLayoutPanel _separatePanel;
     private readonly Panel _whenPanel;
@@ -104,6 +105,12 @@ public sealed class SettingsForm : Form
     private int _advancedWidth = 520;
     private Theme _theme;
 
+    // Keep the preferred 1064 px composition unchanged, then give large windows a deliberate
+    // centered measure instead of stretching task controls across the whole desktop.
+    private const int WideContentMeasure = 1240;
+    private const double PreferredMapHeightRatio = .39;
+    private const double MaximumMapHeightRatio = .59;
+
     private sealed record BoundaryEndpoint(MonitorInfo From, MonitorInfo To, BoundaryDirection Direction, RuntimeTransition Runtime);
 
     public Settings Result { get; private set; }
@@ -111,6 +118,18 @@ public sealed class SettingsForm : Form
     internal bool BoundaryEditorVisibleForTests => _screenSplit.Height > 0 && _screenSplit.Visible;
     internal string InlineStatusForTests => _inlineStatus?.Text ?? "";
     internal IReadOnlyList<string> DrawerStatusCandidatesForTests => DrawerStatusCandidates();
+    internal (string Mode, int BodyHeight, int MapHeight, int BandHeight) DisplayLayoutMetrics()
+    {
+        var last = new[] { _screenSplit, _screenSection, _screenRows }
+            .Where(control => control?.Visible == true)
+            .Select(control => (Control: control,
+                Bounds: _bodyFlow.RectangleToClient(control.RectangleToScreen(control.ClientRectangle))))
+            .OrderByDescending(item => item.Bounds.Bottom)
+            .First();
+        return (_screenSplit.Visible && !_screenRows.Visible ? "drawer" : "list",
+            _bodyFlow.ClientSize.Height, _map.Height,
+            Math.Max(0, _bodyFlow.ClientSize.Height - last.Bounds.Bottom));
+    }
     // Test hooks (fields, not auto-properties, so the WinForms WFO1000 designer-serialization analyzer stays quiet).
     internal Func<string> RestorePathPickerForTests = null;
     internal Func<bool> RestoreConfirmForTests = null;
@@ -118,11 +137,13 @@ public sealed class SettingsForm : Form
     internal bool BackupToFileForTests(string path) => ValidateDraftForBackup() && WriteBackupFile(path);
     internal void RestoreFromFileForTests() => Import_Click(this, EventArgs.Empty);
 
-    public SettingsForm(Settings settings, List<MonitorInfo> monitors, Func<SettingsRuntimeState> runtimeState = null)
+    public SettingsForm(Settings settings, List<MonitorInfo> monitors,
+                        Func<SettingsRuntimeState> runtimeState = null, bool showWithoutActivation = false)
     {
         // Never normalize or edit the live instance. The draft owns all nested lists, dictionaries, and rule objects.
         _draft = (settings ?? new Settings()).DeepClone();
         _runtimeState = runtimeState;
+        _showWithoutActivation = showWithoutActivation;
         _monitors.AddRange(monitors ?? new List<MonitorInfo>());
         Strings.Use(_draft.Language);
         _theme = Theming.Resolve(_draft.Theme);
@@ -343,7 +364,7 @@ public sealed class SettingsForm : Form
             TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, Tag = "faint",
             Text = !_draft.BoundaryTipSeen && !_draft.BoundaryRules.Any() ? Strings.Ui("BoundaryTip") : Strings.Ui("UnsavedFooter"),
         };
-        _inlineAction = new ThemedButton { Text = "", Width = 145, Height = 36, Role = ThemedButtonRole.Quiet, Visible = true, Enabled = false }; _inlineAction.Click += OpenValidationBoundary;
+        _inlineAction = new ThemedButton { Text = "", Width = 145, Height = 36, Role = ThemedButtonRole.Quiet, Visible = false, Enabled = false }; _inlineAction.Click += OpenValidationBoundary;
         var cancel = new ThemedButton { Text = Strings.Cancel, Width = 94, Height = 36, Role = ThemedButtonRole.Secondary, DialogResult = DialogResult.Cancel, Margin = new Padding(10, 0, 0, 0) };
         var save = new ThemedButton { Text = Strings.Save, Width = 94, Height = 36, Role = ThemedButtonRole.Primary, Margin = new Padding(10, 0, 0, 0) }; save.Click += Save_Click;
         _footer.Controls.Add(_inlineStatus, 0, 0); _footer.Controls.Add(_inlineAction, 1, 0);
@@ -366,11 +387,27 @@ public sealed class SettingsForm : Form
         ResizeV2Layout();
     }
 
+    protected override bool ShowWithoutActivation => _showWithoutActivation;
+
     public void SelectTab(int i) { if (i >= 0 && i < _tabs.TabCount) _tabs.SelectedIndex = i; }
-    internal void OpenFirstBoundaryForPreview()
+    internal void OpenFirstBoundaryForPreview(bool hideScreenList = false)
     {
         var first = _map.Boundaries.FirstOrDefault();
-        if (first != null) { _tabs.SelectedIndex = 0; OpenBoundary(first); }
+        if (first != null)
+        {
+            _tabs.SelectedIndex = 0;
+            OpenBoundary(first);
+            if (hideScreenList)
+            {
+                _screenSection.Visible = false;
+                _screenRows.Visible = false;
+                BeginInvoke((Action)(() =>
+                {
+                    _bodyFlow.AutoScrollPosition = Point.Empty;
+                    ResizeV2Layout();
+                }));
+            }
+        }
     }
     internal void OpenAdvancedForPreview()
     {
@@ -378,6 +415,18 @@ public sealed class SettingsForm : Form
         ToggleAdvanced(force: true);
         var numericGrid = _advancedPanel.Controls.Cast<Control>().FirstOrDefault(c => (c.Tag as string) == "numericGrid");
         if (numericGrid != null) BeginInvoke((Action)(() => _advancedPage.ScrollControlIntoView(numericGrid)));
+    }
+    internal void OpenAdvancedOverviewForPreview()
+    {
+        _tabs.SelectedIndex = 1;
+        // The overview capture ends after the automatic/manual choice. Hide the long manual list and reset
+        // section so the fixed footer never cuts through the next row in public documentation.
+        bool afterOverview = false;
+        foreach (Control child in _advancedPanel.Controls)
+        {
+            if (child is FlowLayoutPanel) afterOverview = true;
+            if (afterOverview) child.Visible = false;
+        }
     }
 
     private void RebuildScreenRows()
@@ -722,28 +771,34 @@ public sealed class SettingsForm : Form
         if (!horizontal) _separateExpanded = false;
         _separateLink.Text = (_separateExpanded ? "⌄  " : "›  ") + (splitTruth ? Strings.Ui("DifferentByDirection") : Strings.Ui("SetDirectionsSeparately"));
 
-        bool excluded = _draft.ExcludedDevices.Contains(_primary.To.StableId, StringComparer.OrdinalIgnoreCase) ||
-                        (horizontal && _draft.ExcludedDevices.Contains(_primary.From.StableId, StringComparer.OrdinalIgnoreCase));
+        var excludedTarget = ExcludedBoundaryTarget();
+        bool excluded = excludedTarget != null;
         _allowScreen.Enabled = excluded;
+        _allowScreen.Role = excluded ? ThemedButtonRole.Primary : ThemedButtonRole.Quiet;
+        _allowScreen.AccessibleDescription = excluded
+            ? string.Format(Strings.Ui("ExcludedTargetExplanation"), ScreenName(excludedTarget)) : "";
+        _allowScreen.Invalidate();
         _modeTiles.Enabled = !excluded;
         _overallLink.Enabled = !excluded;
         _separateLink.Enabled = horizontal && !excluded;
+        _separatePanel.Enabled = !excluded;
         _whenLink.Enabled = !excluded;
         _automaticControl.Enabled = !excluded;
         _alwaysControl.Enabled = !excluded;
+        _returnLine.Enabled = !excluded;
         if (excluded) _drawerDirection.Text = Strings.Ui("BlockedByKeepOut");
 
         var selected = ResolvedBehavior(_primary);
-        _freeTile.Selected = !splitTruth && selected == BoundaryBehavior.Free;
-        _pushTile.Selected = !splitTruth && selected is BoundaryBehavior.Push or BoundaryBehavior.OverallFeel;
-        _blockedTile.Selected = !splitTruth && selected == BoundaryBehavior.Blocked;
+        _freeTile.Selected = !excluded && !splitTruth && selected == BoundaryBehavior.Free;
+        _pushTile.Selected = !excluded && !splitTruth && selected is BoundaryBehavior.Push or BoundaryBehavior.OverallFeel;
+        _blockedTile.Selected = !excluded && !splitTruth && selected == BoundaryBehavior.Blocked;
         var primaryRule = FindRule(_primary);
         _overallLink.Text = primaryRule == null ? Strings.Ui("UsingOverallBehavior") : Strings.Ui("UseOverallBehavior");
         _overallLink.Enabled = primaryRule != null && !excluded;
         var control = primaryRule?.Control ?? BoundaryControl.Automatic;
         _automaticControl.Checked = control == BoundaryControl.Automatic;
         _alwaysControl.Checked = control == BoundaryControl.Always;
-        BuildSeparateRows();
+        BuildSeparateRows(excluded);
         UpdateLiveStatus();
         ReserveDrawerStatusHeight();
         _rebuilding = false;
@@ -751,16 +806,16 @@ public sealed class SettingsForm : Form
         ApplyTheme();
     }
 
-    private void BuildSeparateRows()
+    private void BuildSeparateRows(bool suppressSelection = false)
     {
         _separatePanel.SuspendLayout(); _separatePanel.Controls.Clear(); _separatePanel.RowStyles.Clear(); _separatePanel.RowCount = 0;
         if (!_separateExpanded) { _separatePanel.Visible = false; _separatePanel.ResumeLayout(); return; }
         _separatePanel.Visible = true;
-        AddDirectionRow(_primary); AddDirectionRow(_reverse);
+        AddDirectionRow(_primary, suppressSelection); AddDirectionRow(_reverse, suppressSelection);
         _separatePanel.ResumeLayout();
     }
 
-    private void AddDirectionRow(BoundaryEndpoint endpoint)
+    private void AddDirectionRow(BoundaryEndpoint endpoint, bool suppressSelection)
     {
         int row = _separatePanel.RowCount++;
         _separatePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
@@ -772,7 +827,7 @@ public sealed class SettingsForm : Form
             var behavior = modes[i];
             var tile = NewModeTile(behavior, BehaviorTitle(behavior), "", true);
             tile.Left = 198 + i * 195; tile.Top = 5; tile.Width = 188; tile.Height = 66;
-            tile.Selected = ResolvedBehavior(endpoint) == behavior;
+            tile.Selected = !suppressSelection && ResolvedBehavior(endpoint) == behavior;
             tile.Click += (_, _) => { SetEndpointBehavior(endpoint, behavior); RefreshMap(); UpdateDrawer(); };
             panel.Controls.Add(tile);
         }
@@ -851,7 +906,10 @@ public sealed class SettingsForm : Form
     {
         if (_boundary == null || _drawerStatus == null) return;
         string status = "";
-        if (_primary.Runtime?.SafetyDemoted == true) status = string.Format(Strings.Ui("StatusSafety"), ScreenName(_primary.From));
+        var excludedTarget = ExcludedBoundaryTarget();
+        if (excludedTarget != null)
+            status = string.Format(Strings.Ui("ExcludedTargetExplanation"), ScreenName(excludedTarget));
+        else if (_primary.Runtime?.SafetyDemoted == true) status = string.Format(Strings.Ui("StatusSafety"), ScreenName(_primary.From));
         else if (_runtimeState != null)
         {
             var state = _runtimeState();
@@ -863,6 +921,17 @@ public sealed class SettingsForm : Form
                 status = Strings.Ui("StatusSideOff");
         }
         _drawerStatus.Text = status;
+        _drawerStatus.AccessibleName = status;
+    }
+
+    private MonitorInfo ExcludedBoundaryTarget()
+    {
+        if (_boundary == null || _primary == null) return null;
+        if (_draft.ExcludedDevices.Contains(_primary.To.StableId, StringComparer.OrdinalIgnoreCase))
+            return _primary.To;
+        if (_draft.ExcludedDevices.Contains(_primary.From.StableId, StringComparer.OrdinalIgnoreCase))
+            return _primary.From;
+        return null;
     }
 
     private void RefreshMap()
@@ -889,7 +958,16 @@ public sealed class SettingsForm : Form
     private void LayoutBoundaryDrawer()
     {
         if (_screenSplit == null || !_screenSplit.Visible || _screenSplit.Width <= 0) return;
-        _screenSplit.Width = Math.Max(DpiPx(420), _bodyFlow.ClientSize.Width - _bodyFlow.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+        int contentWidth = Math.Max(DpiPx(420), _bodyFlow.ClientSize.Width - _bodyFlow.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+        PrepareBoundaryDrawerWidth(contentWidth);
+        int width = Math.Max(DpiPx(430), _screenSplit.ClientSize.Width - DpiPx(28));
+        int preferred = _drawerFlow.GetPreferredSize(new Size(width, 0)).Height + _drawer.Padding.Vertical + DpiPx(2);
+        _screenSplit.Height = Math.Max(DpiPx(245), preferred);
+    }
+
+    private void PrepareBoundaryDrawerWidth(int contentWidth)
+    {
+        _screenSplit.Width = contentWidth;
         int width = Math.Max(DpiPx(430), _screenSplit.ClientSize.Width - DpiPx(28));
         foreach (Control child in _drawerFlow.Controls) child.Width = width;
         LayoutDrawerQuestionText();
@@ -897,8 +975,19 @@ public sealed class SettingsForm : Form
         int tileWidth = Math.Max(DpiPx(150), (width - DpiPx(16)) / 3);
         foreach (ModeTile tile in _modeTiles.Controls) tile.Width = tileWidth;
         _separatePanel.Width = width; _whenPanel.Width = width;
-        int preferred = _drawerFlow.GetPreferredSize(new Size(width, 0)).Height + _drawer.Padding.Vertical + DpiPx(2);
-        _screenSplit.Height = Math.Max(DpiPx(245), preferred);
+    }
+
+    private int RestingBoundaryDrawerHeight(int contentWidth)
+    {
+        PrepareBoundaryDrawerWidth(contentWidth);
+        ReserveDrawerStatusHeight();
+        int height = _drawer.Padding.Vertical + DpiPx(2);
+        foreach (Control child in _drawerFlow.Controls)
+        {
+            if (child == _separatePanel || child == _whenPanel) continue;
+            height += child.Height + child.Margin.Vertical;
+        }
+        return Math.Max(DpiPx(245), height);
     }
 
     private int DpiPx(int logicalPixels) => (int)Math.Round(logicalPixels * DeviceDpi / 96f);
@@ -970,6 +1059,7 @@ public sealed class SettingsForm : Form
         _inlineStatus.Text = text ?? "";
         _inlineStatus.ForeColor = error ? _theme.Danger : _theme.Faint;
         _inlineAction.Enabled = action;
+        _inlineAction.Visible = action;
         _inlineAction.Text = action ? Strings.Ui("OpenBoundary") : "";
     }
 
@@ -1300,22 +1390,39 @@ public sealed class SettingsForm : Form
         SetInlineStatus(Strings.LayoutChangedBanner);
     }
 
+    private bool _inResizeLayout;
     private void ResizeV2Layout()
     {
         if (_bodyFlow == null || _bodyFlow.IsDisposed) return;
+        // Re-entrancy guard: this method sets child .Width/.Height, which re-fires the _bodyFlow/page
+        // SizeChanged handlers that call back into here. Without this, one window-resize tick triggers a
+        // storm of full relayouts (each doing whole-tree LINQ walks + grid rebuilds) → heavy drag lag.
+        if (_inResizeLayout) return;
+        _inResizeLayout = true;
+        SuspendLayout();
+        try
+        {
         bool narrow = ClientSize.Width < DpiPx(900);
         int horizontal = DpiPx(narrow ? 18 : 28);
-        _bodyFlow.Padding = new Padding(horizontal, DpiPx(23), horizontal, DpiPx(32));
-        int width = Math.Max(DpiPx(420), _bodyFlow.ClientSize.Width - _bodyFlow.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+        int bodyViewport = Math.Max(DpiPx(420), _bodyFlow.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+        int width = Math.Max(DpiPx(420), Math.Min(DpiPx(WideContentMeasure), bodyViewport - horizontal * 2));
+        int bodySpare = Math.Max(0, bodyViewport - width);
+        int bodyLeft = Math.Max(horizontal, bodySpare / 2);
+        int bodyRight = Math.Max(horizontal, bodySpare - bodyLeft);
+        _bodyFlow.Padding = new Padding(bodyLeft, DpiPx(23), bodyRight, DpiPx(32));
         foreach (Control child in _bodyFlow.Controls) child.Width = width;
         LayoutScreenSectionText();
-        _map.Height = Math.Clamp((int)Math.Round(_bodyFlow.ClientSize.Height * .39), DpiPx(220), DpiPx(300));
         _screenRows.Width = width;
         UpdateScreenRowPitch(narrow);
         ReflowScreenRows(narrow);
         foreach (var page in new[] { _advancedPage, _shortcutsPage, _generalPage })
         {
-            int pageWidth = Math.Max(DpiPx(420), page.ClientSize.Width - page.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+            int pageViewport = Math.Max(DpiPx(420), page.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+            int pageWidth = Math.Max(DpiPx(420), Math.Min(DpiPx(WideContentMeasure), pageViewport - horizontal * 2));
+            int pageSpare = Math.Max(0, pageViewport - pageWidth);
+            int pageLeft = Math.Max(horizontal, pageSpare / 2);
+            int pageRight = Math.Max(horizontal, pageSpare - pageLeft);
+            page.Padding = new Padding(pageLeft, DpiPx(23), pageRight, DpiPx(32));
             foreach (Control child in page.Controls) child.Width = pageWidth;
             if (page != _advancedPage)
             {
@@ -1323,11 +1430,13 @@ public sealed class SettingsForm : Form
                 if (flow != null) foreach (Control child in flow.Controls) child.Width = pageWidth;
             }
         }
-        ResizeAdvanced(Math.Max(DpiPx(420), _advancedPage.ClientSize.Width - _advancedPage.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth));
+        int advancedContentWidth = Math.Max(DpiPx(420), _advancedPage.ClientSize.Width - _advancedPage.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4));
+        ResizeAdvanced(advancedContentWidth);
         var numericGrid = _advancedPanel.Controls.Cast<Control>().OfType<TableLayoutPanel>().FirstOrDefault(c => (c.Tag as string) == "numericGrid");
         if (numericGrid != null) ReflowGrid(numericGrid, narrow, Math.Max(DpiPx(420), _advancedWidth));
         var appearanceGrid = _generalPage.Controls.Cast<Control>().SelectMany(AllControls).OfType<TableLayoutPanel>().FirstOrDefault(c => (c.Tag as string) == "appearanceGrid");
-        if (appearanceGrid != null) ReflowGrid(appearanceGrid, narrow, Math.Max(DpiPx(420), _generalPage.ClientSize.Width - _generalPage.Padding.Horizontal));
+        if (appearanceGrid != null) ReflowGrid(appearanceGrid, narrow,
+            Math.Max(DpiPx(420), _generalPage.ClientSize.Width - _generalPage.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - DpiPx(4)));
         if (narrow)
         {
             _modeTiles.FlowDirection = FlowDirection.TopDown; _modeTiles.Height = DpiPx(250);
@@ -1337,7 +1446,22 @@ public sealed class SettingsForm : Form
         {
             _modeTiles.FlowDirection = FlowDirection.LeftToRight; _modeTiles.Height = DpiPx(84);
         }
+        int drawerHeight = RestingBoundaryDrawerHeight(width);
+        int listHeight = _screenSection.Height + _screenSection.Margin.Vertical
+            + _screenRows.Height + _screenRows.Margin.Vertical;
+        var mapHeader = _bodyFlow.Controls.Cast<Control>().First(control => (control.Tag as string) == "mapHeader");
+        int nonMapHeight = _bodyFlow.Padding.Vertical
+            + mapHeader.Height + mapHeader.Margin.Vertical
+            + _mapHint.Height + _mapHint.Margin.Vertical
+            + Math.Max(drawerHeight, listHeight);
+        int bodyHeight = _bodyFlow.ClientSize.Height;
+        int leftoverHeight = bodyHeight - nonMapHeight;
+        int preferredFloor = Math.Max(DpiPx(220), (int)Math.Round(bodyHeight * PreferredMapHeightRatio));
+        int proportionalCeiling = Math.Max(preferredFloor, (int)Math.Round(bodyHeight * MaximumMapHeightRatio));
+        _map.Height = Math.Clamp(leftoverHeight, preferredFloor, proportionalCeiling);
         if (_screenSplit.Visible) LayoutBoundaryDrawer();
+        }
+        finally { ResumeLayout(true); _inResizeLayout = false; }
     }
 
     private void LayoutScreenSectionText()
@@ -1438,6 +1562,7 @@ public sealed class SettingsForm : Form
         {
             Strings.Ui("StatusUpClosed"), Strings.Ui("StatusSideOff"),
             string.Format(Strings.Ui("StatusSafety"), longestName), Strings.Ui("BlockedByKeepOut"),
+            string.Format(Strings.Ui("ExcludedTargetExplanation"), longestName),
             Strings.Ui("SavedInactive"), " "
         };
     }
@@ -1707,33 +1832,43 @@ public sealed class SettingsForm : Form
         public bool Selected { get => _selected; set { _selected = value; Invalidate(); } }
         public ModeTile() { DoubleBuffered = true; Cursor = Cursors.Hand; TabStop = true; AccessibleRole = AccessibleRole.PushButton; }
         public void SetTheme(Theme theme) { _theme = theme; BackColor = theme.Surface; ForeColor = theme.Text; AccessibleName = Title + ". " + Help; Invalidate(); }
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+            base.OnEnabledChanged(e);
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             using var path = Rounded(new Rectangle(1, 1, Width - 3, Height - 3), 8);
-            using var fill = new SolidBrush(Selected ? _theme.AccentWeak : _theme.Surface); e.Graphics.FillPath(fill, path);
-            using var border = new Pen(Selected ? _theme.Accent : _theme.Border, Selected ? 1.8f : 1f); e.Graphics.DrawPath(border, path);
-            DrawGlyph(e.Graphics, new Point(22, Height / 2));
+            Color fillColor = !Enabled ? _theme.DisabledSurface : Selected ? _theme.AccentWeak : _theme.Surface;
+            Color borderColor = !Enabled ? _theme.Border : Selected ? _theme.Accent : _theme.Border;
+            Color titleColor = !Enabled ? _theme.Faint : Selected ? _theme.Accent : _theme.Text;
+            using var fill = new SolidBrush(fillColor); e.Graphics.FillPath(fill, path);
+            using var border = new Pen(borderColor, Enabled && Selected ? 1.8f : 1f); e.Graphics.DrawPath(border, path);
+            DrawGlyph(e.Graphics, new Point(22, Height / 2), Enabled);
             bool shortTile = Height < 60 && Help.Length > 0;
             var titleRect = new Rectangle(44, Help.Length == 0 ? 4 : shortTile ? 2 : 10, Width - 52, Help.Length == 0 ? Height - 8 : shortTile ? 19 : 22);
-            TextRenderer.DrawText(e.Graphics, Title, new Font(Font, FontStyle.Bold), titleRect, Selected ? _theme.Accent : _theme.Text,
+            TextRenderer.DrawText(e.Graphics, Title, new Font(Font, FontStyle.Bold), titleRect, titleColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             if (Help.Length > 0)
             {
                 var helpRect = shortTile
                     ? new Rectangle(44, 21, Width - 52, Height - 24)
                     : new Rectangle(44, 31, Width - 52, Height - 35);
-                TextRenderer.DrawText(e.Graphics, Help, Font, helpRect, _theme.Subtle,
+                TextRenderer.DrawText(e.Graphics, Help, Font, helpRect, Enabled ? _theme.Subtle : _theme.Faint,
                     TextFormatFlags.Left | (shortTile ? TextFormatFlags.SingleLine : TextFormatFlags.WordBreak) |
                     TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             }
-            if (Focused) ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(4, 4, Width - 8, Height - 8), _theme.Text, Color.Transparent);
+            if (Enabled && Focused) ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(4, 4, Width - 8, Height - 8), _theme.Text, Color.Transparent);
         }
-        private void DrawGlyph(Graphics g, Point p)
+        private void DrawGlyph(Graphics g, Point p, bool enabled)
         {
-            if (Behavior == BoundaryBehavior.Blocked) { using var pen = new Pen(_theme.Text, 5); g.DrawLine(pen, p.X - 8, p.Y, p.X + 8, p.Y); }
-            else if (Behavior == BoundaryBehavior.Push) { using var b = new SolidBrush(_theme.Accent); g.FillPolygon(b, new[] { new Point(p.X, p.Y - 8), new Point(p.X + 8, p.Y), new Point(p.X, p.Y + 8), new Point(p.X - 8, p.Y) }); }
-            else { using var pen = new Pen(_theme.Accent, 2); g.DrawEllipse(pen, p.X - 7, p.Y - 7, 14, 14); }
+            Color color = enabled ? (Behavior == BoundaryBehavior.Blocked ? _theme.Text : _theme.Accent) : _theme.Faint;
+            if (Behavior == BoundaryBehavior.Blocked) { using var pen = new Pen(color, 5); g.DrawLine(pen, p.X - 8, p.Y, p.X + 8, p.Y); }
+            else if (Behavior == BoundaryBehavior.Push) { using var b = new SolidBrush(color); g.FillPolygon(b, new[] { new Point(p.X, p.Y - 8), new Point(p.X + 8, p.Y), new Point(p.X, p.Y + 8), new Point(p.X - 8, p.Y) }); }
+            else { using var pen = new Pen(color, 2); g.DrawEllipse(pen, p.X - 7, p.Y - 7, 14, 14); }
         }
         protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode is Keys.Enter or Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; } base.OnKeyDown(e); }
     }

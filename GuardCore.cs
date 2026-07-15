@@ -52,9 +52,9 @@ public sealed class GuardCore
     public int MainL, MainR, MainT, MainB;
 
     // Forbidden rectangles the cursor may never ENTER (e.g. a headless/dummy HDMI display the user can't see).
-    // Half-open like every other rect here: [L,R) x [T,B). Empty list => feature inert (a true no-op). The data
-    // model is intentionally a plain rect list so an Ignore-mode / per-layout profiles can reuse it later without
-    // rework (a future Ignore mode is a strict subset: it would drop these from topology but NOT clamp).
+    // Half-open like every other rect here: [L,R) x [T,B). In clone/overlap layouts, a coordinate also covered by a
+    // usable monitor remains usable; only the excluded-only portion is effectively forbidden. Empty list => inert.
+    // The data model is intentionally a plain rect list so an Ignore-mode / per-layout profiles can reuse it later.
     public List<(int L, int T, int R, int B)> Forbidden = new();
 
     /// <summary>The hook only needs to run (and the clamp/barrier logic only matters) when at least one of these
@@ -71,6 +71,8 @@ public sealed class GuardCore
     public int LastX, LastY;
     public bool HaveLast;
     public bool OnTop;
+    private bool _gatesEnabledForDecision;
+    private bool _sideContainForDecision;
 
     public void Reset()
     {
@@ -389,10 +391,10 @@ public sealed class GuardCore
     }
 
     /// <summary>
-    /// Pure wall-off clamp: if (x,y) lands inside ANY forbidden rect, push it back OUT to a legal pixel on one of
+    /// Pure wall-off clamp: if (x,y) lands inside the excluded-only part of ANY forbidden rect, push it back OUT to a legal pixel on one of
     /// <see cref="Monitors"/> (the usable, non-excluded screens). Preserve the orthogonal axis when that screen has
     /// such a pixel; otherwise use its nearest edge pixel. Returns true if it moved the point. With a configured
-    /// usable monitor list, GUARANTEES the result is outside EVERY forbidden rect AND on a usable monitor.
+    /// usable monitor list, GUARANTEES the result is outside effective forbidden-only geometry AND on a usable monitor.
     ///
     /// ENTRY-SIDE-AWARE (binding fix #1): the move came from (LastX,LastY). When we have a last position that is
     /// OUTSIDE the rect, exit on the edge the move ENTERED from — the rect wall the entry SEGMENT (Last -> target)
@@ -418,6 +420,10 @@ public sealed class GuardCore
         // +1 guards a final no-op verification pass. This hard-caps work so the hot path can never spin.
         for (int pass = 0; pass <= Forbidden.Count; pass++)
         {
+            // Clone/overlap layouts can put the same coordinate on both an excluded display and a usable one. There is
+            // no distinct cursor coordinate to wall in that shared area, so usable geometry wins.
+            if (!InsideForbidden(x, y)) break;
+
             // Find a forbidden rect the point is currently inside.
             int hit = -1;
             for (int i = 0; i < Forbidden.Count; i++)
@@ -545,9 +551,11 @@ public sealed class GuardCore
 
     private bool InsideForbidden(int x, int y)
     {
+        bool excluded = false;
         foreach (var f in Forbidden)
-            if (InRect(f, x, y)) return true;
-        return false;
+            if (InRect(f, x, y)) { excluded = true; break; }
+        if (!excluded) return false;
+        return !TryActiveMonitor(x, y, out _);
     }
 
     private bool RegionContains(List<int> region, int x, int y)
@@ -722,6 +730,8 @@ public sealed class GuardCore
     public GuardAction Decide(int x, int y, bool gatesEnabled, bool sideContain, out int bx, out int by)
     {
         bx = x; by = y;
+        _gatesEnabledForDecision = gatesEnabled;
+        _sideContainForDecision = sideContain;
 
         // (0) Wall-off: the cursor may never ENTER an excluded display (a headless/dummy screen). Clamp the
         //     attempted target back to a legal edge FIRST, so every downstream rule (barrier, gates, confine,
@@ -850,7 +860,7 @@ public sealed class GuardCore
                                                                         // would make the Math.Clamp below throw
                     bool descending = y > LastY;                                             // 2
                     bool originInTop = InRect(route.Top, LastX, LastY);                      // 3
-                    bool crossesLocalEdge = y >= route.Top.B && x >= route.Top.L && x < route.Top.R;   // 4
+                    bool crossesLocalEdge = CrossesLocalBottomEdge(route.Top, x, y);                 // 4
                     bool outsideLanding = !InRect(route.Landing, x, y);                      // 5
                     int landX = Math.Clamp(x, route.Landing.L, route.Landing.R - 1);
                     bool realLanding = InRect(route.Landing, landX, y);                      // 6
@@ -990,11 +1000,12 @@ public sealed class GuardCore
         return best;
     }
 
-    private static BoundaryBehavior EffectiveBehavior(RuntimeTransition t, bool gatesEnabled, bool sideContain)
+    internal static BoundaryBehavior EffectiveBehavior(RuntimeTransition t, bool gatesEnabled, bool sideContain)
     {
-        // The shipped isolated-lower-screen escape is owner-bound and still requires deliberate Push intent, but the
-        // normal Up toggle may never close that source's only exit. SafetyEscapes is baked into this compile-time flag.
-        if (t.SoleUpSafetyEscape)
+        // Compile-time safety exits still require deliberate Push intent, but live Up/side toggles may never close
+        // them. SoleUpSafetyEscape carries the legacy isolated-screen rule; SafetyDemoted is the broader geometry-
+        // seal backstop selected when a later layout change leaves every authored exit blocked.
+        if (t.SoleUpSafetyEscape || t.SafetyDemoted)
             return t.Behavior == BoundaryBehavior.Free ? BoundaryBehavior.Free : BoundaryBehavior.Push;
         if (t.Control == BoundaryControl.Always) return t.Behavior;
         return t.Direction switch
@@ -1020,6 +1031,17 @@ public sealed class GuardCore
         return DeliberateCross ? primary >= t.PushMin && orthogonal <= primary + t.PushSlack : primary > 0;
     }
 
+    /// <summary>True when Last -> target crosses a top monitor's local bottom edge through its half-open X span.
+    /// The intersection X matters: on a fast diagonal the endpoint may already be beyond the top's side.</summary>
+    private bool CrossesLocalBottomEdge((int L, int T, int R, int B) top, int x, int y)
+    {
+        int verticalDelta = y - LastY;
+        if (verticalDelta <= 0 || LastY >= top.B || y < top.B) return false;
+        double hit = (double)(top.B - LastY) / verticalDelta;
+        double crossingX = LastX + (x - LastX) * hit;
+        return crossingX >= top.L && crossingX < top.R;
+    }
+
     private bool TryGuideDescent(int x, int y, out int bx, out int by)
     {
         bx = x; by = y;
@@ -1029,7 +1051,7 @@ public sealed class GuardCore
             if (route.Landing.R <= route.Landing.L) continue;
             bool descending = y > LastY;
             bool originInTop = InRect(route.Top, LastX, LastY);
-            bool crossesLocalEdge = y >= route.Top.B && x >= route.Top.L && x < route.Top.R;
+            bool crossesLocalEdge = CrossesLocalBottomEdge(route.Top, x, y);
             bool outsideLanding = !InRect(route.Landing, x, y);
             int landX = Math.Clamp(x, route.Landing.L, route.Landing.R - 1);
             bool realLanding = InRect(route.Landing, landX, y);
@@ -1057,19 +1079,19 @@ public sealed class GuardCore
         }
     }
 
-    private static bool PointIsAuthorized(int x, int y, RuntimeTransition transition, bool passed)
+    private bool PointIsAuthorized(int x, int y, RuntimeTransition transition, bool passed)
     {
         if (!passed) return InRect(transition.From, x, y);
-        foreach (var monitor in transition.AllowedLandings)
+        foreach (var monitor in transition.AllowedLandingsFor(_gatesEnabledForDecision, _sideContainForDecision))
             if (InRect(monitor, x, y)) return true;
         return false;
     }
 
-    private static bool RectIsAuthorized((int L, int T, int R, int B) monitor,
-                                         RuntimeTransition transition, bool passed)
+    private bool RectIsAuthorized((int L, int T, int R, int B) monitor,
+                                  RuntimeTransition transition, bool passed)
     {
         if (!passed) return monitor == transition.From;
-        foreach (var allowed in transition.AllowedLandings)
+        foreach (var allowed in transition.AllowedLandingsFor(_gatesEnabledForDecision, _sideContainForDecision))
             if (allowed == monitor) return true;
         return false;
     }
@@ -1090,9 +1112,11 @@ public sealed class GuardCore
             var edge = Transitions[i];
             if (edge.From != source) continue;
             hasSourceTransition = true;
-            if (edge.Behavior == BoundaryBehavior.Blocked) continue;
-            for (int j = 0; j < edge.AllowedLandings.Length; j++)
-                if (edge.AllowedLandings[j] == monitor) return true;
+            if (EffectiveBehavior(edge, _gatesEnabledForDecision, _sideContainForDecision) == BoundaryBehavior.Blocked)
+                continue;
+            var allowed = edge.AllowedLandingsFor(_gatesEnabledForDecision, _sideContainForDecision);
+            for (int j = 0; j < allowed.Length; j++)
+                if (allowed[j] == monitor) return true;
         }
         // With no geometric boundary from the source (true diagonal/clone), there is no ordered rule to violate.
         return !hasSourceTransition;

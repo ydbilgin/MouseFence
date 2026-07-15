@@ -24,6 +24,7 @@
     <Compile Include="..\MonitorMapControl.cs" Link="MonitorMapControl.cs" />
     <Compile Include="..\IdentifyOverlay.cs" Link="IdentifyOverlay.cs" />
     <Compile Include="..\Theming.cs" Link="Theming.cs" />
+    <Compile Include="..\Screenshot.cs" Link="Screenshot.cs" />
   </ItemGroup>
 
 </Project>

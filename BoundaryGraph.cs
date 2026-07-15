@@ -54,9 +54,18 @@ public sealed class RuntimeTransition
     public bool SoleUpSafetyEscape { get; internal set; }
     public bool SafetyDemoted { get; internal set; }
     public int SortOrder { get; internal set; }
+    /// <summary>Authorized landings with the ordinary Up and side-protection toggles both enabled.</summary>
     public (int L, int T, int R, int B)[] AllowedLandings { get; internal set; } = Array.Empty<(int, int, int, int)>();
+    internal (int L, int T, int R, int B)[] AllowedLandingsUpClosed { get; set; } = Array.Empty<(int, int, int, int)>();
+    internal (int L, int T, int R, int B)[] AllowedLandingsSideOff { get; set; } = Array.Empty<(int, int, int, int)>();
+    internal (int L, int T, int R, int B)[] AllowedLandingsUpClosedSideOff { get; set; } = Array.Empty<(int, int, int, int)>();
 
     internal int CorridorWidth => CorridorEnd - CorridorStart;
+
+    internal (int L, int T, int R, int B)[] AllowedLandingsFor(bool gatesEnabled, bool sideContain) =>
+        gatesEnabled
+            ? sideContain ? AllowedLandings : AllowedLandingsSideOff
+            : sideContain ? AllowedLandingsUpClosed : AllowedLandingsUpClosedSideOff;
 }
 
 public sealed class BoundaryValidationIssue
@@ -140,19 +149,13 @@ public static class BoundaryGraph
         var sealedBeforeSafety = FindSealed(usable, transitions);
         if (applyGeometrySafety && settings.SafetyEscapes)
         {
-            foreach (var issue in sealedBeforeSafety)
-            {
-                // One deterministic exit per sealed screen: widest corridor, then the compiler's stable order.
-                var exit = transitions.Where(t => Same(t.FromStableId, issue.StableId))
-                    .OrderByDescending(t => t.CorridorWidth).ThenBy(t => t.SortOrder).FirstOrDefault();
-                if (exit != null && exit.Behavior == BoundaryBehavior.Blocked)
-                {
-                    // Explicit all-blocked configurations are rejected by ValidateNoSeal before persistence. This
-                    // backstop exists for a later geometry change, so the running hook can never strand a screen.
-                    exit.Behavior = BoundaryBehavior.Push;
-                    exit.SafetyDemoted = true;
-                }
-            }
+            // Explicit all-blocked configurations are rejected by ValidateNoSeal before persistence. This first pass
+            // is the later-geometry backstop; the second catches a graph that becomes sealed only when Automatic Up
+            // resolves Blocked at runtime. Side protection ON is the restrictive side state (OFF can only free edges).
+            DemoteWidestExits(sealedBeforeSafety, transitions);
+            var sealedWithUpClosed = FindSealed(usable, transitions, useRuntimeState: true,
+                                                gatesEnabled: false, sideContain: true);
+            DemoteWidestExits(sealedWithUpClosed, transitions);
         }
 
         BuildAllowedLandingSets(usable, transitions);
@@ -305,14 +308,19 @@ public static class BoundaryGraph
     }
 
     private static List<BoundaryValidationIssue> FindSealed(IReadOnlyList<BoundaryScreen> screens,
-                                                            IReadOnlyList<RuntimeTransition> transitions)
+                                                            IReadOnlyList<RuntimeTransition> transitions,
+                                                            bool useRuntimeState = false,
+                                                            bool gatesEnabled = true, bool sideContain = true)
     {
         var issues = new List<BoundaryValidationIssue>();
         if (screens.Count <= 1) return issues;
         foreach (var screen in screens)
         {
             var exits = transitions.Where(t => Same(t.FromStableId, screen.StableId)).ToList();
-            if (exits.Count == 0 || exits.Any(t => t.Behavior is BoundaryBehavior.Free or BoundaryBehavior.Push)) continue;
+            bool usableExit = exits.Any(t => useRuntimeState
+                ? GuardCore.EffectiveBehavior(t, gatesEnabled, sideContain) != BoundaryBehavior.Blocked
+                : t.Behavior is BoundaryBehavior.Free or BoundaryBehavior.Push);
+            if (exits.Count == 0 || usableExit) continue;
             var focus = exits.OrderByDescending(t => t.CorridorWidth).ThenBy(t => t.SortOrder).First();
             issues.Add(new BoundaryValidationIssue
             {
@@ -325,36 +333,61 @@ public static class BoundaryGraph
         return issues;
     }
 
+    private static void DemoteWidestExits(IEnumerable<BoundaryValidationIssue> issues,
+                                          IReadOnlyList<RuntimeTransition> transitions)
+    {
+        foreach (var issue in issues)
+        {
+            // One deterministic exit per sealed screen: widest corridor, then the compiler's stable order.
+            var exit = transitions.Where(t => Same(t.FromStableId, issue.StableId))
+                .OrderByDescending(t => t.CorridorWidth).ThenBy(t => t.SortOrder).FirstOrDefault();
+            if (exit == null) continue;
+            if (exit.Behavior == BoundaryBehavior.Blocked) exit.Behavior = BoundaryBehavior.Push;
+            exit.SafetyDemoted = true;
+        }
+    }
+
     private static void BuildAllowedLandingSets(IReadOnlyList<BoundaryScreen> screens, List<RuntimeTransition> transitions)
     {
         foreach (var transition in transitions)
         {
-            if (transition.Behavior == BoundaryBehavior.Blocked && !transition.SoleUpSafetyEscape)
-            {
-                transition.AllowedLandings = new[] { transition.From };
-                continue;
-            }
-
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { transition.FromStableId, transition.ToStableId };
-            var queue = new Queue<string>(); queue.Enqueue(transition.ToStableId);
-            while (queue.Count > 0)
-            {
-                string from = queue.Dequeue();
-                foreach (var edge in transitions)
-                    if (Same(edge.FromStableId, from)
-                        && (edge.Behavior != BoundaryBehavior.Blocked || edge.SoleUpSafetyEscape)
-                        && seen.Add(edge.ToStableId))
-                        queue.Enqueue(edge.ToStableId);
-            }
-            // A transitive alternate route must never authorize a correction directly onto a monitor whose ordered
-            // transition from this source is Blocked. Real future moves may take the alternate route one seam at a
-            // time; a one-frame void/corner repair may not teleport across the blocked direction.
-            foreach (var blocked in transitions.Where(t => Same(t.FromStableId, transition.FromStableId)
-                                                        && t.Behavior == BoundaryBehavior.Blocked
-                                                        && !t.SoleUpSafetyEscape))
-                seen.Remove(blocked.ToStableId);
-            transition.AllowedLandings = screens.Where(s => seen.Contains(s.StableId)).Select(s => s.Bounds).ToArray();
+            transition.AllowedLandings = BuildAllowedLandingSet(screens, transitions, transition,
+                                                                 gatesEnabled: true, sideContain: true);
+            transition.AllowedLandingsUpClosed = BuildAllowedLandingSet(screens, transitions, transition,
+                                                                         gatesEnabled: false, sideContain: true);
+            transition.AllowedLandingsSideOff = BuildAllowedLandingSet(screens, transitions, transition,
+                                                                        gatesEnabled: true, sideContain: false);
+            transition.AllowedLandingsUpClosedSideOff = BuildAllowedLandingSet(screens, transitions, transition,
+                                                                                gatesEnabled: false, sideContain: false);
         }
+    }
+
+    private static (int L, int T, int R, int B)[] BuildAllowedLandingSet(
+        IReadOnlyList<BoundaryScreen> screens, IReadOnlyList<RuntimeTransition> transitions,
+        RuntimeTransition transition, bool gatesEnabled, bool sideContain)
+    {
+        if (GuardCore.EffectiveBehavior(transition, gatesEnabled, sideContain) == BoundaryBehavior.Blocked)
+            return new[] { transition.From };
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { transition.FromStableId, transition.ToStableId };
+        var queue = new Queue<string>(); queue.Enqueue(transition.ToStableId);
+        while (queue.Count > 0)
+        {
+            string from = queue.Dequeue();
+            foreach (var edge in transitions)
+                if (Same(edge.FromStableId, from)
+                    && GuardCore.EffectiveBehavior(edge, gatesEnabled, sideContain) != BoundaryBehavior.Blocked
+                    && seen.Add(edge.ToStableId))
+                    queue.Enqueue(edge.ToStableId);
+        }
+        // A transitive alternate route must never authorize a correction directly onto a monitor whose ordered
+        // transition from this source is blocked in the current live toggle state. Real future moves may take the
+        // alternate route one seam at a time; a one-frame void/corner repair may not bypass the blocked direction.
+        foreach (var blocked in transitions.Where(t => Same(t.FromStableId, transition.FromStableId)
+            && GuardCore.EffectiveBehavior(t, gatesEnabled, sideContain) == BoundaryBehavior.Blocked))
+            seen.Remove(blocked.ToStableId);
+        return screens.Where(s => seen.Contains(s.StableId)).Select(s => s.Bounds).ToArray();
     }
 
     private static int CompareTransition(RuntimeTransition a, RuntimeTransition b)
