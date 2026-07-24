@@ -15,6 +15,12 @@
     <Compile Remove="council_*/**/*.cs" />
     <!-- Test the REAL production logic. The Windows target is needed only because Settings stores WinForms Keys. -->
     <Compile Include="..\Core\GuardCore.cs" Link="GuardCore.cs" />
+    <Compile Include="..\Core\GuardCore.Decision.cs" Link="GuardCore.Decision.cs" />
+    <Compile Include="..\Core\GuardCore.Forbidden.cs" Link="GuardCore.Forbidden.cs" />
+    <Compile Include="..\Core\GuardCore.Layout.cs" Link="GuardCore.Layout.cs" />
+    <Compile Include="..\Core\GuardCore.Routes.cs" Link="GuardCore.Routes.cs" />
+    <Compile Include="..\Core\GuardCore.Topology.cs" Link="GuardCore.Topology.cs" />
+    <Compile Include="..\Core\GuardCore.Transitions.cs" Link="GuardCore.Transitions.cs" />
     <Compile Include="..\Core\HookHealth.cs" Link="HookHealth.cs" />
     <Compile Include="..\Core\BoundaryGraph.cs" Link="BoundaryGraph.cs" />
     <Compile Include="..\I18n\Strings.cs" Link="Strings.cs" />
