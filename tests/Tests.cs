@@ -2933,6 +2933,34 @@ GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop
             IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
 }
 
+// ---------------------------------------------------------------------------------------------------
+// HOOK LIVENESS — Windows silently unhooks a WH_MOUSE_LL hook whose callback overruns LowLevelHooksTimeout
+// and leaves our handle intact, so "handle != 0" is not evidence the fence is up. HookHealth turns the only
+// real evidence (hook traffic vs. cursor movement between two probes) into a verdict. Dead => reinstall, so a
+// false Dead would tear down a healthy hook: an idle probe must stay Inconclusive.
+// ---------------------------------------------------------------------------------------------------
+Console.WriteLine("\n-- hook liveness (HookHealth) --");
+{
+    Check("hook health: traffic since the last probe => Alive",
+          HookHealth.Evaluate(cursorMoved: true, callbacksSincePreviousProbe: 12) == HookHealthVerdict.Alive);
+
+    Check("hook health: traffic without cursor movement (clicks/wheel only) is still Alive",
+          HookHealth.Evaluate(cursorMoved: false, callbacksSincePreviousProbe: 3) == HookHealthVerdict.Alive);
+
+    Check("hook health: the cursor moved but NOT ONE callback arrived => Dead (silently unhooked)",
+          HookHealth.Evaluate(cursorMoved: true, callbacksSincePreviousProbe: 0) == HookHealthVerdict.Dead);
+
+    Check("hook health: nothing moved and nothing arrived => Inconclusive, never a reinstall",
+          HookHealth.Evaluate(cursorMoved: false, callbacksSincePreviousProbe: 0) == HookHealthVerdict.Inconclusive);
+
+    // A probe counter is a running total, so the caller passes a delta; a zero delta on a busy hook (the
+    // counter simply didn't advance in this window) must read exactly like an idle window, not a failure.
+    long total = 4321;
+    long previous = 4321;
+    Check("hook health: a zero delta on a non-zero counter is not evidence of death",
+          HookHealth.Evaluate(cursorMoved: false, callbacksSincePreviousProbe: total - previous) == HookHealthVerdict.Inconclusive);
+}
+
 Console.WriteLine();
 Console.WriteLine(fails == 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
 Environment.Exit(fails == 0 ? 0 : 1);

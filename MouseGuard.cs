@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace MouseFence;
 
@@ -12,8 +13,24 @@ public sealed class MouseGuard : IDisposable
     private readonly Native.HookProc _proc;   // kept alive so the GC never collects the callback
     private readonly GuardCore _core = new();
 
-    /// <summary>True while the hook is installed (the tool is running, not paused).</summary>
-    public bool Enabled => _hook != IntPtr.Zero;
+    // Liveness probe state (see HookHealth): a counter the callback stamps, plus the cursor position at the
+    // previous probe. Both are only ever read/written from the UI thread (the hook is dispatched on the
+    // installing thread's queue), but the counter is interlocked so it stays correct if that ever changes.
+    private long _callbacks;
+    private long _callbacksAtLastProbe;
+    private Native.POINT _lastProbePoint;
+    private bool _haveProbePoint;
+    private bool _running;
+
+    /// <summary>
+    /// True while the guard is MEANT to be running (Start called, Stop not). This is the pause state the tray
+    /// reflects — it is deliberately NOT the hook handle, because Windows can drop the hook without telling us.
+    /// Ask <see cref="HookInstalled"/> for whether a hook is actually in place.
+    /// </summary>
+    public bool Enabled => _running;
+
+    /// <summary>True while a hook handle is actually installed. False + <see cref="Enabled"/> = the fence is DOWN.</summary>
+    public bool HookInstalled => _hook != IntPtr.Zero;
 
     /// <summary>Master toggle: when true the configured crossing gates are active; when false all crossing is blocked.</summary>
     public bool GateOpen { get; set; }
@@ -94,6 +111,8 @@ public sealed class MouseGuard : IDisposable
 
     public void Start()
     {
+        _running = true;
+        ResetProbe();
         if (_hook != IntPtr.Zero) return;
         _core.Reset();
         _hook = Native.SetWindowsHookEx(Native.WH_MOUSE_LL, _proc, Native.GetModuleHandle(null), 0);
@@ -101,13 +120,71 @@ public sealed class MouseGuard : IDisposable
 
     public void Stop()
     {
+        _running = false;
+        ResetProbe();
         if (_hook == IntPtr.Zero) return;
         Native.UnhookWindowsHookEx(_hook);
         _hook = IntPtr.Zero;
     }
 
+    /// <summary>
+    /// One liveness probe. Windows silently unhooks a low-level hook whose callback overruns
+    /// LowLevelHooksTimeout and leaves our handle intact, so the fence can go down while everything still
+    /// *looks* installed. Call this on a timer: a <see cref="HookHealthVerdict.Dead"/> verdict has already
+    /// attempted a reinstall by the time it returns — check <see cref="HookInstalled"/> for whether it took.
+    /// </summary>
+    public HookHealthVerdict CheckHealth()
+    {
+        if (!_running) return HookHealthVerdict.Inconclusive;
+
+        long seen = Interlocked.Read(ref _callbacks);
+        long delta = seen - _callbacksAtLastProbe;
+        _callbacksAtLastProbe = seen;
+
+        bool moved = false;
+        if (Native.GetCursorPos(out var now))
+        {
+            // The first probe after Start has no baseline: record it and claim no movement, so a reinstall is
+            // never triggered by an unknown-vs-known comparison.
+            moved = _haveProbePoint && (now.X != _lastProbePoint.X || now.Y != _lastProbePoint.Y);
+            _lastProbePoint = now;
+            _haveProbePoint = true;
+        }
+
+        var verdict = HookHealth.Evaluate(moved, delta);
+        if (verdict == HookHealthVerdict.Dead)
+            Reinstall();
+
+        return verdict;
+    }
+
+    /// <summary>Tear down whatever handle we hold and install a fresh hook. Safe when nothing is installed.</summary>
+    private void Reinstall()
+    {
+        if (_hook != IntPtr.Zero)
+        {
+            Native.UnhookWindowsHookEx(_hook);
+            _hook = IntPtr.Zero;
+        }
+
+        // Moves were missed while the hook was down, so the last-position state is stale: drop it and let the
+        // next move re-derive the side of the barrier the cursor is on (same reasoning as Configure's re-baseline).
+        _core.Reset();
+        _hook = Native.SetWindowsHookEx(Native.WH_MOUSE_LL, _proc, Native.GetModuleHandle(null), 0);
+    }
+
+    private void ResetProbe()
+    {
+        _callbacksAtLastProbe = Interlocked.Read(ref _callbacks);
+        _haveProbePoint = false;
+    }
+
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        // Stamp EVERY delivered event before any early-out: the counter is the liveness evidence, so it must
+        // not depend on the event being one we act on.
+        Interlocked.Increment(ref _callbacks);
+
         if (nCode < 0 || (int)wParam != Native.WM_MOUSEMOVE || !_core.NeedsProcessing)
             return Native.CallNextHookEx(_hook, nCode, wParam, lParam);
 
