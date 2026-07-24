@@ -14,18 +14,18 @@
     <!-- Don't pull in the council scratch sub-projects nested under tests/ -->
     <Compile Remove="council_*/**/*.cs" />
     <!-- Test the REAL production logic. The Windows target is needed only because Settings stores WinForms Keys. -->
-    <Compile Include="..\GuardCore.cs" Link="GuardCore.cs" />
-    <Compile Include="..\HookHealth.cs" Link="HookHealth.cs" />
-    <Compile Include="..\BoundaryGraph.cs" Link="BoundaryGraph.cs" />
-    <Compile Include="..\Strings.cs" Link="Strings.cs" />
+    <Compile Include="..\Core\GuardCore.cs" Link="GuardCore.cs" />
+    <Compile Include="..\Core\HookHealth.cs" Link="HookHealth.cs" />
+    <Compile Include="..\Core\BoundaryGraph.cs" Link="BoundaryGraph.cs" />
+    <Compile Include="..\I18n\Strings.cs" Link="Strings.cs" />
     <Compile Include="..\Settings.cs" Link="Settings.cs" />
-    <Compile Include="..\MonitorInfo.cs" Link="MonitorInfo.cs" />
-    <Compile Include="..\Native.cs" Link="Native.cs" />
-    <Compile Include="..\SettingsForm.cs" Link="SettingsForm.cs" />
-    <Compile Include="..\MonitorMapControl.cs" Link="MonitorMapControl.cs" />
-    <Compile Include="..\IdentifyOverlay.cs" Link="IdentifyOverlay.cs" />
-    <Compile Include="..\Theming.cs" Link="Theming.cs" />
-    <Compile Include="..\Screenshot.cs" Link="Screenshot.cs" />
+    <Compile Include="..\Core\MonitorInfo.cs" Link="MonitorInfo.cs" />
+    <Compile Include="..\Platform\Native.cs" Link="Native.cs" />
+    <Compile Include="..\Ui\SettingsForm.cs" Link="SettingsForm.cs" />
+    <Compile Include="..\Ui\MonitorMapControl.cs" Link="MonitorMapControl.cs" />
+    <Compile Include="..\Ui\IdentifyOverlay.cs" Link="IdentifyOverlay.cs" />
+    <Compile Include="..\Ui\Theming.cs" Link="Theming.cs" />
+    <Compile Include="..\Ui\Screenshot.cs" Link="Screenshot.cs" />
   </ItemGroup>
 
 </Project>
