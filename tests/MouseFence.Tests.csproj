@@ -24,6 +24,11 @@
     <Compile Include="..\Core\MonitorInfo.cs" Link="MonitorInfo.cs" />
     <Compile Include="..\Platform\Native.cs" Link="Native.cs" />
     <Compile Include="..\Ui\SettingsForm.cs" Link="SettingsForm.cs" />
+    <Compile Include="..\Ui\SettingsForm.Advanced.cs" Link="SettingsForm.Advanced.cs" />
+    <Compile Include="..\Ui\SettingsForm.BoundaryEditor.cs" Link="SettingsForm.BoundaryEditor.cs" />
+    <Compile Include="..\Ui\SettingsForm.Displays.cs" Link="SettingsForm.Displays.cs" />
+    <Compile Include="..\Ui\SettingsForm.General.cs" Link="SettingsForm.General.cs" />
+    <Compile Include="..\Ui\SettingsForm.Shortcuts.cs" Link="SettingsForm.Shortcuts.cs" />
     <Compile Include="..\Ui\MonitorMapControl.cs" Link="MonitorMapControl.cs" />
     <Compile Include="..\Ui\IdentifyOverlay.cs" Link="IdentifyOverlay.cs" />
     <Compile Include="..\Ui\Theming.cs" Link="Theming.cs" />
