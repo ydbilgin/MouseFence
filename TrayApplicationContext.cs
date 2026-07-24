@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace MouseFence;
@@ -7,10 +6,8 @@ namespace MouseFence;
 /// <summary>Owns the tray icon, the mouse guard, the global hotkey, and the settings.</summary>
 public sealed class TrayApplicationContext : ApplicationContext
 {
-    [DllImport("user32.dll")]
-    private static extern bool DestroyIcon(IntPtr hIcon);
-
-    private const int GateInset = 24;   // shrink each crossing gate by this many px on each side
+    private const int GateInset = 24;          // shrink each crossing gate by this many px on each side
+    private const int HookProbeIntervalMs = 3000;   // how often the guard's hook is probed for liveness
 
     private readonly NotifyIcon _tray;
     private readonly MouseGuard _guard = new();
@@ -25,6 +22,12 @@ public sealed class TrayApplicationContext : ApplicationContext
     // debounced through _reconfigTimer.
     private readonly Control _uiSync = new();
     private readonly System.Windows.Forms.Timer _reconfigTimer;
+
+    // Windows silently unhooks a low-level hook whose callback overruns LowLevelHooksTimeout and leaves the
+    // handle behind, so the fence can die while the tray still claims to be guarding. This timer probes for
+    // that (see MouseGuard.CheckHealth) and reinstalls; the latch keeps one outage to one balloon.
+    private readonly System.Windows.Forms.Timer _hookProbeTimer;
+    private bool _hookOutageReported;
 
     private readonly ToolStripMenuItem _gateItem;
     private readonly ToolStripMenuItem _sideItem;
@@ -46,9 +49,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         _settings = Settings.Load();
         Strings.Use(_settings.Language);
 
-        _iconClosed = MakeIcon(Color.FromArgb(220, 60, 60));
-        _iconOpen = MakeIcon(Color.FromArgb(60, 180, 75));
-        _iconPaused = MakeIcon(Color.FromArgb(150, 150, 150));
+        _iconClosed = LoadTrayIcon("tray-closed.ico");
+        _iconOpen = LoadTrayIcon("tray-open.ico");
+        _iconPaused = LoadTrayIcon("tray-paused.ico");
 
         _gateItem = new ToolStripMenuItem("", null, (s, e) => ToggleGate());
         _sideItem = new ToolStripMenuItem("", null, (s, e) => ToggleSide());
@@ -85,6 +88,10 @@ public sealed class TrayApplicationContext : ApplicationContext
         _reconfigTimer.Tick += (s, e) => { _reconfigTimer.Stop(); Configure(); UpdateUi(); };
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
+        _hookProbeTimer = new System.Windows.Forms.Timer { Interval = HookProbeIntervalMs };
+        _hookProbeTimer.Tick += OnHookProbe;
+        _hookProbeTimer.Start();
+
         RebuildMenuText();
         UpdateUi();
         WarnIntelRotation();
@@ -96,6 +103,32 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         if (!_uiSync.IsHandleCreated) return;
         _uiSync.BeginInvoke((Action)(() => { _reconfigTimer.Stop(); _reconfigTimer.Start(); }));
+    }
+
+    // Liveness probe for the mouse hook. A Dead verdict means the guard has already retried the install, so all
+    // that is left here is to tell the truth: announce the outage once, and let UpdateUi drop the "protecting"
+    // badge if the retry failed. The verdict is evidence-based (see HookHealth) — an idle probe says nothing and
+    // must not be treated as a failure.
+    private void OnHookProbe(object sender, EventArgs e)
+    {
+        if (!_guard.Enabled) return;   // deliberately paused — there is nothing to keep alive
+
+        var verdict = _guard.CheckHealth();
+        if (verdict == HookHealthVerdict.Inconclusive) return;
+
+        if (verdict == HookHealthVerdict.Alive)
+        {
+            _hookOutageReported = false;   // re-arm, so a later outage is announced again
+            return;
+        }
+
+        UpdateUi();
+        if (_hookOutageReported) return;   // same outage (or a failed retry) — don't nag every tick
+
+        _hookOutageReported = true;
+        _tray.ShowBalloonTip(_guard.HookInstalled ? 4000 : 8000, "MouseFence",
+            _guard.HookInstalled ? Strings.TipGuardRestored : Strings.TipGuardLost,
+            _guard.HookInstalled ? ToolTipIcon.Info : ToolTipIcon.Warning);
     }
 
     private void Configure()
@@ -287,10 +320,16 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         if (_guard.Enabled) _guard.Stop();
         else _guard.Start();
+        _hookOutageReported = false;   // a manual pause/resume cycle re-arms the outage warning
         UpdateUi();
         // A keyboard user who pauses to escape a trap can't see the grey tray icon -> confirm with a balloon.
-        _tray.ShowBalloonTip(1200, "MouseFence",
-            _guard.Enabled ? Strings.TipResumed : Strings.TipPaused, ToolTipIcon.Info);
+        // If a resume couldn't install the hook, say THAT instead of claiming the barrier is back on.
+        if (!_guard.Enabled)
+            _tray.ShowBalloonTip(1200, "MouseFence", Strings.TipPaused, ToolTipIcon.Info);
+        else if (_guard.HookInstalled)
+            _tray.ShowBalloonTip(1200, "MouseFence", Strings.TipResumed, ToolTipIcon.Info);
+        else
+            _tray.ShowBalloonTip(8000, "MouseFence", Strings.TipGuardLost, ToolTipIcon.Warning);
     }
 
     private void UpdateUi()
@@ -328,6 +367,14 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _gameItem.Checked = _guard.Confine;
         _gameItem.Enabled = true;
+
+        // Honesty gate: running with no hook installed means the fence is down, whatever the gate/side toggles
+        // say. Show the neutral icon and say so, instead of a badge that claims protection we aren't providing.
+        if (!_guard.HookInstalled)
+        {
+            _tray.Icon = _iconPaused;
+            _tray.Text = Strings.TrayGuardLost(hk);
+        }
     }
 
     private void OpenSettings()
@@ -389,6 +436,8 @@ public sealed class TrayApplicationContext : ApplicationContext
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _reconfigTimer.Stop();
         _reconfigTimer.Dispose();
+        _hookProbeTimer.Stop();
+        _hookProbeTimer.Dispose();
         _uiSync.Dispose();
         _tray.Visible = false;
         _guard.Dispose();
@@ -402,28 +451,21 @@ public sealed class TrayApplicationContext : ApplicationContext
         ExitThread();
     }
 
-    private static Icon MakeIcon(Color fill)
+    /// <summary>Loads a multi-resolution (16/20/24/32/40/48/64) padlock badge icon embedded at build time,
+    /// so Windows picks an exact-size frame per DPI instead of stretching a single low-res bitmap.</summary>
+    private static Icon LoadTrayIcon(string fileName)
     {
-        using var bmp = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bmp))
-        {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-            using var brush = new SolidBrush(fill);
-            using var pen = new Pen(Color.White, 3f);
-            using var white = new SolidBrush(Color.White);
-            g.FillEllipse(brush, 3, 3, 26, 26);
-            g.DrawEllipse(pen, 3, 3, 26, 26);
-            g.FillRectangle(white, 11, 12, 10, 7);
-            g.FillRectangle(white, 14, 19, 4, 2);
-        }
-        return (Icon)Icon.FromHandle(bmp.GetHicon()).Clone();
+        var asm = System.Reflection.Assembly.GetExecutingAssembly();
+        string resource = $"MouseFence.Resources.TrayIcons.{fileName}";
+        using var stream = asm.GetManifestResourceStream(resource)
+            ?? throw new InvalidOperationException(
+                $"Embedded tray icon '{resource}' is missing — check the EmbeddedResource LogicalName in MouseFence.csproj.");
+        return new Icon(stream);
     }
 
     private static void DisposeIcon(ref Icon icon)
     {
         if (icon == null) return;
-        DestroyIcon(icon.Handle);
         icon.Dispose();
         icon = null;
     }

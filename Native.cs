@@ -104,6 +104,10 @@ public static class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetCursorPos(int X, int Y);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+
     // ---- hotkey ----
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -145,6 +145,8 @@ public static class Strings
     public static string PauseHotkeyHint => G("PauseHotkeyHint");
     public static string TipPaused => G("TipPaused");
     public static string TipResumed => G("TipResumed");
+    public static string TipGuardLost => G("TipGuardLost");
+    public static string TipGuardRestored => G("TipGuardRestored");
     public static string NoneRegistered => G("NoneRegistered");
     public static string SideHotkeyHead => G("SideHotkeyHead");
     public static string SideHotkeyHint => G("SideHotkeyHint");
@@ -162,6 +164,7 @@ public static class Strings
     // ---- interpolated (keep {0} out of the table) ----
     public static string TipHotkeyFail(string combo) => string.Format(G("TipHotkeyFail"), combo);
     public static string TrayPaused(string combo) => string.Format(G("TrayPaused"), combo);
+    public static string TrayGuardLost(string combo) => string.Format(G("TrayGuardLost"), combo);
     public static string TrayOpen(string combo) => string.Format(G("TrayOpen"), combo);
     public static string TrayClosed(string combo) => string.Format(G("TrayClosed"), combo);
     public static string TipIsolated(string screens, string hotkey) => string.Format(G("TipIsolated"), screens, hotkey);
@@ -278,6 +281,8 @@ public static class Strings
         ["PauseHotkeyHint"] = "Pause/resume the barrier — a keyboard escape if the cursor ever gets trapped.",
         ["TipPaused"] = "MouseFence: PAUSED — barrier off",
         ["TipResumed"] = "MouseFence: resumed — barrier on",
+        ["TipGuardLost"] = "MouseFence: Windows dropped the mouse hook and it could not be reinstalled — the barrier is NOT active. Pause and resume from the tray, or restart MouseFence.",
+        ["TipGuardRestored"] = "MouseFence: Windows dropped the mouse hook (a stall or a heavy app) — it was reinstalled and the barrier is active again.",
         ["NoneRegistered"] = "(not registered)",
         ["SideHotkeyHead"] = "Side protection",
         ["SideHotkeyHint"] = "Turns protection against accidentally drifting off the left or right of Main on or off.",
@@ -446,6 +451,7 @@ public static class Strings
         ["IsolatedNote"] = "⚠ Screen {0} is isolated (a gap in the layout). Up-crossing from it is auto-allowed so it can't trap the cursor.",
         ["TipHotkeyFail"] = "Couldn't register hotkey: {0} — another app may be using it.",
         ["TrayPaused"] = "MouseFence: PAUSED ({0})",
+        ["TrayGuardLost"] = "MouseFence: NOT PROTECTING — mouse hook lost ({0})",
         ["TrayOpen"] = "MouseFence: main→top OPEN ({0})",
         ["TrayClosed"] = "MouseFence: main→top CLOSED ({0})",
         ["TipIntelRotation"] = "Intel graphics detected: the {0} hotkey can rotate the screen (Ctrl+Alt+Arrow). Open Settings to add Shift or change it.",
@@ -561,6 +567,8 @@ public static class Strings
         ["PauseHotkeyHint"] = "Bariyeri duraklat/sürdür — imleç kapana kısılırsa klavyeden çıkış.",
         ["TipPaused"] = "MouseFence: DURAKLATILDI — bariyer kapalı",
         ["TipResumed"] = "MouseFence: devam etti — bariyer açık",
+        ["TipGuardLost"] = "MouseFence: Windows fare kancasını düşürdü ve yeniden kurulamadı — bariyer ETKİN DEĞİL. Tepsiden duraklatıp sürdürün ya da MouseFence'i yeniden başlatın.",
+        ["TipGuardRestored"] = "MouseFence: Windows fare kancasını düşürdü (takılma ya da ağır bir uygulama) — kanca yeniden kuruldu, bariyer yine etkin.",
         ["NoneRegistered"] = "(kaydedilmedi)",
         ["SideHotkeyHead"] = "Yan koruma",
         ["SideHotkeyHint"] = "Ana ekranın solundan veya sağından kazara kaymayı önleyen korumayı açar ya da kapatır.",
@@ -729,6 +737,7 @@ public static class Strings
         ["IsolatedNote"] = "⚠ {0} numaralı ekran yalıtılmış (yerleşimde boşluk). Kapana kısmaması için oradan yukarı geçiş otomatik açıldı.",
         ["TipHotkeyFail"] = "Kısayol kaydedilemedi: {0} — başka bir uygulama kullanıyor olabilir.",
         ["TrayPaused"] = "MouseFence: DURAKLATILDI ({0})",
+        ["TrayGuardLost"] = "MouseFence: KORUMA YOK — fare kancası düştü ({0})",
         ["TrayOpen"] = "MouseFence: ana→üst AÇIK ({0})",
         ["TrayClosed"] = "MouseFence: ana→üst KAPALI ({0})",
         ["TipIntelRotation"] = "Intel ekran kartı algılandı: {0} kısayolu ekranı döndürebilir (Ctrl+Alt+ok). Ayarlar'dan Shift ekleyin veya değiştirin.",
