@@ -19,6 +19,9 @@ STAGING/
 
 ## Local working notes (not part of the public repo)
 PROJECT_RULES.md
+# CLAUDE.md and AGENTS.md only deliver PROJECT_RULES.md to Claude and cx - same local-only scope.
+CLAUDE.md
+AGENTS.md
 STATUS.md
 
 ## OS
@@ -30,3 +33,8 @@ desktop.ini
 mockup-*.png
 scratchpad/
 STAGING/*.png
+
+# Relocated local project law and its reference remain private working notes.
+/.claude/PROJECT_RULES.md
+/docs/MOUSEFENCE_REFERENCE.md
+/STATUS_ARCHIVE_2026-09-10.md
