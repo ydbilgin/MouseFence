@@ -17,12 +17,7 @@ STAGING/
 .ax_dispatch/
 .cx_dispatch/
 
-## Local working notes (not part of the public repo)
-PROJECT_RULES.md
-# CLAUDE.md and AGENTS.md only deliver PROJECT_RULES.md to Claude and cx - same local-only scope.
-CLAUDE.md
-AGENTS.md
-STATUS.md
+## Estate layout files are tracked (AGENTS.md, CLAUDE.md, STATUS.md, docs/PROJECT_LAW.md); 2026-09-25 adoption
 
 ## OS
 Thumbs.db
@@ -34,7 +29,3 @@ mockup-*.png
 scratchpad/
 STAGING/*.png
 
-# Relocated local project law and its reference remain private working notes.
-/.claude/PROJECT_RULES.md
-/docs/MOUSEFENCE_REFERENCE.md
-/STATUS_ARCHIVE_2026-09-10.md
