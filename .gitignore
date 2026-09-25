@@ -29,3 +29,25 @@ mockup-*.png
 scratchpad/
 STAGING/*.png
 
+# Estate layout (added by new-project adopt)
+cred_blob_*.bin
+snapshot*_*.json
+agy_snapshots/
+cookies_*.txt
+*_cookies.txt
+*.cred
+token*.json
+.env
+*secret*
+auth.json
+.credentials.json
+oauth_creds.json
+*oauth-token*
+cookies.json
+*.key
+id_ed25519*
+.apikey
+discovery_keys*
+gemini_video_keys.json
+sandbox_users.json
+kiro-auth-token.json

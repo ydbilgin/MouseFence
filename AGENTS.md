@@ -1,4 +1,5 @@
 # MouseFence — AGENTS.md (the body for Claude and Codex; cx reads only a capped head, keep Purpose/Run/Never on top)
+Repo sentinel: mousefence-delta-juniper-cobalt-67
 Purpose: MouseFence, a lightweight Windows tray utility (C# .NET 9, WinForms) that controls how the mouse cursor crosses edges in multi-monitor layouts.
 Run: test `dotnet run --project tests/MouseFence.Tests.csproj -c Release` · build `dotnet build MouseFence.csproj -c Release --no-incremental -o F:/_scratch/<job-id>/build` · lint TODO(owner) (commands and deploy: docs/PROJECT_LAW.md "Commands")
 Never: mutate the display configuration, move barrier logic out of the pure Win32-free GuardCore, or stop the owner's running MouseFence.exe except by its PID for a redeploy.
