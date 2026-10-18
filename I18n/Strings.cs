@@ -78,7 +78,6 @@ public static partial class Strings
     public static string TabGeneral => G("TabGeneral");
     public static string LayoutChangedBanner => G("LayoutChangedBanner");
     public static string ExcludePruned => G("ExcludePruned");
-    public static string IdentifyLabel => G("IdentifyLabel");
     public static string ExportLabel => G("ExportLabel");
     public static string ImportLabel => G("ImportLabel");
     public static string ExportTitle => G("ExportTitle");

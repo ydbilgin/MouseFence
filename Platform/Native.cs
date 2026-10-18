@@ -19,7 +19,6 @@ public static class Native
         public int Left, Top, Right, Bottom;
         public int Width => Right - Left;
         public int Height => Bottom - Top;
-        public bool Contains(int x, int y) => x >= Left && x < Right && y >= Top && y < Bottom;
     }
 
     [StructLayout(LayoutKind.Sequential)]
