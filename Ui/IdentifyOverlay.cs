@@ -22,7 +22,6 @@ internal sealed class IdentifyOverlay : Form
     {
         int w = m.Bounds.Width, h = m.Bounds.Height;
         int side = Math.Min(w, h);
-        int frame = Math.Max(10, side / 45);
 
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -86,9 +85,6 @@ internal sealed class IdentifyOverlay : Form
     /// Flash a brief identify overlay on one physical monitor. The overlay keeps the same hardware-safe rendering
     /// model as the all-monitor path: exactly one, single-line <see cref="Label"/>.
     /// </summary>
-    public static void Flash(MonitorInfo m, Theme theme, IWin32Window owner)
-        => Flash(m, null, theme, owner);
-
     public static void Flash(MonitorInfo m, string monitorName, Theme theme, IWin32Window owner)
     {
         if (m == null) return;
