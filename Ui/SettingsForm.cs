@@ -119,6 +119,15 @@ public sealed partial class SettingsForm : Form
     internal IReadOnlyList<string> DrawerStatusCandidatesForTests => DrawerStatusCandidates();
     internal (string Mode, int BodyHeight, int MapHeight, int BandHeight) DisplayLayoutMetrics()
     {
+        // Display controls inherit Visible=false while another tab is selected. Report that page's
+        // viewport instead of querying the hidden list/drawer, which has no visible last control.
+        if (_tabs.SelectedTab != _tabs.TabPages[0])
+        {
+            string mode = _tabs.SelectedTab == _advancedPage ? "advanced"
+                : _tabs.SelectedTab == _shortcutsPage ? "shortcuts" : "general";
+            return (mode, _tabs.SelectedTab.ClientSize.Height, 0, 0);
+        }
+
         var last = new[] { _screenSplit, _screenSection, _screenRows }
             .Where(control => control?.Visible == true)
             .Select(control => (Control: control,
