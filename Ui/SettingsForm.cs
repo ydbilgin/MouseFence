@@ -30,8 +30,6 @@ public sealed partial class SettingsForm : Form
         nameof(Settings.BoundaryTipSeen),
     };
 
-    internal static IReadOnlyCollection<string> M1DeferredGuiSettingProperties { get; } = new HashSet<string>();
-
     private readonly Settings _draft;
     private readonly Func<SettingsRuntimeState> _runtimeState;
     private readonly bool _showWithoutActivation;
@@ -47,7 +45,6 @@ public sealed partial class SettingsForm : Form
     private readonly Panel _tabStrip;
     private readonly SidebarButton[] _tabItems;
     private readonly MonitorMapControl _map;
-    private readonly MapLegend _mapLegend;
     private readonly TableLayoutPanel _screenRows;
     private readonly Panel _screenSplit;
     private readonly Panel _drawer;
@@ -114,7 +111,6 @@ public sealed partial class SettingsForm : Form
 
     public Settings Result { get; private set; }
     internal Settings DraftForTests => _draft;
-    internal bool BoundaryEditorVisibleForTests => _screenSplit.Height > 0 && _screenSplit.Visible;
     internal string InlineStatusForTests => _inlineStatus?.Text ?? "";
     internal IReadOnlyList<string> DrawerStatusCandidatesForTests => DrawerStatusCandidates();
     internal (string Mode, int BodyHeight, int MapHeight, int BandHeight) DisplayLayoutMetrics()
@@ -256,8 +252,6 @@ public sealed partial class SettingsForm : Form
         _map.BoundaryClicked += OpenBoundary;
         _map.BoundaryEscape += CloseDrawer;
         _bodyFlow.Controls.Add(_map);
-        _mapLegend = new MapLegend { Visible = false };
-        _mapLegend.SetTheme(_theme);
         _mapHint = new Label
         {
             Width = 820, Height = 38, TextAlign = ContentAlignment.MiddleLeft, Tag = "subtle", Margin = Padding.Empty,
@@ -478,17 +472,6 @@ public sealed partial class SettingsForm : Form
         _tabStrip?.Invalidate();
     }
 
-    private void PaintRoundedCard(object sender, PaintEventArgs e)
-    {
-        if (sender is not Control card || card.Width < 3 || card.Height < 3) return;
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var path = Rounded(new Rectangle(0, 0, card.Width - 1, card.Height - 1), 8);
-        using var fill = new SolidBrush(_theme.Surface);
-        using var border = new Pen(_theme.Border);
-        e.Graphics.FillPath(fill, path);
-        e.Graphics.DrawPath(border, path);
-    }
-
     private void PaintDrawerCard(object sender, PaintEventArgs e)
     {
         if (_drawer.Width < 2 || _drawer.Height < 2) return;
@@ -521,7 +504,6 @@ public sealed partial class SettingsForm : Form
         ThemeScrollbars(_drawerFlow);
         ThemeScrollbars(_shortcutsPage);
         ThemeScrollbars(_generalPage);
-        _mapLegend?.SetTheme(_theme);
         if (_inlineStatus != null) _inlineStatus.ForeColor = _inlineStatusIsError ? _theme.Danger : _theme.Faint;
         UpdateTabStrip();
         _tabs.Invalidate(); Invalidate(true);
@@ -604,8 +586,6 @@ public sealed partial class SettingsForm : Form
 
     private static void AddSectionHeading(Control flow, string text) => flow.Controls.Add(new Label { Text = text, Width = 790, Height = 46, Padding = new Padding(0, 16, 0, 0), Font = new Font("Segoe UI Semibold", 10.5f), Tag = "head" });
     private static Label HelpLabel(string text, int width, int height = 30) => new() { Text = text, Width = width, Height = height, Tag = "subtle" };
-    private static Button FlatButton(string text, int width) => new() { Text = text, Width = width, Height = 32, FlatStyle = FlatStyle.Flat, Margin = new Padding(4, 0, 4, 0) };
-    private static Button LinkButton(string text, int width, int height) => new() { Text = text, Width = width, Height = height, FlatStyle = FlatStyle.Flat, FlatAppearance = { BorderSize = 0 }, Cursor = Cursors.Hand };
     private static void AddUnique(List<string> list, string value) { if (!list.Contains(value, StringComparer.OrdinalIgnoreCase)) list.Add(value); }
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
@@ -746,43 +726,6 @@ public sealed partial class SettingsForm : Form
                 _ => TextFormatFlags.Left,
             };
             TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, DisabledLinkColor, flags);
-        }
-    }
-
-    private sealed class MapLegend : Control
-    {
-        private Theme _theme = Theme.Light;
-        public MapLegend() { DoubleBuffered = true; Font = new Font("Segoe UI", 8.25f); }
-        public void SetTheme(Theme theme) { _theme = theme; BackColor = theme.Back; ForeColor = theme.Subtle; Invalidate(); }
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            int x = 0;
-            x = DrawLegendItem(e.Graphics, x, "star", Strings.Ui("LegendMainM2"));
-            x = DrawLegendItem(e.Graphics, x + 18, "hatch", Strings.Ui("LegendKeepOutM2"));
-            DrawLegendItem(e.Graphics, x + 18, "dot", Strings.Ui("LegendCrossingM2"));
-        }
-        private int DrawLegendItem(Graphics g, int x, string glyph, string text)
-        {
-            var swatch = new Rectangle(x, 6, 16, 16);
-            if (glyph == "star")
-                TextRenderer.DrawText(g, "★", Font, swatch, _theme.Star, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-            else if (glyph == "hatch")
-            {
-                using var back = new SolidBrush(_theme.Surface);
-                using var hatch = new HatchBrush(HatchStyle.ForwardDiagonal, _theme.Danger, _theme.Surface);
-                using var border = new Pen(_theme.Border);
-                g.FillRectangle(back, swatch); g.FillRectangle(hatch, swatch); g.DrawRectangle(border, swatch);
-            }
-            else
-            {
-                using var ring = new Pen(_theme.Surface2, 2);
-                using var dot = new SolidBrush(_theme.Subtle);
-                g.FillEllipse(dot, x + 3, 9, 10, 10); g.DrawEllipse(ring, x + 3, 9, 10, 10);
-            }
-            int width = TextRenderer.MeasureText(g, text, Font, Size.Empty, TextFormatFlags.NoPadding).Width;
-            TextRenderer.DrawText(g, text, Font, new Rectangle(x + 21, 3, width + 2, 22), _theme.Subtle,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
-            return x + 23 + width;
         }
     }
 

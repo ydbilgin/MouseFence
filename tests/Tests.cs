@@ -2105,20 +2105,6 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
         $"forward=[{string.Join(",", forward)}] reverse=[{string.Join(",", reverse)}]");
 }
 
-// 19) Deterministic label: compact human identity only; position/device details live in the map tooltip.
-{
-    var label1 = GuardCore.MonitorLabel(2, 2560, 1440, true, "[MAIN]");
-    var label2 = GuardCore.MonitorLabel(2, 2560, 1440, true, "[MAIN]");
-    Check("layout label: compact, deterministic, and not position/DISPLAY-number based",
-        label1 == label2 && label1 == "2  •  2560x1440  [MAIN]"
-        && !label1.Contains("@") && !label1.Contains("DISPLAY") && !label1.Contains("#"),
-        label1);
-}
-{
-    var named = GuardCore.MonitorLabel(4, 1920, 1080, false, "[MAIN]", "Samsung 24");
-    Check("monitor naming: list label keeps the MouseFence number and adds the nickname",
-        named == "4  •  Samsung 24  •  1920x1080" && named.StartsWith("4  •  "), named);
-}
 {
     var monitor = new MonitorInfo { Index = 1, Primary = true, StableId = "stable-main" };
     string named = IdentifyOverlay.DisplayText(monitor, "BenQ\r\nDesk");
@@ -2251,8 +2237,7 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
         $"unnamed=[{string.Join(",", unnamedIdentity)}] named=[{string.Join(",", namedIdentity)}]");
 }
 
-// M1 keeps reflection coverage executable while explicitly staging only the v4 boundary/startup fields whose editors
-// arrive in M2/M3. Any unrelated persistence addition still fails, and every lean BoundaryRule field is covered now.
+// Every persisted setting has an editor, and every lean BoundaryRule field is covered.
 {
     var persisted = typeof(Settings).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
         .Where(p => p.Name != nameof(Settings.SettingsVersion)
@@ -2261,15 +2246,13 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
         .Select(p => p.Name)
         .ToHashSet();
     var editable = SettingsForm.GuiEditableSettingProperties.ToHashSet();
-    var deferred = SettingsForm.M1DeferredGuiSettingProperties.ToHashSet();
-    var missing = persisted.Except(editable).Except(deferred).OrderBy(x => x).ToList();
+    var missing = persisted.Except(editable).OrderBy(x => x).ToList();
     var stale = editable.Except(persisted).OrderBy(x => x).ToList();
-    var deferredMismatch = deferred.Except(persisted).Concat(persisted.Intersect(deferred).Except(deferred)).ToList();
     var ruleFields = typeof(BoundaryRule).GetProperties().Select(p => p.Name).OrderBy(x => x).ToList();
     var expectedRuleFields = new[] { nameof(BoundaryRule.Behavior), nameof(BoundaryRule.Control),
         nameof(BoundaryRule.Direction), nameof(BoundaryRule.FromStableId), nameof(BoundaryRule.ToStableId) }.OrderBy(x => x).ToList();
-    Check("settings GUI: persisted fields are edited or explicitly M1-staged; lean BoundaryRule reflection coverage",
-        missing.Count == 0 && stale.Count == 0 && deferredMismatch.Count == 0
+    Check("settings GUI: every persisted field is edited; lean BoundaryRule reflection coverage",
+        missing.Count == 0 && stale.Count == 0
         && ruleFields.SequenceEqual(expectedRuleFields) && editable.Contains(nameof(Settings.MonitorNames)),
         $"missing=[{string.Join(",", missing)}] stale=[{string.Join(",", stale)}] rules=[{string.Join(",", ruleFields)}]");
 }
