@@ -75,9 +75,8 @@ public static class Native
 
     public const uint MONITORINFOF_PRIMARY = 0x1;
 
-    // Extended window styles for the click-through "Identify" overlay: TRANSPARENT = mouse passes through;
-    // NOACTIVATE = never steals focus; TOOLWINDOW = stays out of Alt-Tab. (LAYERED is added by Form.Opacity.)
-    public const int WS_EX_TRANSPARENT = 0x00000020;
+    // Extended window styles for the "Identify" overlay: NOACTIVATE = never steals focus;
+    // TOOLWINDOW = stays out of Alt-Tab. (LAYERED is added by Form.Opacity.)
     public const int WS_EX_TOOLWINDOW = 0x00000080;
     public const int WS_EX_NOACTIVATE = 0x08000000;
 

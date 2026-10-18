@@ -168,13 +168,4 @@ public sealed partial class GuardCore
         return result;
     }
 
-    /// <summary>Short, human-facing monitor label; position and device details belong in the map tooltip.</summary>
-    public static string MonitorLabel(int ordinal, int width, int height, bool primary, string mainTag,
-                                      string monitorName = null)
-    {
-        var name = string.IsNullOrWhiteSpace(monitorName) ? "" : "  •  " + monitorName.Trim();
-        var suffix = primary && !string.IsNullOrEmpty(mainTag) ? "  " + mainTag : "";
-        return $"{ordinal}{name}  •  {width}x{height}{suffix}";
-    }
-
 }

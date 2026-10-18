@@ -6,14 +6,11 @@ namespace MouseFence;
 internal readonly record struct Theme(
     Color Back, Color Surface, Color Surface2, Color Text, Color Subtle, Color Faint,
     Color Accent, Color AccentWeak, Color AccentLine, Color Border, Color BorderStrong,
-    Color Chip, Color ChipText, Color Star, Color Danger, Color Warning, Color Success,
+    Color Chip, Color ChipText, Color Danger, Color Warning,
     Color FocusRing, Color DisabledSurface)
 {
     public bool IsDark => Back.R < 128;
     public Color AccentText => IsDark ? Color.FromArgb(23, 27, 33) : Color.FromArgb(253, 253, 254);
-    public Color WindowBack => Back;
-    public Color Page => Surface;
-    public Color Raised => Surface2;
     public Color Sidebar => IsDark ? Color.FromArgb(25, 30, 37) : Color.FromArgb(238, 241, 245);
 
     public static readonly Theme Light = new(
@@ -23,9 +20,9 @@ internal readonly record struct Theme(
         Accent: Color.FromArgb(53, 111, 214), AccentWeak: Color.FromArgb(231, 238, 251),
         AccentLine: Color.FromArgb(169, 196, 242), Border: Color.FromArgb(210, 216, 224),
         BorderStrong: Color.FromArgb(183, 192, 203), Chip: Color.FromArgb(238, 241, 245),
-        ChipText: Color.FromArgb(65, 73, 85), Star: Color.FromArgb(206, 142, 12),
+        ChipText: Color.FromArgb(65, 73, 85),
         Danger: Color.FromArgb(180, 35, 24), Warning: Color.FromArgb(139, 93, 0),
-        Success: Color.FromArgb(38, 115, 77), FocusRing: Color.FromArgb(169, 196, 242),
+        FocusRing: Color.FromArgb(169, 196, 242),
         DisabledSurface: Color.FromArgb(238, 241, 245));
 
     public static readonly Theme Dark = new(
@@ -35,9 +32,9 @@ internal readonly record struct Theme(
         Accent: Color.FromArgb(116, 160, 242), AccentWeak: Color.FromArgb(37, 51, 74),
         AccentLine: Color.FromArgb(63, 93, 137), Border: Color.FromArgb(54, 63, 75),
         BorderStrong: Color.FromArgb(81, 93, 108), Chip: Color.FromArgb(42, 50, 61),
-        ChipText: Color.FromArgb(202, 209, 219), Star: Color.FromArgb(232, 181, 65),
+        ChipText: Color.FromArgb(202, 209, 219),
         Danger: Color.FromArgb(255, 139, 126), Warning: Color.FromArgb(240, 196, 109),
-        Success: Color.FromArgb(118, 201, 160), FocusRing: Color.FromArgb(63, 93, 137),
+        FocusRing: Color.FromArgb(63, 93, 137),
         DisabledSurface: Color.FromArgb(25, 30, 37));
 
     public static readonly Theme HighContrast = new(
@@ -45,8 +42,8 @@ internal readonly record struct Theme(
         Text: SystemColors.WindowText, Subtle: SystemColors.WindowText, Faint: SystemColors.GrayText,
         Accent: SystemColors.Highlight, AccentWeak: SystemColors.Window, AccentLine: SystemColors.Highlight,
         Border: SystemColors.WindowText, BorderStrong: SystemColors.WindowText,
-        Chip: SystemColors.Control, ChipText: SystemColors.ControlText, Star: SystemColors.Highlight,
-        Danger: SystemColors.WindowText, Warning: SystemColors.WindowText, Success: SystemColors.WindowText,
+        Chip: SystemColors.Control, ChipText: SystemColors.ControlText,
+        Danger: SystemColors.WindowText, Warning: SystemColors.WindowText,
         FocusRing: SystemColors.Highlight, DisabledSurface: SystemColors.Control);
 }
 

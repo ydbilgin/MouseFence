@@ -35,10 +35,8 @@ public static partial class Strings
 
     // ---- settings dialog ----
     public static string SettingsTitle => G("SettingsTitle");
-    public static string Subtitle => G("Subtitle");
     public static string HotkeyHead => G("HotkeyHead");
     public static string HotkeyHint => G("HotkeyHint");
-    public static string GeneralIntro => G("GeneralIntro");
     public static string HotkeyPressKeys => G("HotkeyPressKeys");
     public static string Clear => G("Clear");
     public static string StartupHead => G("StartupHead");
@@ -47,26 +45,17 @@ public static partial class Strings
     public static string StartWithWindows => G("StartWithWindows");
     public static string StartWithWindowsTip => G("StartWithWindowsTip");
     public static string AppearanceHead => G("AppearanceHead");
-    public static string AppearanceIntro => G("AppearanceIntro");
     public static string LanguageLabel => G("LanguageLabel");
-    public static string LanguageTip => G("LanguageTip");
     public static string ThemeLabel => G("ThemeLabel");
-    public static string ThemeTip => G("ThemeTip");
     public static string LangAuto => G("LangAuto");
     public static string LangEnglish => G("LangEnglish");
     public static string LangTurkish => G("LangTurkish");
     public static string ThemeSystem => G("ThemeSystem");
     public static string ThemeLight => G("ThemeLight");
     public static string ThemeDark => G("ThemeDark");
-    public static string MonitorsHead => G("MonitorsHead");
-    public static string ModeAuto => G("ModeAuto");
-    public static string ModeManual => G("ModeManual");
-    public static string Note => G("Note");
     public static string Save => G("Save");
     public static string Cancel => G("Cancel");
-    public static string MainTag => G("MainTag");
     public static string ValidationPickModifier => G("ValidationPickModifier");
-    public static string NoSealValidation => G("NoSealValidation");
     public static string GeometrySealDemoted => G("GeometrySealDemoted");
 
     // ---- tray ----
@@ -87,48 +76,9 @@ public static partial class Strings
 
     // ---- tabs + crossing rules ----
     public static string TabGeneral => G("TabGeneral");
-    public static string TabAppearance => G("TabAppearance");
-    public static string TabMonitors => G("TabMonitors");
-    public static string DisplaysTab => G("DisplaysTab");
-    public static string DisplayMapHead => G("DisplayMapHead");
-    public static string IdentifyAll => G("IdentifyAll");
-    public static string MapHint => G("MapHint");
-    public static string LegendMain => G("LegendMain");
-    public static string LegendKeptOut => G("LegendKeptOut");
-    public static string MonitorNameHead => G("MonitorNameHead");
-    public static string MonitorNameHint => G("MonitorNameHint");
-    public static string MonitorNamePlaceholder => G("MonitorNamePlaceholder");
-    public static string KeepOutHead => G("KeepOutHead");
-    public static string MainAlwaysAvailable => G("MainAlwaysAvailable");
-    public static string AdvancedHead => G("AdvancedHead");
-    public static string AdvancedHint => G("AdvancedHint");
-    public static string TopSelectionHead => G("TopSelectionHead");
-    public static string TopSelectionHint => G("TopSelectionHint");
-    public static string TopModeAuto => G("TopModeAuto");
-    public static string TopModeManual => G("TopModeManual");
-    public static string NotAbovePrimary => G("NotAbovePrimary");
-    public static string CrossingPathsHead => G("CrossingPathsHead");
-    public static string CrossingPathsHint => G("CrossingPathsHint");
-    public static string CrossingDefault => G("CrossingDefault");
-    public static string CrossingCustom => G("CrossingCustom");
-    public static string BehaviorHead => G("BehaviorHead");
-    public static string ResetCrossing => G("ResetCrossing");
     public static string LayoutChangedBanner => G("LayoutChangedBanner");
-    public static string RulesHead => G("RulesHead");
-    public static string FromScreenLabel => G("FromScreenLabel");
-    public static string AllowedTopsLabel => G("AllowedTopsLabel");
-    public static string RuleHint => G("RuleHint");
-    public static string NoTopsHint => G("NoTopsHint");
-    public static string DeliberateCrossLabel => G("DeliberateCrossLabel");
-    public static string DeliberateCrossHint => G("DeliberateCrossHint");
-    public static string DescentRoutingLabel => G("DescentRoutingLabel");
-    public static string DescentRoutingHint => G("DescentRoutingHint");
-    public static string ExcludeHead => G("ExcludeHead");
-    public static string ExcludeHint => G("ExcludeHint");
     public static string ExcludePruned => G("ExcludePruned");
-    public static string ResetLayoutLabel => G("ResetLayoutLabel");
     public static string IdentifyLabel => G("IdentifyLabel");
-    public static string IdentifyHint => G("IdentifyHint");
     public static string ExportLabel => G("ExportLabel");
     public static string ImportLabel => G("ImportLabel");
     public static string ExportTitle => G("ExportTitle");
@@ -152,14 +102,6 @@ public static partial class Strings
     public static string SideHotkeyHint => G("SideHotkeyHint");
     public static string StartSideContainOn => G("StartSideContainOn");
     public static string StartSideContainTip => G("StartSideContainTip");
-    public static string SideTuningHead => G("SideTuningHead");
-    public static string SideTuningHint => G("SideTuningHint");
-    public static string SideSensitivityLabel => G("SideSensitivityLabel");
-    public static string SideSensitivityHint => G("SideSensitivityHint");
-    public static string DefaultLabel => G("DefaultLabel");
-    public static string SideSlackLabel => G("SideSlackLabel");
-    public static string SideSlackHint => G("SideSlackHint");
-    public static string DefaultSlackLabel => G("DefaultSlackLabel");
 
     // ---- interpolated (keep {0} out of the table) ----
     public static string TipHotkeyFail(string combo) => string.Format(G("TipHotkeyFail"), combo);
@@ -168,7 +110,6 @@ public static partial class Strings
     public static string TrayOpen(string combo) => string.Format(G("TrayOpen"), combo);
     public static string TrayClosed(string combo) => string.Format(G("TrayClosed"), combo);
     public static string TipIsolated(string screens, string hotkey) => string.Format(G("TipIsolated"), screens, hotkey);
-    public static string IsolatedNote(string screens) => string.Format(G("IsolatedNote"), screens);
     public static string TipIntelRotation(string keys) => string.Format(G("TipIntelRotation"), keys);
     public static string TipIntelDefaults(string up, string side) => string.Format(G("TipIntelDefaults"), up, side);
 
