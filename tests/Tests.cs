@@ -2818,6 +2818,32 @@ GuardCore GraphCore(Settings settings, List<BoundaryScreen> screens, bool hasTop
 }
 
 // ---- public docs: deterministic synthetic layout + faithful off-screen capture ----
+foreach (var preview in new[] { (Tab: 0, Mode: "list"), (Tab: -1, Mode: "drawer"),
+                               (Tab: 1, Mode: "advanced"), (Tab: 2, Mode: "shortcuts"),
+                               (Tab: 3, Mode: "general"), (Tab: -2, Mode: "advanced") })
+{
+    using var form = new SettingsForm(Screenshot.DemoSettings("Dark", "en"), Screenshot.DemoMonitors());
+    ShowOffscreen(form);
+    if (preview.Tab == -2) form.OpenAdvancedForPreview();
+    else if (preview.Tab == -1) form.OpenFirstBoundaryForPreview(hideScreenList: true);
+    else if (preview.Tab == 1) form.OpenAdvancedOverviewForPreview();
+    else form.SelectTab(preview.Tab);
+    Application.DoEvents(); form.PerformLayout();
+    try
+    {
+        var metrics = form.DisplayLayoutMetrics();
+        bool displayPage = preview.Tab is 0 or -1;
+        Check($"docs metrics: preview {preview.Tab} reports the visible page",
+            metrics.Mode == preview.Mode && metrics.BodyHeight > 0
+            && (displayPage ? metrics.MapHeight > 0 : metrics.MapHeight == 0 && metrics.BandHeight == 0),
+            $"metrics={metrics}");
+    }
+    catch (InvalidOperationException ex)
+    {
+        Check($"docs metrics: preview {preview.Tab} reports the visible page", false, ex.Message);
+    }
+}
+
 {
     var demo = Screenshot.DemoMonitors();
     var demoSettings = Screenshot.DemoSettings("Dark", "en");
