@@ -316,9 +316,9 @@ public sealed partial class SettingsForm : Form
         _separatePanel = new TableLayoutPanel { Width = 790, AutoSize = true, ColumnCount = 1, Visible = false, Margin = Padding.Empty, Tag = "surface2" };
         drawerFlow.Controls.Add(_separatePanel);
         _whenPanel = new Panel { Width = 790, Height = 94, Visible = false, Margin = Padding.Empty, Tag = "surface2" };
-        _automaticControl = new RadioButton { Text = Strings.Ui("AutomaticControl"), Left = 0, Top = 0, Width = 760, Height = 24 };
+        _automaticControl = new ThemedRadioButton { Text = Strings.Ui("AutomaticControl"), Left = 0, Top = 0, Width = 760, Height = 24 };
         var autoHelp = new Label { Text = Strings.Ui("AutomaticControlHelp"), Left = 24, Top = 24, Width = 302, Height = 24, Tag = "subtle" };
-        _alwaysControl = new RadioButton { Text = Strings.Ui("AlwaysControl"), Left = 0, Top = 48, Width = 760, Height = 24 };
+        _alwaysControl = new ThemedRadioButton { Text = Strings.Ui("AlwaysControl"), Left = 0, Top = 48, Width = 760, Height = 24 };
         var alwaysHelp = new Label { Text = Strings.Ui("AlwaysControlHelp"), Left = 24, Top = 76, Width = 302, Height = 24, Tag = "subtle" };
         _automaticControl.CheckedChanged += (_, _) => { if (!_rebuilding && _automaticControl.Checked) SetControl(BoundaryControl.Automatic); };
         _alwaysControl.CheckedChanged += (_, _) => { if (!_rebuilding && _alwaysControl.Checked) SetControl(BoundaryControl.Always); };

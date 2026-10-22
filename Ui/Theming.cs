@@ -83,6 +83,7 @@ internal static class Theming
         {
             case ThemedButton button: button.SetTheme(theme); break;
             case ThemedCheckBox check: check.SetTheme(theme); break;
+            case ThemedRadioButton radio: radio.SetTheme(theme); break;
             case ThemedControlFrame frame: frame.SetTheme(theme); break;
             case ThemedNumericUpDown numeric: numeric.SetTheme(theme); break;
             case ThemedSpinnerRail rail: rail.SetTheme(theme); break;
@@ -233,6 +234,49 @@ internal sealed class ThemedCheckBox : CheckBox
             var ring = rect; ring.Inflate(3, 3); using var pen = new Pen(_theme.FocusRing, 2); e.Graphics.DrawRectangle(pen, ring);
         }
         var textRect = new Rectangle(rect.Right + 9, 0, Math.Max(1, Width - rect.Right - 9), Height);
+        TextRenderer.DrawText(e.Graphics, Text, Font, textRect, Enabled ? _theme.Text : _theme.Faint,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordEllipsis | TextFormatFlags.NoPrefix);
+    }
+}
+
+/// <summary>A radio button drawn like ThemedCheckBox: themed ring, accent dot, focus ring, same text placement.</summary>
+internal sealed class ThemedRadioButton : RadioButton
+{
+    private Theme _theme = Theme.Light;
+    private bool _hovered;
+    public ThemedRadioButton()
+    {
+        AutoSize = false;
+        Height = 32;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+    }
+    public Theme CurrentTheme => _theme;
+    public void SetTheme(Theme theme) { _theme = theme; Invalidate(); }
+    protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnCheckedChanged(EventArgs e) { Invalidate(); base.OnCheckedChanged(e); }
+    protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(Parent?.BackColor ?? _theme.Back);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        int box = Math.Max(18, (int)Math.Round(18 * DeviceDpi / 96f));
+        int x = 2, y = (Height - box) / 2;
+        var rect = new Rectangle(x, y, box - 1, box - 1);
+        Color fill = !Enabled ? _theme.DisabledSurface : _theme.Surface2;
+        Color border = Checked && Enabled ? _theme.Accent : Focused ? _theme.Accent : _hovered ? _theme.Subtle : _theme.BorderStrong;
+        using (var brush = new SolidBrush(fill)) e.Graphics.FillEllipse(brush, rect);
+        using (var pen = new Pen(border, Checked || Focused ? 2 : 1)) e.Graphics.DrawEllipse(pen, rect);
+        if (Checked)
+        {
+            int dot = box / 2; var inner = new Rectangle(x + (box - dot) / 2, y + (box - dot) / 2, dot - 1, dot - 1);
+            using var brush = new SolidBrush(Enabled ? _theme.Accent : _theme.Faint); e.Graphics.FillEllipse(brush, inner);
+        }
+        if (Focused && ShowFocusCues)
+        {
+            var ring = rect; ring.Inflate(3, 3); using var pen = new Pen(_theme.FocusRing, 2); e.Graphics.DrawEllipse(pen, ring);
+        }
+        var textRect = new Rectangle(x + box + 9, 0, Math.Max(1, Width - x - box - 9), Height);
         TextRenderer.DrawText(e.Graphics, Text, Font, textRect, Enabled ? _theme.Text : _theme.Faint,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordEllipsis | TextFormatFlags.NoPrefix);
     }

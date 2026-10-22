@@ -91,6 +91,7 @@ public static partial class Strings
         ["FineTunePixels"] = "Fiziksel piksellerle ayrıntılı ayarla",
         ["EdgeHoldbackHelpV2"] = "0 = tam kenarda (varsayılan). İşaretçinin durdurulduğu her yerde uygulanır: hem Asla geçmez hem de başarısız sıkı itiş için. Bunlar fiziksel piksellerdir.",
         ["UpperManualV2"] = "Üst grubu kendim seçeyim · {0} ekran seçilebilir",
+        ["UpperManualOne"] = "Üst grubu kendim seçeyim · 1 ekran seçilebilir",
         ["ShortcutSubtitle"] = "MouseFence'i yöneten tuş birleşimlerini seç.",
         ["ShortcutActionColumn"] = "EYLEM",
         ["ShortcutColumn"] = "KISAYOL",

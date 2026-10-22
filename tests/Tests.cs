@@ -3204,6 +3204,24 @@ foreach (var language in new[] { "en", "tr" })
         $"themed={themed} names={names} ticks={ticks} shortcuts={shortcuts} paused={paused} actions={clicked} relight={relight}");
 }
 
+foreach (var language in new[] { "en", "tr" })
+{
+    // UI refresh 2026-10-22 (M3): every radio button is themed like the checkboxes, and one choosable screen
+    // reads in the singular.
+    using var form = new SettingsForm(Screenshot.DemoSettings("Dark", language), Screenshot.DemoMonitors())
+    {
+        StartPosition = FormStartPosition.Manual,
+        Location = new Point(SystemInformation.VirtualScreen.Right + 2000, SystemInformation.VirtualScreen.Bottom + 2000),
+        Opacity = 0,
+    };
+    form.Show(); Application.DoEvents(); form.SelectTab(1); Application.DoEvents();
+    var radios = DescendantsAndSelf(form).OfType<RadioButton>().ToList();
+    bool themed = radios.Count >= 4 && radios.All(r => r is ThemedRadioButton t && t.CurrentTheme == Theme.Dark);
+    bool singular = radios.Any(r => r.Text == Strings.Ui("UpperManualOne")) && !radios.Any(r => r.Text.Contains("1 screens"));
+    Check($"UI refresh M3 ({language}): radio buttons are themed and one choosable screen reads in the singular",
+        themed && singular, $"radios={radios.Count} types={string.Join(",", radios.Select(r => r.GetType().Name))} texts={string.Join(" | ", radios.Select(r => r.Text))}");
+}
+
 Console.WriteLine();
 Console.WriteLine($"Passed: {passes}; Failed: {fails}");
 Console.WriteLine(fails == 0 && passes > 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
