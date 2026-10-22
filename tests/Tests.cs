@@ -3137,6 +3137,44 @@ Console.WriteLine("\n-- hook liveness (HookHealth) --");
           HookHealth.Evaluate(cursorMoved: false, callbacksSincePreviousProbe: total - previous) == HookHealthVerdict.Inconclusive);
 }
 
+foreach (var language in new[] { "en", "tr" })
+{
+    // UI refresh 2026-10-22 (M2): on a live off-screen window every shortcut field and Clear button keeps one
+    // field height, sits vertically centred inside its own row, and the footnote below starts after the last row.
+    using var form = new SettingsForm(new Settings { Language = language, Theme = "Dark" }, Screenshot.DemoMonitors())
+    {
+        StartPosition = FormStartPosition.Manual,
+        Location = new Point(SystemInformation.VirtualScreen.Right + 2000, SystemInformation.VirtualScreen.Bottom + 2000),
+        Opacity = 0,
+    };
+    form.Show(); Application.DoEvents();
+    form.ClientSize = new Size(1064 * form.DeviceDpi / 96, 820 * form.DeviceDpi / 96);
+    form.SelectTab(2); Application.DoEvents(); form.PerformLayout(); Application.DoEvents();
+    var all = DescendantsAndSelf(form).ToList();
+    var rows = all.OfType<TableLayoutPanel>().Where(row => (row.Tag as string) == "listRow"
+        && row.Controls.Cast<Control>().Any(c => (c.Tag as string) == "shortcutFrame")).ToList();
+    int field = 36 * form.DeviceDpi / 96;
+    var details = new List<string>();
+    bool shaped = rows.Count == 4;
+    foreach (var row in rows)
+    {
+        var frame = row.Controls.Cast<Control>().First(c => (c.Tag as string) == "shortcutFrame");
+        var clear = row.Controls.Cast<Control>().First(c => c is ThemedButton);
+        int frameCentre = frame.Top + frame.Height / 2, rowCentre = row.ClientSize.Height / 2;
+        bool ok = Math.Abs(frame.Height - field) <= 2 && Math.Abs(clear.Height - field) <= 2
+            && frame.Top >= 0 && frame.Bottom <= row.ClientSize.Height && clear.Bottom <= row.ClientSize.Height
+            && Math.Abs(frameCentre - rowCentre) <= 3;
+        shaped &= ok;
+        details.Add($"row={row.ClientSize.Height} frame={frame.Top}+{frame.Height} clear={clear.Top}+{clear.Height}");
+    }
+    var lastRow = rows.LastOrDefault();
+    var footnote = all.OfType<Label>().FirstOrDefault(label => label.Text == Strings.Ui("ShortcutsHealthy"));
+    bool footClear = lastRow != null && footnote != null
+        && footnote.Parent.RectangleToScreen(footnote.Bounds).Top >= lastRow.RectangleToScreen(lastRow.ClientRectangle).Bottom;
+    Check($"UI refresh M2 ({language}): shortcut rows keep one centred field height and the footnote clears the last row",
+        shaped && footClear, $"rows={rows.Count} field={field} footClear={footClear} " + string.Join("; ", details));
+}
+
 Console.WriteLine();
 Console.WriteLine($"Passed: {passes}; Failed: {fails}");
 Console.WriteLine(fails == 0 && passes > 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");

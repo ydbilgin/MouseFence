@@ -23,6 +23,8 @@ public sealed partial class SettingsForm
             int index = i;
             var row = new TableLayoutPanel { Width = 800, Height = 83, ColumnCount = 3, Margin = Padding.Empty, Tag = "listRow", Padding = new Padding(0, 8, 0, 8) };
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 238)); row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            // One row that fills the padded height; the field and Clear keep one height and centre in it.
+            row.RowCount = 1; row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             row.Paint += PaintListSeparator;
             var copy = new Panel { Dock = DockStyle.Fill };
             var required = i == 0 ? Strings.Ui("RequiredStatus") : Strings.Ui("OptionalStatus");
@@ -31,8 +33,8 @@ public sealed partial class SettingsForm
             copy.Controls.Add(head); copy.Controls.Add(help);
             var box = new TextBox { ReadOnly = true, TextAlign = HorizontalAlignment.Center, Cursor = Cursors.Hand, Font = new Font("Segoe UI Semibold", 9f), BorderStyle = BorderStyle.None };
             box.Text = HotkeyText(index); box.KeyDown += (_, e) => CaptureHotkey(index, e);
-            var frame = new ThemedControlFrame { Dock = DockStyle.Fill, Height = 36, Margin = new Padding(0, 14, 8, 14), Tag = "shortcutFrame" }; frame.Host(box);
-            var clear = new ThemedButton { Text = Strings.Clear, Dock = DockStyle.Fill, Height = 36, Role = ThemedButtonRole.Quiet, Margin = new Padding(4, 14, 0, 14) };
+            var frame = new ThemedControlFrame { Anchor = AnchorStyles.Left | AnchorStyles.Right, Height = 36, Margin = new Padding(0, 0, 8, 0), Tag = "shortcutFrame" }; frame.Host(box);
+            var clear = new ThemedButton { Text = Strings.Clear, Anchor = AnchorStyles.Left | AnchorStyles.Right, Height = 36, Role = ThemedButtonRole.Quiet, Margin = new Padding(4, 0, 0, 0) };
             clear.Click += (_, _) => { ClearHotkey(index); box.Text = HotkeyText(index); UpdateShortcutErrors(); };
             if (i == 0) { clear.Enabled = false; clear.AccessibleName = Strings.Ui("RequiredClearReason"); _tips.SetToolTip(clear, Strings.Ui("RequiredClearReason")); }
             row.Controls.Add(copy, 0, 0); row.Controls.Add(frame, 1, 0); row.Controls.Add(clear, 2, 0);
