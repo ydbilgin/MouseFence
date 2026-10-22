@@ -247,8 +247,14 @@ internal sealed class MonitorMapControl : Control
         if (rect.Width >= 64 && rect.Height >= 34)
         {
             var label = new Rectangle(rect.Left + 6, rect.Top + 20, rect.Width - 12, Math.Max(15, rect.Height - (monitor.Primary ? 42 : 34)));
-            bool coveredByEndpointPill = pills.Any(pill => pill.Rect.IntersectsWith(label) &&
+            var covering = pills.FirstOrDefault(pill => pill.Rect.IntersectsWith(label) &&
                 (Same(pill.Boundary.First.StableId, monitor.StableId) || Same(pill.Boundary.Second.StableId, monitor.StableId)));
+            bool coveredByEndpointPill = !covering.Rect.IsEmpty;
+            if (coveredByEndpointPill && NameAbovePill(label, covering.Rect) is Rectangle above)
+            {
+                label = above;
+                coveredByEndpointPill = false;
+            }
             if (!coveredByEndpointPill)
             {
                 using var nameFont = new Font(Font.FontFamily, Math.Max(9f, Font.Size), FontStyle.Bold);
@@ -256,7 +262,8 @@ internal sealed class MonitorMapControl : Control
                     excluded ? _theme.Subtle : _theme.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                     TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
             }
-            if (!coveredByEndpointPill && rect.Width >= 104 && rect.Height >= 88)
+            if (!coveredByEndpointPill && rect.Width >= 104 && rect.Height >= 88
+                && (covering.Rect.IsEmpty || label.Bottom + 17 <= covering.Rect.Top))
             {
                 var resolution = new Rectangle(rect.Left + 8, Math.Min(rect.Bottom - 20, label.Bottom), rect.Width - 16, 17);
                 using var resolutionFont = new Font(Font.FontFamily, Math.Max(7.5f, Font.Size - 1f));
@@ -332,6 +339,16 @@ internal sealed class MonitorMapControl : Control
             TextRenderer.DrawText(g, text, Font, textRect, _theme.Text,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         }
+    }
+
+    /// <summary>
+    /// When the selected gate's pill covers a screen's name area, the part above the pill still holds the name
+    /// if it is at least 16 px tall; otherwise the name stays hidden as before.
+    /// </summary>
+    internal static Rectangle? NameAbovePill(Rectangle label, Rectangle pill)
+    {
+        int height = pill.Top - 4 - label.Top;
+        return height >= 16 ? new Rectangle(label.Left, label.Top, label.Width, height) : null;
     }
 
     private Rectangle BoundaryPillRect(Graphics g, BoundaryView boundary)
