@@ -45,9 +45,9 @@ public sealed partial class SettingsForm
         flow.Controls.Add(descent); flow.Controls.Add(HelpLabel(Strings.Ui("GuideDownwardHelp"), 790));
 
         AddSectionHeading(flow, Strings.Ui("UpperGroupHead"));
-        var auto = new RadioButton { Text = Strings.Ui("UpperAutomatic"), Width = 790, Height = 28, Checked = _draft.Mode != "Manual" };
+        var auto = new ThemedRadioButton { Text = Strings.Ui("UpperAutomatic"), Width = 790, Height = 28, Checked = _draft.Mode != "Manual" };
         int chooseCount = _monitors.Count(m => !m.Primary && !_draft.ExcludedDevices.Contains(m.StableId, StringComparer.OrdinalIgnoreCase));
-        var manual = new RadioButton { Text = string.Format(Strings.Ui("UpperManualV2"), chooseCount), Width = 790, Height = 28, Checked = _draft.Mode == "Manual" };
+        var manual = new ThemedRadioButton { Text = chooseCount == 1 ? Strings.Ui("UpperManualOne") : string.Format(Strings.Ui("UpperManualV2"), chooseCount), Width = 790, Height = 28, Checked = _draft.Mode == "Manual" };
         flow.Controls.Add(auto); flow.Controls.Add(manual);
         var manualList = new FlowLayoutPanel { Width = 790, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(24, 0, 0, 8) };
         foreach (var monitor in _monitors.Where(m => !m.Primary))

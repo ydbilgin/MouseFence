@@ -91,6 +91,7 @@ public static partial class Strings
         ["FineTunePixels"] = "Fine-tune in physical pixels",
         ["EdgeHoldbackHelpV2"] = "0 = exactly at the edge (default). Applies wherever the pointer is stopped — Never crosses and a failed firm push alike. These are physical pixels.",
         ["UpperManualV2"] = "Choose the upper group myself · {0} screens can be chosen",
+        ["UpperManualOne"] = "Choose the upper group myself · 1 screen can be chosen",
         ["ShortcutSubtitle"] = "Choose the key combinations that control MouseFence.",
         ["ShortcutActionColumn"] = "ACTION",
         ["ShortcutColumn"] = "SHORTCUT",
