@@ -1,0 +1,146 @@
+<!doctype html>
+<!--
+  MouseFence demo film. Rendered to ../demo.gif by render.mjs (see README-demo.md).
+  Everything you are likely to change lives in the TIMELINE block of the script below:
+  caption text, the start time of each beat, and the pointer path. The two real UI pictures
+  come straight from ../screenshots/, so re-running the screenshot harness and then render.mjs
+  keeps the film in step with the app.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #14171d; --panel: #1d222b; --line: #2c3340; --text: #e8ecf3; --muted: #9aa4b5;
+    --accent: #6d9cf7; --amber: #f2b552; --red: #f06a6a; --green: #5fd38d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 800px; height: 450px; overflow: hidden; background: var(--bg); }
+  body { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text); position: relative; }
+  .layer { position: absolute; inset: 0; }
+  header { position: absolute; left: 24px; top: 18px; display: flex; align-items: center; gap: 10px; }
+  header img { width: 28px; height: 28px; }
+  header b { font-size: 19px; font-weight: 600; letter-spacing: .2px; }
+  header span { font-size: 14px; color: var(--muted); margin-left: 6px; }
+  .screen { position: absolute; border-radius: 8px; background: var(--panel); border: 1.5px solid #3a4352; }
+  .screen .name { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-size: 17px; font-weight: 600; }
+  .screen .num { position: absolute; left: 8px; top: 7px; font-size: 12px; color: var(--muted); background: #262c37; border-radius: 4px; padding: 1px 6px; }
+  .screen.off { background: repeating-linear-gradient(135deg, #1d222b 0 7px, #262b35 7px 9px); }
+  .screen.off .x { position: absolute; right: 9px; bottom: 6px; color: var(--red); font-size: 16px; font-weight: 700; }
+  .screen.off .tag { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 12px; color: var(--red); }
+  .edge { position: absolute; border-radius: 3px; background: var(--muted); opacity: .35; }
+  .label { position: absolute; font-size: 13px; padding: 3px 9px; border-radius: 12px; white-space: nowrap; opacity: 0; }
+  #cursor { position: absolute; left: 0; top: 0; width: 22px; height: 30px; filter: drop-shadow(0 1px 2px #000a); }
+  .caption { position: absolute; left: 0; right: 0; bottom: 26px; text-align: center; font-size: 21px; font-weight: 600; opacity: 0; }
+  .caption small { display: block; font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+  .crop { position: absolute; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); box-shadow: 0 10px 30px #0009; }
+  .crop img { position: absolute; }
+  #gates .crop { left: 31px; top: 96px; width: 738px; height: 173px; }
+  #gates .crop img { width: 957.6px; left: -176.4px; top: -396px; }
+  #tray img { position: absolute; left: 190px; top: 64px; width: 420px; border-radius: 6px; border: 1px solid var(--line); box-shadow: 0 10px 30px #0009; }
+  #end { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  #end img { width: 84px; height: 84px; }
+  #end h1 { font-size: 34px; font-weight: 600; }
+  #end p { font-size: 17px; color: var(--muted); }
+  #end code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 16px; color: var(--accent); background: #1f2633; padding: 5px 12px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="layer" id="map">
+  <header><img src="../icon.png" alt=""><b>MouseFence</b><span>pointer fences for multi-monitor Windows</span></header>
+  <div class="screen" id="top" style="left:263px; top:74px; width:226px; height:127px"><span class="num">2</span><div class="name">Top</div></div>
+  <div class="screen" id="main" style="left:226px; top:201px; width:300px; height:169px"><span class="num">1</span><div class="name">Main</div></div>
+  <div class="screen off" id="laptop" style="left:526px; top:243px; width:226px; height:127px"><span class="num">3</span><div class="name">Laptop</div><span class="tag">Keep pointer off</span><span class="x">&#x2715;</span></div>
+  <div class="edge" id="edgeTop" style="left:263px; top:199px; width:226px; height:4px"></div>
+  <div class="edge" id="edgeSide" style="left:524px; top:243px; width:4px; height:127px"></div>
+  <div class="label" id="labStop" style="left:520px; top:150px; background:#3a2d14; color:var(--amber)">slow drift stops at the edge</div>
+  <div class="label" id="labCross" style="left:520px; top:150px; background:#15304f; color:var(--accent)">one firm push crosses</div>
+  <div class="label" id="labDown" style="left:520px; top:150px; background:#173826; color:var(--green)">coming down crosses freely</div>
+  <div class="label" id="labOff" style="left:560px; top:205px; background:#3c1c1f; color:var(--red)">never entered</div>
+  <svg id="cursor" viewBox="0 0 22 30"><path d="M2 2 L2 24 L8 18.5 L12 28 L16 26.3 L12 17 L20 17 Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>
+</div>
+<div class="layer" id="gates">
+  <div class="crop"><img src="../screenshots/boundary-editor-dark.png" alt=""></div>
+</div>
+<div class="layer" id="tray">
+  <img src="../screenshots/tray-menu-dark.png" alt="">
+</div>
+<div class="layer" id="end">
+  <img src="../icon.png" alt="">
+  <h1>MouseFence</h1>
+  <p>Free tray app for Windows 10 and 11 &middot; MIT licence</p>
+  <code>github.com/ydbilgin/MouseFence</code>
+</div>
+<div class="caption" id="cap"></div>
+
+<script>
+// ---------------------------------------------------------------- TIMELINE (edit here)
+window.DEMO = { width: 800, height: 450, fps: 12, duration: 16 };
+
+// Captions: [start, end, title, small line]. Times are seconds.
+const CAPTIONS = [
+  [0.3, 3.9, 'A screen above Main is an easy place to slip into', 'Aim near the top edge and the pointer escapes'],
+  [3.9, 6.4, 'MouseFence stops slow drift at the edge', 'One deliberate push still crosses'],
+  [6.4, 9.6, 'Screens you mark Keep pointer off are never entered', 'Windows still uses the screen; only the pointer stays out'],
+  [9.6, 11.9, 'Click a gate in Settings to choose how it behaves', 'Crosses freely, needs a firm push, or never crosses'],
+  [11.9, 14.2, 'The tray menu and shortcuts switch it on the fly', 'Game mode keeps the pointer on the screen it is on'],
+];
+
+// Pointer path: [time, x, y]. Linear between points, eased per segment.
+const PATH = [
+  [0.0, 330, 300], [1.4, 360, 262], [2.6, 372, 212], [3.0, 374, 203], [3.3, 374, 205], [3.6, 374, 203],
+  [3.9, 374, 204], [4.4, 374, 203], [4.7, 374, 150], [5.4, 380, 128], [6.4, 384, 132],
+  [7.2, 410, 250], [8.0, 470, 300], [8.6, 523, 300], [8.8, 518, 300], [9.0, 523, 302], [9.6, 520, 302],
+];
+
+// Beats: which layer is visible, with a short cross-fade.
+const BEATS = { map: [0, 9.6], gates: [9.6, 11.9], tray: [11.9, 14.2], end: [14.2, 16] };
+// ---------------------------------------------------------------- end of TIMELINE
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
+const window01 = (t, a, b, fade = 0.3) => clamp(Math.min((t - a) / fade, (b - t) / fade));
+
+function pointAt(t) {
+  if (t <= PATH[0][0]) return PATH[0].slice(1);
+  for (let i = 1; i < PATH.length; i += 1) {
+    const [t1, x1, y1] = PATH[i];
+    const [t0, x0, y0] = PATH[i - 1];
+    if (t <= t1) { const p = ease((t - t0) / (t1 - t0)); return [x0 + (x1 - x0) * p, y0 + (y1 - y0) * p]; }
+  }
+  return PATH[PATH.length - 1].slice(1);
+}
+
+window.renderAt = (t) => {
+  for (const [id, [a, b]] of Object.entries(BEATS)) $(id).style.opacity = window01(t, a, b, a === 0 ? 0.01 : 0.35);
+  const [x, y] = pointAt(t);
+  $('cursor').style.transform = `translate(${x - 2}px, ${y - 2}px)`;
+
+  // Top edge: amber while drift is held (2.9-4.4 s), blue flash on the push, green on the free way down.
+  const held = t >= 2.9 && t < 4.45;
+  const pushed = t >= 4.45 && t < 5.6;
+  const down = t >= 6.6 && t < 7.4;
+  const edge = $('edgeTop');
+  edge.style.background = held ? 'var(--amber)' : pushed ? 'var(--accent)' : down ? 'var(--green)' : 'var(--muted)';
+  edge.style.opacity = held || pushed || down ? 1 : 0.35;
+  $('labStop').style.opacity = window01(t, 2.9, 4.45, 0.2);
+  $('labCross').style.opacity = window01(t, 4.45, 6.4, 0.2);
+  $('labDown').style.opacity = window01(t, 6.6, 7.8, 0.2);
+
+  // Side edge: red when the pointer bumps into the Keep pointer off screen.
+  const bump = t >= 8.5 && t < 9.6;
+  $('edgeSide').style.background = bump ? 'var(--red)' : 'var(--muted)';
+  $('edgeSide').style.opacity = bump ? 1 : 0.35;
+  $('labOff').style.opacity = window01(t, 8.5, 9.6, 0.15);
+  $('laptop').style.borderColor = bump ? 'var(--red)' : '#3a4352';
+  $('top').style.borderColor = pushed || (t >= 5.6 && t < 6.6) ? 'var(--accent)' : '#3a4352';
+
+  const cap = CAPTIONS.find(([a, b]) => t >= a && t < b);
+  $('cap').innerHTML = cap ? `${cap[2]}<small>${cap[3]}</small>` : '';
+  $('cap').style.opacity = cap ? window01(t, cap[0], cap[1], 0.25) : 0;
+};
+window.renderAt(0);
+</script>
+</body>
+</html>
