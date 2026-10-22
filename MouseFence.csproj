@@ -25,6 +25,7 @@
     <EmbeddedResource Include="Resources\TrayIcons\tray-closed.ico" LogicalName="MouseFence.Resources.TrayIcons.tray-closed.ico" />
     <EmbeddedResource Include="Resources\TrayIcons\tray-open.ico" LogicalName="MouseFence.Resources.TrayIcons.tray-open.ico" />
     <EmbeddedResource Include="Resources\TrayIcons\tray-paused.ico" LogicalName="MouseFence.Resources.TrayIcons.tray-paused.ico" />
+    <EmbeddedResource Include="app.ico" LogicalName="MouseFence.app.ico" />
   </ItemGroup>
 
 </Project>

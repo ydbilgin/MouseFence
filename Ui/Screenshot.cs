@@ -363,14 +363,14 @@ internal static class Screenshot
             if (!Near(target.GetPixel(x, y), expected, 12)) return $"footer button {button.Text} has {target.GetPixel(x, y)} not {expected}";
         }
 
-        var brand = controls.OfType<Label>().FirstOrDefault(label => label.Text.Contains("▣", StringComparison.Ordinal)
-            && label.Text.Contains("MouseFence", StringComparison.Ordinal));
+        var brand = controls.OfType<Label>().FirstOrDefault(label => label.Text == "MouseFence"
+            && string.Equals(label.Tag as string, "head", StringComparison.Ordinal));
         if (brand == null) return "no brand label";
         Point brandOrigin = brand.PointToScreen(Point.Empty);
         int ink = 0;
-        // Ignore the leading square glyph: it can render even when PrintWindow drops the wordmark text.
+        // The wordmark label holds text only (the icon is a separate picture), so all of it must carry ink.
         for (int y = 0; y < brand.Height; y++)
-        for (int x = Math.Min(24, brand.Width); x < brand.Width; x++)
+        for (int x = 0; x < brand.Width; x++)
         {
             int targetX = brandOrigin.X - windowBounds.Left + x;
             int targetY = brandOrigin.Y - windowBounds.Top + y;
