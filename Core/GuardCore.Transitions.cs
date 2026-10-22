@@ -3,8 +3,9 @@ namespace MouseFence;
 public sealed partial class GuardCore
 {
 
-    private RuntimeTransition MatchTransition(int x, int y)
+    private RuntimeTransition MatchTransition(int x, int y, out bool inPassage)
     {
+        inPassage = false;
         RuntimeTransition best = null;
         double bestT = double.PositiveInfinity;
         for (int i = 0; i < Transitions.Length; i++)
@@ -33,14 +34,17 @@ public sealed partial class GuardCore
             if (hit < 0 || hit > 1) continue;
             double orth = originOrth + (targetOrth - originOrth) * hit;
             int inset = Math.Min(t.PassageInsetPx, Math.Max(0, (t.CorridorWidth - 1) / 2));
-            if (orth < t.CorridorStart + inset || orth >= t.CorridorEnd - inset) continue;
+            if (orth < t.CorridorStart || orth >= t.CorridorEnd) continue;
             // A gap is enforceable only when Windows establishes this exact ordered transition by landing in To.
             if (t.GapPx > t.SeamTolerancePx && !InRect(t.To, x, y)) continue;
 
             if (best == null || hit < bestT
                 || hit == bestT && (t.GapPx < best.GapPx
                 || t.GapPx == best.GapPx && t.SortOrder < best.SortOrder))
-            { best = t; bestT = hit; }
+            {
+                best = t; bestT = hit;
+                inPassage = orth >= t.CorridorStart + inset && orth < t.CorridorEnd - inset;
+            }
         }
         return best;
     }

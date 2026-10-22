@@ -137,6 +137,8 @@ A framework-dependent package needs the [.NET 9 Desktop Runtime](https://dotnet.
 
 Settings are stored as plain JSON at `%APPDATA%\MouseFence\settings.json`. Delete the file to reset the app.
 
+Settings saves replace the file atomically. If saving fails, the previous settings and shortcuts stay active. Corrupt, null, or newer-version settings stop startup and preserve the file; restore a valid backup to recover. Diagnostics are bounded in `%APPDATA%\MouseFence\error.log`. The saved Start paused and Start in Game mode options apply on the next launch.
+
 ## How it works
 
 MouseFence installs a low-level mouse hook (`WH_MOUSE_LL`) and observes physical pointer movement. `BoundaryGraph` turns the saved display rules into directed transitions between real screen rectangles. The Win32-free `GuardCore` then decides whether each move passes, stops at an edge, or lands on an allowed monitor. Game mode uses the same core to confine movement to one monitor.

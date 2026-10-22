@@ -5,6 +5,8 @@ public static partial class Strings
     private static readonly Dictionary<string, string> Tr = new()
     {
         ["SettingsTitle"] = "MouseFence — Ayarlar",
+        ["SettingsSaveFailed"] = "Ayarlar kaydedilemedi. Önceki ayarlarınız etkin kalmaya devam ediyor.",
+        ["SettingsLoadFailed"] = "MouseFence ayarlarını okuyamadı. Dosya korundu. Yeniden başlatmadan önce geçerli bir yedeği geri yükleyin.",
         ["HotkeyHead"] = "Yukarı geçiş",
         ["HotkeyHint"] = "Yukarı geçişi açar veya kapatır. Kutuya tıkla, sonra tuşlarına bas.",
         ["HotkeyPressKeys"] = "(tuşlara basın)",

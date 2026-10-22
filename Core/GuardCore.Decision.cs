@@ -48,12 +48,12 @@ public sealed partial class GuardCore
         // Schema-v4 directional graph. All geometry/rule/default work was compiled during Configure; this hot path
         // only intersects the movement segment with an already sorted array. It intentionally runs before the legacy
         // BarrierY/OnTop path so Down and side rules are first-class and a fast move cannot skip a blocked seam.
-        var transition = MatchTransition(x, y);
+        var transition = MatchTransition(x, y, out bool inPassage);
         if (transition != null)
         {
             BoundaryBehavior behavior = EffectiveBehavior(transition, gatesEnabled, sideContain);
             bool crosses = behavior == BoundaryBehavior.Free
-                || behavior == BoundaryBehavior.Push && HasTransitionIntent(transition, x, y);
+                || behavior == BoundaryBehavior.Push && inPassage && HasTransitionIntent(transition, x, y);
             if (crosses)
             {
                 if (transition.Direction == BoundaryDirection.Down && TryGuideDescent(x, y, out bx, out by))

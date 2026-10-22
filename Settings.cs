@@ -160,15 +160,20 @@ public sealed class Settings
     [JsonIgnore]
     public static string FilePath => Path.Combine(Dir, "settings.json");
 
-    public static Settings Load()
+    public static Settings Load() => Load(FilePath);
+
+    internal static Settings Load(string path)
     {
         try
         {
-            if (File.Exists(FilePath))
+            // Read directly: File.Exists also returns false for access errors, which are not a fresh install.
             {
-                var json = File.ReadAllText(FilePath);
+                var json = File.ReadAllText(path);
                 int loadedVersion = ReadVersion(json);
-                var settings = JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
+                if (loadedVersion > CurrentSettingsVersion)
+                    throw new InvalidDataException("The settings file requires a newer MouseFence version.");
+                var settings = JsonSerializer.Deserialize<Settings>(json)
+                    ?? throw new InvalidDataException("The settings file must contain a settings object.");
                 settings.Normalize();
                 if (loadedVersion < CurrentSettingsVersion)
                 {
@@ -176,7 +181,7 @@ public sealed class Settings
                     {
                         settings.MigrateLayoutKeysToStable(MonitorInfo.All());
                         settings.SettingsVersion = CurrentSettingsVersion;
-                        settings.Save();
+                        settings.Save(path, MonitorInfo.All());
                     }
                     catch
                     {
@@ -186,7 +191,9 @@ public sealed class Settings
                 return settings;
             }
         }
-        catch { /* fall through to defaults */ }
+        catch (FileNotFoundException) { /* missing settings are a fresh install */ }
+        catch (DirectoryNotFoundException) { /* missing settings directory is a fresh install */ }
+        catch (Exception ex) { throw new InvalidDataException($"Could not load MouseFence settings: {path}", ex); }
 
         // Fresh install (no settings file yet): on an Intel GPU, the Ctrl+Alt+Arrow defaults clash with the driver's
         // screen-rotation hotkeys, so add Shift to keep the directional arrow but dodge rotation.
@@ -369,21 +376,28 @@ public sealed class Settings
         SeamTolerancePx = DefaultSeamTolerancePx; SafetyEscapes = true;
     }
 
-    public void Save()
+    public bool Save() => Save(FilePath, MonitorInfo.All());
+
+    internal bool Save(string path, List<MonitorInfo> monitors, Action<string, string> write = null)
     {
+        string temporary = Path.GetFullPath(path) + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             Normalize();
+            if (SettingsVersion > CurrentSettingsVersion) return false;
             SettingsVersion = CurrentSettingsVersion;
-            if (HasRepairableImportErrors) return;
-            var monitors = MonitorInfo.All();
+            if (HasRepairableImportErrors) return false;
             var excluded = SanitizedExcluded(monitors);
             if (BoundaryGraph.ValidateNoSeal(this, BoundaryGraph.FromMonitors(monitors, excluded)).Length > 0)
-                return;
-            Directory.CreateDirectory(Dir);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+                return false;
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
+            (write ?? File.WriteAllText)(temporary, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            using (var file = new FileStream(temporary, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) file.Flush(true);
+            File.Move(temporary, path, overwrite: true);
+            return true;
         }
-        catch { /* non-fatal */ }
+        catch { return false; }
+        finally { try { File.Delete(temporary); } catch { } }
     }
 
     public BoundaryValidationIssue[] ValidateNoSeal(IEnumerable<MonitorInfo> monitors)

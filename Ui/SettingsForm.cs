@@ -110,6 +110,10 @@ public sealed partial class SettingsForm : Form
     private sealed record BoundaryEndpoint(MonitorInfo From, MonitorInfo To, BoundaryDirection Direction, RuntimeTransition Runtime);
 
     public Settings Result { get; private set; }
+    private static void DisposeChildren(Control parent)
+    {
+        foreach (Control child in parent.Controls.Cast<Control>().ToArray()) child.Dispose();
+    }
     internal Settings DraftForTests => _draft;
     internal string InlineStatusForTests => _inlineStatus?.Text ?? "";
     internal IReadOnlyList<string> DrawerStatusCandidatesForTests => DrawerStatusCandidates();
@@ -771,7 +775,8 @@ public sealed partial class SettingsForm : Form
             DrawGlyph(e.Graphics, new Point(22, Height / 2), Enabled);
             bool shortTile = Height < 60 && Help.Length > 0;
             var titleRect = new Rectangle(44, Help.Length == 0 ? 4 : shortTile ? 2 : 10, Width - 52, Help.Length == 0 ? Height - 8 : shortTile ? 19 : 22);
-            TextRenderer.DrawText(e.Graphics, Title, new Font(Font, FontStyle.Bold), titleRect, titleColor,
+            using var titleFont = new Font(Font, FontStyle.Bold);
+            TextRenderer.DrawText(e.Graphics, Title, titleFont, titleRect, titleColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             if (Help.Length > 0)
             {

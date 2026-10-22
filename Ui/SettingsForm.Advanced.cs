@@ -144,7 +144,7 @@ public sealed partial class SettingsForm
     {
         bool visible = _advancedPanel.Visible;
         using var fresh = BuildAdvancedPanel();
-        _advancedPanel.SuspendLayout(); _advancedPanel.Controls.Clear();
+        _advancedPanel.SuspendLayout(); DisposeChildren(_advancedPanel);
         while (fresh.Controls.Count > 0)
         {
             var child = fresh.Controls[0]; fresh.Controls.Remove(child); _advancedPanel.Controls.Add(child);

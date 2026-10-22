@@ -215,7 +215,8 @@ internal sealed class MonitorMapControl : Control
         var chip = new Rectangle(rect.Left + 5, rect.Top + 5, Math.Max(chipSize, 18), chipSize);
         using (var chipPath = Rounded(chip, 5))
         using (var brush = new SolidBrush(monitor.Primary ? _theme.AccentWeak : _theme.Chip)) g.FillPath(brush, chipPath);
-        TextRenderer.DrawText(g, monitor.Index.ToString(), new Font(Font, FontStyle.Bold), chip,
+        using var chipFont = new Font(Font, FontStyle.Bold);
+        TextRenderer.DrawText(g, monitor.Index.ToString(), chipFont, chip,
             monitor.Primary ? _theme.Accent : _theme.ChipText,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
@@ -249,14 +250,18 @@ internal sealed class MonitorMapControl : Control
             bool coveredByEndpointPill = pills.Any(pill => pill.Rect.IntersectsWith(label) &&
                 (Same(pill.Boundary.First.StableId, monitor.StableId) || Same(pill.Boundary.Second.StableId, monitor.StableId)));
             if (!coveredByEndpointPill)
-                TextRenderer.DrawText(g, name, new Font(Font.FontFamily, Math.Max(9f, Font.Size), FontStyle.Bold), label,
+            {
+                using var nameFont = new Font(Font.FontFamily, Math.Max(9f, Font.Size), FontStyle.Bold);
+                TextRenderer.DrawText(g, name, nameFont, label,
                     excluded ? _theme.Subtle : _theme.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                     TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+            }
             if (!coveredByEndpointPill && rect.Width >= 104 && rect.Height >= 88)
             {
                 var resolution = new Rectangle(rect.Left + 8, Math.Min(rect.Bottom - 20, label.Bottom), rect.Width - 16, 17);
+                using var resolutionFont = new Font(Font.FontFamily, Math.Max(7.5f, Font.Size - 1f));
                 TextRenderer.DrawText(g, $"{monitor.Bounds.Width} × {monitor.Bounds.Height}",
-                    new Font(Font.FontFamily, Math.Max(7.5f, Font.Size - 1f)), resolution, _theme.Subtle,
+                    resolutionFont, resolution, _theme.Subtle,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPadding);
             }
         }
