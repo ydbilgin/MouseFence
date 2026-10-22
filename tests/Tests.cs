@@ -3222,6 +3222,29 @@ foreach (var language in new[] { "en", "tr" })
         themed && singular, $"radios={radios.Count} types={string.Join(",", radios.Select(r => r.GetType().Name))} texts={string.Join(" | ", radios.Select(r => r.Text))}");
 }
 
+foreach (var theme in new[] { "Light", "Dark" })
+{
+    // UI refresh 2026-10-22 (M6): the documentation capture completes in Light as well as Dark; a hidden footer
+    // button used to be sampled and failed every Light capture off-screen.
+    string folder = Path.Combine(AppContext.BaseDirectory, "m6-captures");
+    Directory.CreateDirectory(folder);
+    var results = new List<string>();
+    bool all = true;
+    foreach (int view in new[] { -1, 2 })
+    {
+        string path = Path.Combine(folder, $"{theme}-{view}.png");
+        if (File.Exists(path)) File.Delete(path);
+        try
+        {
+            Screenshot.CaptureSettings(path, theme, view, "en", 1f, useDemoLayout: true);
+            bool ok = File.Exists(path) && new FileInfo(path).Length > 10_000;
+            all &= ok; results.Add($"{view}:{ok}");
+        }
+        catch (Exception ex) { all = false; results.Add($"{view}:{ex.Message}"); }
+    }
+    Check($"UI refresh M6 ({theme}): documentation captures complete off-screen", all, string.Join("; ", results));
+}
+
 Console.WriteLine();
 Console.WriteLine($"Passed: {passes}; Failed: {fails}");
 Console.WriteLine(fails == 0 && passes > 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
