@@ -108,6 +108,7 @@ internal static class Theming
             case Panel panel when (panel.Tag as string) == "surface2": panel.BackColor = theme.Surface2; break;
             case Panel panel when (panel.Tag as string) == "sidebar": panel.BackColor = theme.Sidebar; break;
             case Panel panel when (panel.Tag as string) == "accentWeak": panel.BackColor = theme.AccentWeak; break;
+            case PictureBox picture: picture.BackColor = picture.Parent?.BackColor ?? theme.Back; break;
             case LinkLabel link: link.BackColor = link.Parent?.BackColor ?? theme.Back; break;
             case Label label:
                 label.BackColor = label.Parent?.BackColor ?? theme.Back;

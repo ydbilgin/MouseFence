@@ -3245,6 +3245,24 @@ foreach (var theme in new[] { "Light", "Dark" })
     Check($"UI refresh M6 ({theme}): documentation captures complete off-screen", all, string.Join("; ", results));
 }
 
+{
+    // UI refresh 2026-10-22 (M5): the sidebar brand shows the shield app icon beside a text-only wordmark.
+    using var form = new SettingsForm(Screenshot.DemoSettings("Dark", "en"), Screenshot.DemoMonitors())
+    {
+        StartPosition = FormStartPosition.Manual,
+        Location = new Point(SystemInformation.VirtualScreen.Right + 2000, SystemInformation.VirtualScreen.Bottom + 2000),
+        Opacity = 0,
+    };
+    form.Show(); Application.DoEvents();
+    var all = DescendantsAndSelf(form).ToList();
+    var icon = all.OfType<PictureBox>().FirstOrDefault(p => (p.Tag as string) == "brandIcon");
+    var word = all.OfType<Label>().FirstOrDefault(l => l.Text == "MouseFence");
+    bool ok = icon?.Image != null && icon.Image.Width >= 20 && icon.BackColor == icon.Parent.BackColor
+        && word != null && word.Left >= icon.Right && !all.OfType<Label>().Any(l => l.Text.Contains('▣'));
+    Check("UI refresh M5: sidebar brand uses the shield app icon beside a text-only wordmark", ok,
+        $"icon={(icon?.Image == null ? "none" : icon.Image.Width.ToString())} word={word?.Left} iconRight={icon?.Right}");
+}
+
 Console.WriteLine();
 Console.WriteLine($"Passed: {passes}; Failed: {fails}");
 Console.WriteLine(fails == 0 && passes > 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");

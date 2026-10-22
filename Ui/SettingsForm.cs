@@ -196,8 +196,11 @@ public sealed partial class SettingsForm : Form
             using var border = new Pen(_theme.Border);
             e.Graphics.DrawLine(border, _tabStrip.Width - 1, 0, _tabStrip.Width - 1, _tabStrip.Height);
         };
-        var product = new Label { Text = "▣  MouseFence", Left = 12, Top = 21, Width = 144, Height = 25,
+        var brandIcon = new PictureBox { Left = 12, Top = 23, Width = 20, Height = 20, SizeMode = PictureBoxSizeMode.Zoom,
+            Image = AppIconBitmap(32), Tag = "brandIcon" };
+        var product = new Label { Text = "MouseFence", Left = 38, Top = 21, Width = 118, Height = 25,
             Font = new Font("Segoe UI Semibold", 10.5f), Tag = "head" };
+        _tabStrip.Controls.Add(brandIcon);
         var settingsLabel = new Label { Text = Strings.Ui("SettingsNavLabel"), Left = 12, Top = 66, Width = 144, Height = 18,
             Font = new Font("Segoe UI Semibold", 7.5f), Tag = "faint" };
         _tabStrip.Controls.Add(product); _tabStrip.Controls.Add(settingsLabel);
@@ -394,6 +397,15 @@ public sealed partial class SettingsForm : Form
     }
 
     protected override bool ShowWithoutActivation => _showWithoutActivation;
+
+    /// <summary>The shield app icon at the given pixel size, from the embedded app.ico.</summary>
+    internal static Bitmap AppIconBitmap(int size)
+    {
+        using var stream = typeof(SettingsForm).Assembly.GetManifestResourceStream("MouseFence.app.ico");
+        if (stream == null) return null;
+        using var icon = new Icon(stream, size, size);
+        return icon.ToBitmap();
+    }
 
     public void SelectTab(int i) { if (i >= 0 && i < _tabs.TabCount) _tabs.SelectedIndex = i; }
     internal void OpenFirstBoundaryForPreview(bool hideScreenList = false)
