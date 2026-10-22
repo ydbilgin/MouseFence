@@ -29,12 +29,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _hookProbeTimer;
     private bool _hookOutageReported;
 
-    private readonly ToolStripMenuItem _gateItem;
-    private readonly ToolStripMenuItem _sideItem;
-    private readonly ToolStripMenuItem _pauseItem;
-    private readonly ToolStripMenuItem _gameItem;
-    private readonly ToolStripMenuItem _settingsItem;
-    private readonly ToolStripMenuItem _exitItem;
+    private readonly TrayMenu _menu;
 
     private Settings _settings;
     private Icon _iconClosed;
@@ -55,23 +50,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         _iconOpen = LoadTrayIcon("tray-open.ico");
         _iconPaused = LoadTrayIcon("tray-paused.ico");
 
-        _gateItem = new ToolStripMenuItem("", null, (s, e) => ToggleGate());
-        _sideItem = new ToolStripMenuItem("", null, (s, e) => ToggleSide());
-        _pauseItem = new ToolStripMenuItem("", null, (s, e) => TogglePause());
-        _gameItem = new ToolStripMenuItem("", null, (s, e) => ToggleGame());
-        _settingsItem = new ToolStripMenuItem("", null, (s, e) => OpenSettings());
-        _exitItem = new ToolStripMenuItem("", null, (s, e) => ExitApp());
+        _menu = new TrayMenu(ToggleGate, ToggleSide, ToggleGame, TogglePause, OpenSettings, ExitApp);
 
-        var menu = new ContextMenuStrip();
-        menu.Items.Add(_gateItem);
-        menu.Items.Add(_sideItem);
-        menu.Items.Add(_gameItem);
-        menu.Items.Add(_pauseItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(_settingsItem);
-        menu.Items.Add(_exitItem);
-
-        _tray = new NotifyIcon { Visible = true, ContextMenuStrip = menu, Icon = _iconClosed, Text = "MouseFence" };
+        _tray = new NotifyIcon { Visible = true, ContextMenuStrip = _menu.Menu, Icon = _iconClosed, Text = "MouseFence" };
         _tray.DoubleClick += (s, e) => ToggleGate();
 
         _hotkey.HotKeyPressed += ToggleGate;
@@ -288,12 +269,10 @@ public sealed class TrayApplicationContext : ApplicationContext
             _tray.ShowBalloonTip(3000, "MouseFence", Strings.TipHotkeyFail(_settings.PauseHotKeyText()), ToolTipIcon.Warning);
     }
 
-    private void RebuildMenuText()
-    {
-        _settingsItem.Text = Strings.MenuSettings;
-        _exitItem.Text = Strings.MenuExit;
-        _gameItem.Text = Strings.MenuGame;
-    }
+    private void RebuildMenuText() => ApplyMenu();
+
+    private void ApplyMenu() => _menu.Apply(_settings,
+        new TrayMenuState(_guard.Enabled, _guard.GateOpen, _guard.SideContain, _guard.Confine));
 
     private void ToggleGame()
     {
@@ -338,38 +317,18 @@ public sealed class TrayApplicationContext : ApplicationContext
     private void UpdateUi()
     {
         string hk = _settings.HotKeyText();
+        ApplyMenu();
 
         if (!_guard.Enabled)
         {
             _tray.Icon = _iconPaused;
             _tray.Text = Strings.TrayPaused(hk);
-            _gateItem.Text = Strings.GatePausedMenu;
-            _gateItem.Enabled = false;
-            _sideItem.Text = Strings.SideGatePausedMenu;
-            _sideItem.Enabled = false;
-            _gameItem.Enabled = false;
-            _pauseItem.Text = Strings.MenuResume;
-            _pauseItem.Checked = true;
             return;
         }
-
-        _gateItem.Enabled = true;
-        _sideItem.Enabled = true;
-        _pauseItem.Text = Strings.MenuPause;
-        _pauseItem.Checked = false;
 
         bool open = _guard.GateOpen;
         _tray.Icon = open ? _iconOpen : _iconClosed;
         _tray.Text = open ? Strings.TrayOpen(hk) : Strings.TrayClosed(hk);
-        _gateItem.Text = open ? Strings.GateOpenMenu : Strings.GateClosedMenu;
-        _gateItem.Checked = open;
-
-        bool sideOn = _guard.SideContain;
-        _sideItem.Text = sideOn ? Strings.SideContainOnMenu : Strings.SideContainOffMenu;
-        _sideItem.Checked = sideOn;
-
-        _gameItem.Checked = _guard.Confine;
-        _gameItem.Enabled = true;
 
         // Honesty gate: running with no hook installed means the fence is down, whatever the gate/side toggles
         // say. Show the neutral icon and say so, instead of a badge that claims protection we aren't providing.

@@ -410,3 +410,74 @@ internal sealed class ThemedComboBox : ComboBox
         }
     }
 }
+
+/// <summary>Tray and context menus in the app theme: themed surface, accent tick, rounded hover, shortcut on the right.</summary>
+internal sealed class ThemedMenuRenderer : ToolStripProfessionalRenderer
+{
+    public Theme Theme { get; }
+    public ThemedMenuRenderer(Theme theme) : base(new ThemedMenuColors(theme)) { Theme = theme; RoundedEdges = false; }
+
+    protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+    {
+        using var fill = new SolidBrush(Theme.Surface); e.Graphics.FillRectangle(fill, e.AffectedBounds);
+    }
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+    {
+        using var pen = new Pen(Theme.BorderStrong);
+        e.Graphics.DrawRectangle(pen, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
+    }
+    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e)
+    {
+        using var fill = new SolidBrush(Theme.Surface); e.Graphics.FillRectangle(fill, e.AffectedBounds);
+    }
+    protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+    {
+        if (!e.Item.Selected || !e.Item.Enabled) return;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var rect = new Rectangle(4, 1, e.Item.Width - 8, e.Item.Height - 2);
+        using var path = new GraphicsPath();
+        int d = 8;
+        path.AddArc(rect.Left, rect.Top, d, d, 180, 90); path.AddArc(rect.Right - d, rect.Top, d, d, 270, 90);
+        path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90); path.AddArc(rect.Left, rect.Bottom - d, d, d, 90, 90); path.CloseFigure();
+        using var fill = new SolidBrush(Theme.AccentWeak); e.Graphics.FillPath(fill, path);
+    }
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+    {
+        bool shortcut = e.Item is ToolStripMenuItem item && !string.IsNullOrEmpty(item.ShortcutKeyDisplayString)
+            && e.Text == item.ShortcutKeyDisplayString;
+        e.TextColor = !e.Item.Enabled ? Theme.Faint : shortcut ? Theme.Subtle : Theme.Text;
+        base.OnRenderItemText(e);
+    }
+    protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = e.ImageRectangle; int s = Math.Min(r.Width, r.Height);
+        var box = new Rectangle(r.Left + (r.Width - s) / 2, r.Top + (r.Height - s) / 2, s, s);
+        using var pen = new Pen(e.Item.Enabled ? Theme.Accent : Theme.Faint, Math.Max(2f, s / 8f)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        e.Graphics.DrawLines(pen, new[] { new Point(box.Left + s / 5, box.Top + s / 2), new Point(box.Left + s * 2 / 5, box.Top + s * 7 / 10), new Point(box.Right - s / 5, box.Top + s * 3 / 10) });
+    }
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        using var pen = new Pen(Theme.Border); int y = e.Item.Height / 2;
+        e.Graphics.DrawLine(pen, 10, y, e.Item.Width - 10, y);
+    }
+    protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e) { e.ArrowColor = Theme.Subtle; base.OnRenderArrow(e); }
+
+    private sealed class ThemedMenuColors : ProfessionalColorTable
+    {
+        private readonly Theme _t;
+        public ThemedMenuColors(Theme theme) { _t = theme; UseSystemColors = false; }
+        public override Color ToolStripDropDownBackground => _t.Surface;
+        public override Color ImageMarginGradientBegin => _t.Surface;
+        public override Color ImageMarginGradientMiddle => _t.Surface;
+        public override Color ImageMarginGradientEnd => _t.Surface;
+        public override Color MenuBorder => _t.BorderStrong;
+        public override Color MenuItemBorder => Color.Transparent;
+        public override Color MenuItemSelected => _t.AccentWeak;
+        public override Color SeparatorDark => _t.Border;
+        public override Color SeparatorLight => _t.Border;
+        public override Color CheckBackground => Color.Transparent;
+        public override Color CheckSelectedBackground => Color.Transparent;
+        public override Color CheckPressedBackground => Color.Transparent;
+    }
+}

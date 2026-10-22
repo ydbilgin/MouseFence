@@ -187,6 +187,27 @@ internal static class Screenshot
         return settings;
     }
 
+    /// <summary>
+    /// Draws the real tray menu off-screen with demo settings: upward passage closed, side protection on.
+    /// No hook, hotkey or tray icon is created.
+    /// </summary>
+    internal static void CaptureTrayMenu(string path, string themeOverride, string lang)
+    {
+        var settings = DemoSettings(themeOverride, lang);
+        Strings.Use(settings.Language);
+        using var menu = new TrayMenu(() => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+        menu.Apply(settings, new TrayMenuState(Enabled: true, GateOpen: false, SideOn: true, Confine: false));
+        var virtualScreen = SystemInformation.VirtualScreen;
+        menu.Menu.Show(new Point(virtualScreen.Right + 3000, virtualScreen.Bottom + 3000));
+        for (int i = 0; i < 4; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+        using var bmp = new Bitmap(menu.Menu.Width, menu.Menu.Height);
+        menu.Menu.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        bmp.Save(path, ImageFormat.Png);
+        menu.Menu.Close();
+    }
+
     private static void SelectPreviewState(SettingsForm form, int tabIndex)
     {
         // V2 mapping: 0 Displays, 1 Advanced, 2 Shortcuts, 3 General, -1 selected boundary, -2 Advanced with physical-pixel fold open.
