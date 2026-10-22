@@ -100,6 +100,7 @@ public sealed partial class SettingsForm
             var imported = JsonSerializer.Deserialize<Settings>(json);
             if (imported == null) { ShowInline(Strings.ImportInvalid); return; }
             int version = Settings.ReadVersion(json); imported.Normalize();
+            if (version > Settings.CurrentSettingsVersion) { ShowInline(Strings.ImportInvalid); return; }
             if (version < Settings.CurrentSettingsVersion) imported.MigrateLayoutKeysToStable(_monitors);
             var issues = imported.ValidateNoSeal(_monitors);
             if (imported.HasRepairableImportErrors || issues.Length > 0)

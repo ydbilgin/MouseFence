@@ -182,7 +182,9 @@ internal sealed class ThemedButton : Button
         if (Focused && ShowFocusCues)
         {
             var focus = ClientRectangle; focus.Inflate(-2, -2);
-            using var pen = new Pen(_theme.FocusRing, 2); e.Graphics.DrawPath(pen, Rounded(focus, 4));
+            using var pen = new Pen(_theme.FocusRing, 2);
+            using var focusPath = Rounded(focus, 4);
+            e.Graphics.DrawPath(pen, focusPath);
         }
     }
 
@@ -269,7 +271,9 @@ internal sealed class ThemedControlFrame : Panel
         if (Error || FramedControl?.Focused == true)
         {
             var outer = new Rectangle(2, 2, Math.Max(1, Width - 5), Math.Max(1, Height - 5));
-            using var ring = new Pen(Error ? Color.FromArgb(110, _theme.Danger) : _theme.FocusRing, 2); e.Graphics.DrawPath(ring, Rounded(outer, 4));
+            using var ring = new Pen(Error ? Color.FromArgb(110, _theme.Danger) : _theme.FocusRing, 2);
+            using var outerPath = Rounded(outer, 4);
+            e.Graphics.DrawPath(ring, outerPath);
         }
     }
     private static GraphicsPath Rounded(Rectangle rect, int radius)

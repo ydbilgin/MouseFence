@@ -9,6 +9,8 @@ using System.Text.Json;
 // Gate = MAIN inset by 24 -> [24, 2536).
 
 int fails = 0;
+int passes = 0;
+Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
 
 GuardCore New()
 {
@@ -111,9 +113,174 @@ void Check(string name, bool ok, string detail = "")
 {
     Console.WriteLine($"{(ok ? "PASS" : "FAIL")}  {name}{(ok ? "" : "   <-- " + detail)}");
     if (!ok) fails++;
+    else passes++;
 }
 
 Console.WriteLine("MouseFence barrier logic — scenario tests\n");
+
+{
+    using var first = new HotKeyWindow();
+    using var second = new HotKeyWindow();
+    uint modifiers = Native.MOD_CONTROL | Native.MOD_ALT | Native.MOD_SHIFT | Native.MOD_WIN;
+    bool registered = first.Register(modifiers, (uint)Keys.F24);
+    bool conflict = !second.Register(modifiers, (uint)Keys.F24);
+    first.Unregister();
+    bool reassigned = second.Register(modifiers, (uint)Keys.F24);
+    second.Unregister();
+    Check("logic audit: native hotkey conflict is reported and unregister permits re-registration",
+        registered && conflict && reassigned);
+}
+
+{
+    string folder = Path.Combine(AppContext.BaseDirectory, "diagnostic-audit-" + Guid.NewGuid().ToString("N"));
+    CrashLogger.Write(new IOException(new string('ç', 180000)), fatal: false, directory: folder);
+    CrashLogger.Write(new IOException("latest diagnostic marker"), fatal: true, directory: folder);
+    string path = Path.Combine(folder, "error.log");
+    byte[] bytes = File.ReadAllBytes(path);
+    string text = new System.Text.UTF8Encoding(false, true).GetString(bytes);
+    Check("logic audit: diagnostics stay bounded and retain valid UTF-8 plus the latest failure",
+        bytes.Length > 0 && bytes.Length <= 256 * 1024 && text.Contains("FATAL") && text.Contains("latest diagnostic marker"));
+    File.Delete(path); Directory.Delete(folder);
+}
+
+{
+    using var form = new SettingsForm(new Settings { SettingsVersion = Settings.CurrentSettingsVersion }, Screenshot.DemoMonitors());
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    form.KeyIsDown = key => key == Keys.RWin;
+    typeof(SettingsForm).GetMethod("CaptureHotkey", flags).Invoke(form, new object[] { 0, new KeyEventArgs(Keys.Shift | Keys.T) });
+    Check("logic audit: shortcut capture retains an already held Windows modifier",
+        form.DraftForTests.HotKey == Keys.T && form.DraftForTests.ModWin && form.DraftForTests.ModShift);
+}
+
+foreach (var json in new[] { "{broken", "null", "{\"SettingsVersion\":999,\"Theme\":\"Dark\"}" })
+{
+    string path = Path.Combine(AppContext.BaseDirectory, "invalid-settings-" + Guid.NewGuid().ToString("N") + ".json");
+    File.WriteAllText(path, json);
+    bool refused = false;
+    try { Settings.Load(path); }
+    catch (InvalidDataException) { refused = true; }
+    Check("logic audit: corrupt or future settings refuse a destructive default session: " + json,
+        refused && File.ReadAllText(path) == json);
+    File.Delete(path);
+}
+
+{
+    string folder = Path.Combine(AppContext.BaseDirectory, "settings-audit-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(folder);
+    string path = Path.Combine(folder, "settings.json");
+    const string original = "{\"SettingsVersion\":4,\"Theme\":\"Dark\"}";
+    File.WriteAllText(path, original);
+    var settings = new Settings { SettingsVersion = Settings.CurrentSettingsVersion, Theme = "Light" };
+    bool saved = settings.Save(path, new List<MonitorInfo>(), (target, _) =>
+    {
+        File.WriteAllText(target, "{");
+        throw new IOException("Simulated partial disk write");
+    });
+    Check("logic audit: failed settings write preserves previous bytes", !saved && File.ReadAllText(path) == original);
+    Check("logic audit: successful settings replacement is readable", settings.Save(path, new List<MonitorInfo>())
+        && JsonSerializer.Deserialize<Settings>(File.ReadAllText(path)).Theme == "Light");
+    Check("logic audit: settings save cleans temporary siblings", Directory.GetFiles(folder).Length == 1);
+    File.Delete(path); Directory.Delete(folder);
+}
+
+{
+    var startup = new Settings { SettingsVersion = Settings.CurrentSettingsVersion,
+        StartPaused = true, StartConfineOn = true, StartGateClosed = false, StartSideContainOn = false,
+        HotKey = Keys.None, ConfineHotKey = Keys.None, PauseHotKey = Keys.None, SideHotKey = Keys.None };
+    var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+    using var context = new TrayApplicationContext(startup);
+    var guard = (MouseGuard)typeof(TrayApplicationContext).GetField("_guard", flags).GetValue(context);
+    Check("logic audit: saved startup pause does not install a hook", !guard.Enabled && !guard.HookInstalled);
+    Check("logic audit: saved startup confinement and ordinary toggles reach the real guard",
+        guard.Confine && guard.GateOpen && !guard.SideContain);
+    typeof(TrayApplicationContext).GetMethod("ExitApp", flags).Invoke(context, null);
+}
+
+// Logic audit 2026-10-22: inset pixels are a closed part of a Push gate, never a free bypass.
+foreach (var direction in new[] { BoundaryDirection.Up, BoundaryDirection.Down, BoundaryDirection.Left, BoundaryDirection.Right })
+{
+    var screens = direction switch
+    {
+        BoundaryDirection.Up => GraphScreens(("a", -100, 0, 0, 100, true), ("b", -100, -100, 0, 0, false)),
+        BoundaryDirection.Down => GraphScreens(("a", -100, -100, 0, 0, true), ("b", -100, 0, 0, 100, false)),
+        BoundaryDirection.Left => GraphScreens(("a", 0, -100, 100, 0, true), ("b", -100, -100, 0, 0, false)),
+        _ => GraphScreens(("a", -100, -100, 0, 0, true), ("b", 0, -100, 100, 0, false)),
+    };
+    var settings = new Settings { SettingsVersion = Settings.CurrentSettingsVersion, SafetyEscapes = false, PassageInsetPx = 24 };
+    settings.BoundaryRules.Add(new BoundaryRule { FromStableId = "a", ToStableId = "b", Direction = direction,
+        Behavior = BoundaryBehavior.Push, Control = BoundaryControl.Always });
+    var c = GraphCore(settings, screens);
+    var origin = direction switch
+    {
+        BoundaryDirection.Up => (-99, 0), BoundaryDirection.Down => (-99, -1),
+        BoundaryDirection.Left => (0, -99), _ => (-1, -99),
+    };
+    var target = direction switch
+    {
+        BoundaryDirection.Up => (-99, -1), BoundaryDirection.Down => (-99, 0),
+        BoundaryDirection.Left => (-1, -99), _ => (0, -99),
+    };
+    Move(c, origin.Item1, origin.Item2, true);
+    var result = Move(c, target.Item1, target.Item2, true);
+    Check($"logic audit: {direction} inset rejects slow drift at negative coordinates",
+        result.act == GuardAction.Block && InRect(screens[0].Bounds, result.bx, result.by),
+        $"act={result.act} target={result.bx},{result.by}");
+}
+
+// The public Free/Push/Blocked contracts must agree at both ends and the middle of every physical edge.
+foreach (var direction in new[] { BoundaryDirection.Up, BoundaryDirection.Down, BoundaryDirection.Left, BoundaryDirection.Right })
+foreach (var behavior in new[] { BoundaryBehavior.Free, BoundaryBehavior.Push, BoundaryBehavior.Blocked })
+foreach (int inset in new[] { 0, 24, 500 })
+foreach (int orthogonal in new[] { -99, -50, -1 })
+foreach (int distance in new[] { 1, 10 })
+{
+    bool vertical = direction is BoundaryDirection.Up or BoundaryDirection.Down;
+    var source = direction switch
+    {
+        BoundaryDirection.Up => (L: -100, T: 0, R: 0, B: 100),
+        BoundaryDirection.Left => (L: 0, T: -100, R: 100, B: 0),
+        _ => (L: -100, T: -100, R: 0, B: 0),
+    };
+    var destination = direction switch
+    {
+        BoundaryDirection.Up or BoundaryDirection.Left => (L: -100, T: -100, R: 0, B: 0),
+        BoundaryDirection.Down => (L: -100, T: 0, R: 0, B: 100),
+        _ => (L: 0, T: -100, R: 100, B: 0),
+    };
+    var screens = GraphScreens(("a", source.L, source.T, source.R, source.B, true),
+        ("b", destination.L, destination.T, destination.R, destination.B, false));
+    var settings = new Settings { SettingsVersion = Settings.CurrentSettingsVersion, SafetyEscapes = false, PassageInsetPx = inset };
+    settings.BoundaryRules.Add(new BoundaryRule { FromStableId = "a", ToStableId = "b", Direction = direction,
+        Behavior = behavior, Control = BoundaryControl.Always });
+    var core = GraphCore(settings, screens);
+    int originAxis = direction is BoundaryDirection.Up or BoundaryDirection.Left ? 0 : -1;
+    int targetAxis = originAxis + (direction is BoundaryDirection.Up or BoundaryDirection.Left ? -distance : distance);
+    Move(core, vertical ? orthogonal : originAxis, vertical ? originAxis : orthogonal, true);
+    var result = Move(core, vertical ? orthogonal : targetAxis, vertical ? targetAxis : orthogonal, true);
+    bool shouldCross = behavior == BoundaryBehavior.Free
+        || behavior == BoundaryBehavior.Push && distance == 10 && (inset == 0 || orthogonal == -50);
+    Check($"logic audit edge contract: {direction}/{behavior}/inset={inset}/position={orthogonal}/distance={distance}",
+        (result.act == GuardAction.Pass) == shouldCross
+        && InRect(shouldCross ? destination : source, result.bx, result.by));
+}
+
+// All disposable child windows must be released when a dynamic section is replaced.
+{
+    using var form = new SettingsForm(new Settings { SettingsVersion = Settings.CurrentSettingsVersion }, Screenshot.DemoMonitors());
+    var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+    foreach (var section in new[] { ("_screenRows", "RebuildScreenRows"), ("_advancedPanel", "RebuildAdvancedContents") })
+    {
+        var panel = (Control)typeof(SettingsForm).GetField(section.Item1, flags).GetValue(form);
+        var replaced = panel.Controls.Cast<Control>().Where(c => (c.Tag as string) != null || c is Label).First();
+        _ = replaced.Handle;
+        typeof(SettingsForm).GetMethod(section.Item2, flags).Invoke(form, null);
+        Check($"logic audit: {section.Item1} disposes replaced controls", replaced.IsDisposed);
+    }
+    form.DraftForTests.ExcludedDevices.Add("temporarily-unplugged-monitor");
+    typeof(SettingsForm).GetMethod("SanitizeExcluded", flags).Invoke(form, null);
+    Check("logic audit: display refresh preserves absent excluded monitor identity",
+        form.DraftForTests.ExcludedDevices.Contains("temporarily-unplugged-monitor"));
+}
 
 // 1) THE right-screen bug: at top of DISPLAY2, moving up-right into the VOID (X>3000) must be blocked
 //    and clamped to Y=0 (not snapped onto the top monitor's far wall).
@@ -2971,5 +3138,6 @@ Console.WriteLine("\n-- hook liveness (HookHealth) --");
 }
 
 Console.WriteLine();
-Console.WriteLine(fails == 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
-Environment.Exit(fails == 0 ? 0 : 1);
+Console.WriteLine($"Passed: {passes}; Failed: {fails}");
+Console.WriteLine(fails == 0 && passes > 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
+Environment.Exit(fails == 0 && passes > 0 ? 0 : 1);

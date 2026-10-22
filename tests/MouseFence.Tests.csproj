@@ -39,6 +39,14 @@
     <Compile Include="..\Ui\IdentifyOverlay.cs" Link="IdentifyOverlay.cs" />
     <Compile Include="..\Ui\Theming.cs" Link="Theming.cs" />
     <Compile Include="..\Ui\Screenshot.cs" Link="Screenshot.cs" />
+    <Compile Include="..\Ui\TrayApplicationContext.cs" Link="TrayApplicationContext.cs" />
+    <Compile Include="..\Platform\MouseGuard.cs" Link="MouseGuard.cs" />
+    <Compile Include="..\Platform\HotKeyWindow.cs" Link="HotKeyWindow.cs" />
+    <Compile Include="..\Platform\AutoStart.cs" Link="AutoStart.cs" />
+    <Compile Include="..\Platform\CrashLogger.cs" Link="CrashLogger.cs" />
+    <EmbeddedResource Include="..\Resources\TrayIcons\tray-closed.ico" LogicalName="MouseFence.Resources.TrayIcons.tray-closed.ico" />
+    <EmbeddedResource Include="..\Resources\TrayIcons\tray-open.ico" LogicalName="MouseFence.Resources.TrayIcons.tray-open.ico" />
+    <EmbeddedResource Include="..\Resources\TrayIcons\tray-paused.ico" LogicalName="MouseFence.Resources.TrayIcons.tray-paused.ico" />
   </ItemGroup>
 
 </Project>

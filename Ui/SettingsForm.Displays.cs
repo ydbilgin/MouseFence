@@ -5,7 +5,7 @@ public sealed partial class SettingsForm
     private void RebuildScreenRows()
     {
         _rebuilding = true;
-        _screenRows.SuspendLayout(); _screenRows.Controls.Clear(); _screenRows.RowStyles.Clear(); _screenRows.RowCount = 0;
+        _screenRows.SuspendLayout(); DisposeChildren(_screenRows); _screenRows.RowStyles.Clear(); _screenRows.RowCount = 0;
         _screenRows.ColumnCount = 1;
         int headerRow = _screenRows.RowCount++;
         _screenRows.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));

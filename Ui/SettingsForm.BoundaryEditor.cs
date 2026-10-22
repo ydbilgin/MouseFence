@@ -100,7 +100,7 @@ public sealed partial class SettingsForm
 
     private void BuildSeparateRows(bool suppressSelection = false)
     {
-        _separatePanel.SuspendLayout(); _separatePanel.Controls.Clear(); _separatePanel.RowStyles.Clear(); _separatePanel.RowCount = 0;
+        _separatePanel.SuspendLayout(); DisposeChildren(_separatePanel); _separatePanel.RowStyles.Clear(); _separatePanel.RowCount = 0;
         if (!_separateExpanded) { _separatePanel.Visible = false; _separatePanel.ResumeLayout(); return; }
         _separatePanel.Visible = true;
         AddDirectionRow(_primary, suppressSelection); AddDirectionRow(_reverse, suppressSelection);
@@ -339,8 +339,12 @@ public sealed partial class SettingsForm
     {
         var ids = _monitors.Select(m => m.StableId).ToList();
         string primary = (_monitors.FirstOrDefault(m => m.Primary) ?? _monitors.FirstOrDefault())?.StableId;
-        _draft.ExcludedDevices = GuardCore.SanitizeExcluded(ids, primary,
+        var present = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
+        var allowed = GuardCore.SanitizeExcluded(ids, primary,
             new HashSet<string>(_draft.ExcludedDevices, StringComparer.OrdinalIgnoreCase), out _);
+        // Absent identities remain dormant so an unplug/replug cannot silently remove a keep-out choice.
+        _draft.ExcludedDevices = allowed.Concat(_draft.ExcludedDevices.Where(id => !present.Contains(id)))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private BoundaryRule FindRule(BoundaryEndpoint e) => _draft.BoundaryRules.LastOrDefault(r => Same(r.FromStableId, e.From.StableId) && Same(r.ToStableId, e.To.StableId) && r.Direction == e.Direction);

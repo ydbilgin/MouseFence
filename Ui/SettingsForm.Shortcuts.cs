@@ -2,6 +2,7 @@ namespace MouseFence;
 
 public sealed partial class SettingsForm
 {
+    internal Func<Keys, bool> KeyIsDown = key => (Native.GetAsyncKeyState((int)key) & 0x8000) != 0;
     private void BuildShortcutsTab(TabPage page)
     {
         var flow = PageFlow(page);
@@ -43,8 +44,10 @@ public sealed partial class SettingsForm
     private void CaptureHotkey(int index, KeyEventArgs e)
     {
         e.SuppressKeyPress = true; e.Handled = true;
-        Keys key = e.KeyCode is Keys.ControlKey or Keys.Menu or Keys.ShiftKey or Keys.LWin or Keys.RWin ? Keys.None : e.KeyCode;
-        bool win = e.KeyCode is Keys.LWin or Keys.RWin;
+        Keys key = e.KeyCode is Keys.ControlKey or Keys.LControlKey or Keys.RControlKey
+            or Keys.Menu or Keys.LMenu or Keys.RMenu or Keys.ShiftKey or Keys.LShiftKey or Keys.RShiftKey
+            or Keys.LWin or Keys.RWin ? Keys.None : e.KeyCode;
+        bool win = e.KeyCode is Keys.LWin or Keys.RWin || KeyIsDown(Keys.LWin) || KeyIsDown(Keys.RWin);
         SetHotkey(index, key, e.Control, e.Alt, e.Shift, win);
         _hotkeyBoxes[index].Text = HotkeyText(index);
         UpdateShortcutErrors();

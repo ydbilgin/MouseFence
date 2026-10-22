@@ -44,9 +44,11 @@ public sealed class TrayApplicationContext : ApplicationContext
     private List<string> _isolatedDevices = new();   // stable-keyed latch: warn once per bad layout, re-arm when it heals
     private bool _pauseRegistered;                    // did the pause hotkey actually register? (for the escape-key hint)
 
-    public TrayApplicationContext()
+    public TrayApplicationContext() : this(Settings.Load()) { }
+
+    internal TrayApplicationContext(Settings settings)
     {
-        _settings = Settings.Load();
+        _settings = settings;
         Strings.Use(_settings.Language);
 
         _iconClosed = LoadTrayIcon("tray-closed.ico");
@@ -81,7 +83,8 @@ public sealed class TrayApplicationContext : ApplicationContext
         Configure();
         _guard.GateOpen = !_settings.StartGateClosed;
         _guard.SideContain = _settings.StartSideContainOn;
-        _guard.Start();
+        _guard.Confine = _settings.StartConfineOn;
+        if (!_settings.StartPaused) _guard.Start();
 
         _ = _uiSync.Handle;   // force the marshaling window handle onto this (UI) thread
         _reconfigTimer = new System.Windows.Forms.Timer { Interval = 750 };
@@ -383,12 +386,16 @@ public sealed class TrayApplicationContext : ApplicationContext
             _guard.GateOpen, _guard.SideContain, !_guard.Enabled));
         if (f.ShowDialog() != DialogResult.OK) return;
 
+        if (!f.Result.Save())
+        {
+            _tray.ShowBalloonTip(4000, "MouseFence", Strings.Ui("SettingsSaveFailed"), ToolTipIcon.Warning);
+            return;
+        }
         _hotkey.Unregister();
         _confineHotkey.Unregister();
         _pauseHotkey.Unregister();
         _sideHotkey.Unregister();
         _settings = f.Result;
-        _settings.Save();
         Strings.Use(_settings.Language);
         AutoStart.Apply(_settings.AutoStart);
         RegisterHotkey();   // before Configure() so _pauseRegistered is fresh for any isolation warning

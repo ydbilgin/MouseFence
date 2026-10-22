@@ -10,6 +10,10 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => CrashLogger.Write(e.Exception, fatal: false);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            CrashLogger.Write(e.ExceptionObject as Exception ?? new Exception("Unhandled runtime failure"), fatal: true);
         // Dev/CI helpers: render the settings window off-screen to a PNG. --screenshot uses the live
         // monitor list for local QA; --screenshot-demo uses deterministic synthetic data for public docs.
         // Both run before the single-instance check so they work while the tray app is already running.
@@ -72,7 +76,17 @@ internal static class Program
         if (!createdNew) return;   // already running
 
         ApplicationConfiguration.Initialize();   // applies PerMonitorV2 + visual styles from the .csproj
-        Application.Run(new TrayApplicationContext());
+        try { Application.Run(new TrayApplicationContext()); }
+        catch (Exception ex)
+        {
+            CrashLogger.Write(ex, fatal: true);
+            Environment.ExitCode = 1;
+            if (ex is InvalidDataException)
+            {
+                Strings.Use("auto");
+                MessageBox.Show(Strings.Ui("SettingsLoadFailed"), "MouseFence", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
 
         GC.KeepAlive(_single);
     }

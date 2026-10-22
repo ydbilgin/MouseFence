@@ -5,6 +5,8 @@ public static partial class Strings
     private static readonly Dictionary<string, string> En = new()
     {
         ["SettingsTitle"] = "MouseFence — Settings",
+        ["SettingsSaveFailed"] = "Settings could not be saved. Your previous settings are still active.",
+        ["SettingsLoadFailed"] = "MouseFence could not read its settings. The file was preserved. Restore a valid backup before starting again.",
         ["HotkeyHead"] = "Upward passage",
         ["HotkeyHint"] = "Turns upward passage on or off. Click the box, then press your keys.",
         ["HotkeyPressKeys"] = "(press keys)",
