@@ -80,6 +80,7 @@ internal static class Screenshot
         using (var bmp = new Bitmap(w, h))
         {
             bool captureComplete = false;
+            string problem = "PrintWindow drew no frame";
             for (int attempt = 0; attempt < 8; attempt++)
             {
                 form.Invalidate(true);
@@ -96,7 +97,8 @@ internal static class Screenshot
                 }
                 if (!printed || !HasRenderedFrame(bmp, clientY)) continue;
                 CompositeFaithfulControls(form, bmp, actualBounds);
-                captureComplete = CaptureLooksComplete(form, bmp, actualBounds, captureTheme);
+                problem = CaptureProblem(form, bmp, actualBounds, captureTheme);
+                captureComplete = problem == null;
                 if (captureComplete) break;
             }
             if (captureComplete && useDemoLayout)
@@ -113,7 +115,7 @@ internal static class Screenshot
             else if (captureComplete)
                 bmp.Save(path, ImageFormat.Png);
             else if (useDemoLayout)
-                throw new InvalidOperationException("Could not render a complete documentation screenshot.");
+                throw new InvalidOperationException("Could not render a complete documentation screenshot: " + problem + ".");
             else
             {
                 // A client-only crop is still faithful and private if DWM declines an off-screen frame.
@@ -341,27 +343,29 @@ internal static class Screenshot
             label.ForeColor, background, flags);
     }
 
-    private static bool CaptureLooksComplete(SettingsForm form, Bitmap target, NativeRect windowBounds, Theme theme)
+    /// <summary>Null when the capture looks complete, otherwise the first missing part in plain words.</summary>
+    private static string CaptureProblem(SettingsForm form, Bitmap target, NativeRect windowBounds, Theme theme)
     {
-        if (HasLargeBlankRegion(target)) return false;
+        if (HasLargeBlankRegion(target)) return "a large blank region";
 
         var controls = AllControls(form).Where(control => control.Visible).ToList();
         var footer = controls.OfType<TableLayoutPanel>().FirstOrDefault(control =>
             string.Equals(control.Tag as string, "surface", StringComparison.Ordinal));
-        if (footer == null) return false;
-        foreach (var button in footer.Controls.OfType<ThemedButton>())
+        if (footer == null) return "no footer";
+        // Only buttons on screen: a hidden, empty validation action would otherwise be sampled where the footer shows.
+        foreach (var button in footer.Controls.OfType<ThemedButton>().Where(button => button.Visible))
         {
             Point sample = button.PointToScreen(new Point(Math.Min(5, button.Width - 1), button.Height / 2));
             int x = sample.X - windowBounds.Left, y = sample.Y - windowBounds.Top;
-            if (x < 0 || y < 0 || x >= target.Width || y >= target.Height) return false;
+            if (x < 0 || y < 0 || x >= target.Width || y >= target.Height) return "footer button outside the frame";
             Color expected = !button.Enabled ? theme.DisabledSurface
                 : button.Role == ThemedButtonRole.Primary ? theme.Accent : theme.Surface2;
-            if (!Near(target.GetPixel(x, y), expected, 12)) return false;
+            if (!Near(target.GetPixel(x, y), expected, 12)) return $"footer button {button.Text} has {target.GetPixel(x, y)} not {expected}";
         }
 
         var brand = controls.OfType<Label>().FirstOrDefault(label => label.Text.Contains("▣", StringComparison.Ordinal)
             && label.Text.Contains("MouseFence", StringComparison.Ordinal));
-        if (brand == null) return false;
+        if (brand == null) return "no brand label";
         Point brandOrigin = brand.PointToScreen(Point.Empty);
         int ink = 0;
         // Ignore the leading square glyph: it can render even when PrintWindow drops the wordmark text.
@@ -373,7 +377,7 @@ internal static class Screenshot
             if (targetX >= 0 && targetY >= 0 && targetX < target.Width && targetY < target.Height &&
                 !Near(target.GetPixel(targetX, targetY), theme.Sidebar, 24)) ink++;
         }
-        if (ink < 40) return false;
+        if (ink < 40) return $"brand wordmark has {ink} ink pixels";
 
         foreach (var close in controls.Where(control => control.GetType().Name == "DrawerCloseButton"))
         {
@@ -388,9 +392,9 @@ internal static class Screenshot
                 if (targetX >= 0 && targetY >= 0 && targetX < target.Width && targetY < target.Height &&
                     !Near(target.GetPixel(targetX, targetY), background, 24)) glyphInk++;
             }
-            if (glyphInk < 3) return false;
+            if (glyphInk < 3) return "drawer close glyph missing";
         }
-        return true;
+        return null;
     }
 
     private static bool HasLargeBlankRegion(Bitmap bitmap)
