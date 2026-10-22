@@ -17,6 +17,13 @@ internal static class Program
         // Dev/CI helpers: render the settings window off-screen to a PNG. --screenshot uses the live
         // monitor list for local QA; --screenshot-demo uses deterministic synthetic data for public docs.
         // Both run before the single-instance check so they work while the tray app is already running.
+        // --screenshot-tray <png> <Light|Dark> <en|tr>: the real tray menu with demo settings, drawn off-screen.
+        if (args.Length >= 2 && args[0] == "--screenshot-tray")
+        {
+            ApplicationConfiguration.Initialize();
+            Screenshot.CaptureTrayMenu(args[1], args.Length >= 3 ? args[2] : "Dark", args.Length >= 4 ? args[3] : "en");
+            return;
+        }
         if (args.Length >= 2 && args[0] is "--screenshot" or "--screenshot-demo")
         {
             ApplicationConfiguration.Initialize();

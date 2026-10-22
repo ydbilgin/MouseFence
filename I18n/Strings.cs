@@ -60,16 +60,11 @@ public static partial class Strings
 
     // ---- tray ----
     public static string MenuPause => G("MenuPause");
-    public static string MenuResume => G("MenuResume");
     public static string MenuSettings => G("MenuSettings");
     public static string MenuExit => G("MenuExit");
-    public static string GateOpenMenu => G("GateOpenMenu");
-    public static string GateClosedMenu => G("GateClosedMenu");
     public static string GatePausedMenu => G("GatePausedMenu");
     public static string TipOpen => G("TipOpen");
     public static string TipClosed => G("TipClosed");
-    public static string SideContainOnMenu => G("SideContainOnMenu");
-    public static string SideContainOffMenu => G("SideContainOffMenu");
     public static string SideGatePausedMenu => G("SideGatePausedMenu");
     public static string TipSideOn => G("TipSideOn");
     public static string TipSideOff => G("TipSideOff");

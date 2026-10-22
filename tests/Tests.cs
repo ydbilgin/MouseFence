@@ -3175,6 +3175,35 @@ foreach (var language in new[] { "en", "tr" })
         shaped && footClear, $"rows={rows.Count} field={field} footClear={footClear} " + string.Join("; ", details));
 }
 
+foreach (var language in new[] { "en", "tr" })
+{
+    // UI refresh 2026-10-22 (M1): the tray menu follows the theme, uses the Settings names, shows state only as a
+    // tick and the shortcut on the right; paused keeps the same enabled states as before the refresh.
+    var settings = Screenshot.DemoSettings("Dark", language);
+    Strings.Use(settings.Language);
+    int clicked = 0;
+    using var menu = new TrayMenu(() => clicked |= 1, () => clicked |= 2, () => clicked |= 4, () => clicked |= 8, () => clicked |= 16, () => clicked |= 32);
+    menu.Apply(settings, new TrayMenuState(Enabled: true, GateOpen: false, SideOn: true, Confine: false));
+    bool themed = menu.Menu.Renderer is ThemedMenuRenderer renderer && renderer.Theme == Theme.Dark;
+    bool names = menu.Gate.Text == Strings.HotkeyHead && menu.Side.Text == Strings.SideHotkeyHead
+        && menu.Game.Text == Strings.MenuGame && menu.Pause.Text == Strings.MenuPause
+        && !menu.Gate.Text.Contains('—') && !menu.Side.Text.Contains('—');
+    bool ticks = !menu.Gate.Checked && menu.Side.Checked && !menu.Game.Checked && !menu.Pause.Checked;
+    bool shortcuts = menu.Gate.ShortcutKeyDisplayString == settings.HotKeyText()
+        && menu.Pause.ShortcutKeyDisplayString == settings.PauseHotKeyText();
+    settings.SideHotKey = Keys.None;
+    menu.Apply(settings, new TrayMenuState(Enabled: false, GateOpen: false, SideOn: true, Confine: false));
+    bool paused = !menu.Gate.Enabled && !menu.Side.Enabled && !menu.Game.Enabled && menu.Pause.Enabled && menu.Pause.Checked
+        && menu.Gate.Text == Strings.GatePausedMenu && menu.Side.ShortcutKeyDisplayString == "";
+    foreach (var item in new[] { menu.Gate, menu.Side, menu.Game, menu.Pause, menu.SettingsItem, menu.Exit }) item.PerformClick();
+    bool actions = clicked == (8 | 16 | 32);   // disabled items do not fire, exactly as before
+    menu.Apply(Screenshot.DemoSettings("Light", language), new TrayMenuState(true, true, false, true));
+    bool relight = menu.Menu.Renderer is ThemedMenuRenderer light && light.Theme == Theme.Light && menu.Gate.Checked && menu.Game.Checked;
+    Check($"UI refresh M1 ({language}): themed tray menu with Settings names, ticks, shortcuts and unchanged paused states",
+        themed && names && ticks && shortcuts && paused && actions && relight,
+        $"themed={themed} names={names} ticks={ticks} shortcuts={shortcuts} paused={paused} actions={clicked} relight={relight}");
+}
+
 Console.WriteLine();
 Console.WriteLine($"Passed: {passes}; Failed: {fails}");
 Console.WriteLine(fails == 0 && passes > 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");

@@ -40,6 +40,7 @@
     <Compile Include="..\Ui\Theming.cs" Link="Theming.cs" />
     <Compile Include="..\Ui\Screenshot.cs" Link="Screenshot.cs" />
     <Compile Include="..\Ui\TrayApplicationContext.cs" Link="TrayApplicationContext.cs" />
+    <Compile Include="..\Ui\TrayMenu.cs" Link="TrayMenu.cs" />
     <Compile Include="..\Platform\MouseGuard.cs" Link="MouseGuard.cs" />
     <Compile Include="..\Platform\HotKeyWindow.cs" Link="HotKeyWindow.cs" />
     <Compile Include="..\Platform\AutoStart.cs" Link="AutoStart.cs" />
