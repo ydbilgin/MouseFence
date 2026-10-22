@@ -3263,6 +3263,18 @@ foreach (var theme in new[] { "Light", "Dark" })
         $"icon={(icon?.Image == null ? "none" : icon.Image.Width.ToString())} word={word?.Left} iconRight={icon?.Right}");
 }
 
+{
+    // UI refresh 2026-10-22 (M4): a gate pill low in a screen leaves the name readable above it; a pill near the
+    // top of a screen still hides the name, as before.
+    var label = new Rectangle(408, 140, 192, 79);
+    var lowPill = new Rectangle(465, 199, 78, 22);
+    var highPill = new Rectangle(465, 145, 78, 22);
+    var above = MonitorMapControl.NameAbovePill(label, lowPill);
+    bool ok = above is Rectangle r && r.Top == label.Top && r.Bottom == lowPill.Top - 4 && r.Width == label.Width
+        && MonitorMapControl.NameAbovePill(label, highPill) == null;
+    Check("UI refresh M4: a screen name moves above a low gate pill instead of disappearing", ok, $"above={above}");
+}
+
 Console.WriteLine();
 Console.WriteLine($"Passed: {passes}; Failed: {fails}");
 Console.WriteLine(fails == 0 && passes > 0 ? "ALL TESTS PASSED" : $"{fails} TEST(S) FAILED");
