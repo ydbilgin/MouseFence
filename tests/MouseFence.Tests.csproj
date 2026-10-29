@@ -15,6 +15,7 @@
     <Compile Remove="council_*/**/*.cs" />
     <!-- Test the REAL production logic. The Windows target is needed only because Settings stores WinForms Keys. -->
     <Compile Include="..\Core\GuardCore.cs" Link="GuardCore.cs" />
+    <Compile Include="..\Core\InstantaneousPush.cs" Link="InstantaneousPush.cs" />
     <Compile Include="..\Core\GuardCore.Decision.cs" Link="GuardCore.Decision.cs" />
     <Compile Include="..\Core\GuardCore.Forbidden.cs" Link="GuardCore.Forbidden.cs" />
     <Compile Include="..\Core\GuardCore.Layout.cs" Link="GuardCore.Layout.cs" />

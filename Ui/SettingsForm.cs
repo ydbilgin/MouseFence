@@ -28,6 +28,7 @@ public sealed partial class SettingsForm : Form
         nameof(Settings.SideCrossMin), nameof(Settings.SideCrossSlack), nameof(Settings.PassageInsetPx),
         nameof(Settings.EdgeHoldbackPx), nameof(Settings.SeamTolerancePx), nameof(Settings.SafetyEscapes),
         nameof(Settings.BoundaryTipSeen),
+        nameof(Settings.InstantCrossSpeedPxPerSecond), nameof(Settings.LearnFromMyArrivals),
     };
 
     private readonly Settings _draft;

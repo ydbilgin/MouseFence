@@ -213,6 +213,8 @@ public sealed class TrayApplicationContext : ApplicationContext
                          excludedMonitors.Select(m => m.Bounds),
                          hasSides, main?.Bounds ?? default);
         _guard.DeliberateCross = _settings.DeliberateCross;
+        _guard.InstantCrossSpeedPxPerSecond = _settings.InstantCrossSpeedPxPerSecond;
+        _guard.LearnFromMyArrivals = _settings.LearnFromMyArrivals;
         _guard.DescentRouting = _settings.DescentRouting;
         // Side-barrier sensitivity. Clamp defensively so a hand-edited / imported settings.json can't set a value that
         // makes the barrier never engage (>= 1) or absurdly stiff: a 0/negative SideCrossMin would let any drift "count"

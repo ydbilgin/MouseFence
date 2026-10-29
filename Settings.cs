@@ -9,6 +9,11 @@ public sealed class Settings
     public const string DefaultCrossingPathMode = "Default";
     public const string CustomCrossingPathMode = "Custom";
     public const int DefaultUpCrossMin = 3;
+    public const int DefaultInstantCrossSpeed = 3000;
+    public int InstantCrossSpeedPxPerSecond { get; set; } = DefaultInstantCrossSpeed;
+    public bool LearnFromMyArrivals { get; set; } = false;
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> UnrecognizedSettings { get; set; }
     public const int DefaultUpCrossSlack = 5;
     public const int DefaultPassageInsetPx = 24;
     public const int DefaultEdgeHoldbackPx = 0;
@@ -271,6 +276,7 @@ public sealed class Settings
         }
 
         UpCrossMin = Math.Clamp(UpCrossMin, 1, 200);
+        InstantCrossSpeedPxPerSecond = Math.Clamp(InstantCrossSpeedPxPerSecond, 100, 100000);
         UpCrossSlack = Math.Clamp(UpCrossSlack, 0, 200);
         SideCrossMin = Math.Clamp(SideCrossMin, 1, 200);
         SideCrossSlack = Math.Clamp(SideCrossSlack, 0, 200);
@@ -371,6 +377,7 @@ public sealed class Settings
         DownwardBoundaryDefault = BoundaryDefault.Free;
         BoundaryRules.Clear();
         UpCrossMin = DefaultUpCrossMin; UpCrossSlack = DefaultUpCrossSlack;
+        InstantCrossSpeedPxPerSecond = DefaultInstantCrossSpeed; LearnFromMyArrivals = false;
         SideCrossMin = DefaultSideCrossMin; SideCrossSlack = DefaultSideCrossSlack;
         PassageInsetPx = DefaultPassageInsetPx; EdgeHoldbackPx = DefaultEdgeHoldbackPx;
         SeamTolerancePx = DefaultSeamTolerancePx; SafetyEscapes = true;

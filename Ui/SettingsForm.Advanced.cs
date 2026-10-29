@@ -20,6 +20,16 @@ public sealed partial class SettingsForm
         var deliberate = new ThemedCheckBox { Text = Strings.Ui("FirmPushRecommended"), Width = 790, Height = 32, Checked = _draft.DeliberateCross };
         deliberate.CheckedChanged += (_, _) => _draft.DeliberateCross = deliberate.Checked; flow.Controls.Add(deliberate);
         flow.Controls.Add(HelpLabel(Strings.Ui("CrossingFeelSectionHelp"), 790, 34));
+        var speed = NumericRow(Strings.Ui("InstantSpeed"), Strings.Ui("InstantSpeedHelp"), 100, 100000,
+            _draft.InstantCrossSpeedPxPerSecond, Settings.DefaultInstantCrossSpeed,
+            v => _draft.InstantCrossSpeedPxPerSecond = v);
+        speed.Name = "InstantSpeedRow";
+        flow.Controls.Add(speed);
+        var learn = new ThemedCheckBox { Name = "LearnFromMyArrivals", Text = Strings.Ui("LearnArrivals"),
+            Width = 790, Height = 32, Checked = _draft.LearnFromMyArrivals };
+        learn.CheckedChanged += (_, _) => _draft.LearnFromMyArrivals = learn.Checked;
+        flow.Controls.Add(learn);
+        flow.Controls.Add(HelpLabel(Strings.Ui("LearnArrivalsHelp"), 790, 52));
         flow.Controls.Add(_advancedToggle);
         var numericGrid = new TableLayoutPanel { Width = 790, AutoSize = true, ColumnCount = 2, Tag = "numericGrid", Margin = Padding.Empty };
         numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); numericGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));

@@ -274,6 +274,14 @@ public sealed partial class GuardCore
     private bool TryNearestLegalMonitorPoint(int desiredX, int desiredY, out int bestX, out int bestY,
                                              RuntimeTransition transition = null, bool transitionPassed = false)
     {
+        if (transition == null && TryNearestLegalMonitorPoint(desiredX, desiredY, out bestX, out bestY,
+                                                             null, false, freeOnly: true)) return true;
+        return TryNearestLegalMonitorPoint(desiredX, desiredY, out bestX, out bestY, transition, transitionPassed, false);
+    }
+
+    private bool TryNearestLegalMonitorPoint(int desiredX, int desiredY, out int bestX, out int bestY,
+                                             RuntimeTransition transition, bool transitionPassed, bool freeOnly)
+    {
         bestX = bestY = 0;
         bool found = false;
         decimal bestDistance = decimal.MaxValue;
@@ -281,6 +289,7 @@ public sealed partial class GuardCore
 
         foreach (var monitor in Monitors)
         {
+            if (freeOnly && !RectIsFreelyReachableFromLast(monitor)) continue;
             if (transition != null && !RectIsAuthorized(monitor, transition, transitionPassed)) continue;
             if (transition == null && !RectIsGloballyAuthorizedFromLast(monitor)) continue;
             if (!TryLegalPointOnMonitor(monitor, desiredX, desiredY, -1,

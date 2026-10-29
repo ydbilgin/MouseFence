@@ -11,6 +11,24 @@ public sealed partial class GuardCore
     /// </summary>
     public GuardAction Decide(int x, int y, bool gatesEnabled, bool sideContain, out int bx, out int by)
     {
+        _timedDecision = false;
+        return DecideMove(x, y, gatesEnabled, sideContain, out bx, out by);
+    }
+
+    /// <summary>Production entry point: replace cached cursor state with this event's observed origin.
+    /// An unknown origin never reuses a previous target or requested clamp (8cf37f8).</summary>
+    public GuardAction Decide((int X, int Y)? origin, int x, int y, bool gatesEnabled, bool sideContain,
+                              double eventSeconds, out int bx, out int by)
+    {
+        _timedDecision = true; _eventSeconds = eventSeconds;
+        HaveLast = origin.HasValue;
+        LastX = origin.GetValueOrDefault().X; LastY = origin.GetValueOrDefault().Y;
+        OnTop = HaveLast && HasTop && LastY < BarrierY;
+        return DecideMove(x, y, gatesEnabled, sideContain, out bx, out by);
+    }
+
+    private GuardAction DecideMove(int x, int y, bool gatesEnabled, bool sideContain, out int bx, out int by)
+    {
         bx = x; by = y;
         _gatesEnabledForDecision = gatesEnabled;
         _sideContainForDecision = sideContain;
@@ -49,6 +67,8 @@ public sealed partial class GuardCore
         // only intersects the movement segment with an already sorted array. It intentionally runs before the legacy
         // BarrierY/OnTop path so Down and side rules are first-class and a fast move cannot skip a blocked seam.
         var transition = MatchTransition(x, y, out bool inPassage);
+        if (_arrivalContact != null && (!HaveLast || !InRect(_arrivalContact.From, LastX, LastY)
+            || !OriginTouchesEdge(_arrivalContact))) _arrivalContact = null;
         if (transition != null)
         {
             BoundaryBehavior behavior = EffectiveBehavior(transition, gatesEnabled, sideContain);
@@ -62,6 +82,19 @@ public sealed partial class GuardCore
             }
 
             HoldOnSource(transition, x, y, ref bx, ref by);
+            if (_timedDecision && LearnFromMyArrivals && behavior == BoundaryBehavior.Push
+                && !ReferenceEquals(_arrivalContact, transition))
+            {
+                int primary = transition.Direction switch
+                {
+                    BoundaryDirection.Up => LastY - y, BoundaryDirection.Down => y - LastY,
+                    BoundaryDirection.Left => LastX - x, _ => x - LastX,
+                };
+                var learner = transition.Direction is BoundaryDirection.Left or BoundaryDirection.Right
+                    ? _sideArrivals : _upArrivals;
+                learner.Observe(primary / _eventSeconds);
+                _arrivalContact = transition;
+            }
             return FinishDecision(GuardAction.Block, x, y, ref bx, ref by, transition, transitionPassed: false);
         }
 
@@ -77,7 +110,7 @@ public sealed partial class GuardCore
             bool startedOnMain = LastX >= MainL && LastX < MainR && LastY >= MainT && LastY < MainB;
             int sideDx = Math.Abs(x - LastX);
             int sideDy = Math.Abs(y - LastY);
-            bool sideIntent = DeliberateCross ? (sideDx >= SideCrossMin && sideDy <= sideDx + SideCrossSlack) : sideDx > 0;
+            bool sideIntent = HasEventIntent(sideDx, sideDy, SideCrossMin, SideCrossSlack, true);
 
             // Direction OUT (main -> side): the move starts on main and its target leaves main horizontally.
             if (startedOnMain && (x < MainL || x >= MainR))
@@ -177,7 +210,7 @@ public sealed partial class GuardCore
         bool inSafetyGate = startedBelow && InSafetyGate(x, LastX, LastY);
         int dxAbs = Math.Abs(x - LastX);
         int dyUp = LastY - y;
-        bool intent = DeliberateCross ? (dyUp >= CrossMinUp && dxAbs <= dyUp + CrossSlack) : dyUp > 0;
+        bool intent = HasEventIntent(dyUp, dxAbs, CrossMinUp, CrossSlack, false);
         if ((inUserGate || inSafetyGate) && intent)
         {
             OnTop = true;

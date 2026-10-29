@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Diagnostics;
 
 namespace MouseFence;
 
@@ -12,6 +13,9 @@ public sealed class MouseGuard : IDisposable
     private IntPtr _hook = IntPtr.Zero;
     private readonly Native.HookProc _proc;   // kept alive so the GC never collects the callback
     private readonly GuardCore _core = new();
+    private readonly HookEventClock _eventClock = new();
+    public double InstantCrossSpeedPxPerSecond { get => _core.InstantCrossSpeedPxPerSecond; set => _core.InstantCrossSpeedPxPerSecond = value; }
+    public bool LearnFromMyArrivals { get => _core.LearnFromMyArrivals; set => _core.LearnFromMyArrivals = value; }
 
     // Liveness probe state (see HookHealth): a counter the callback stamps, plus the cursor position at the
     // previous probe. Both are only ever read/written from the UI thread (the hook is dispatched on the
@@ -107,6 +111,7 @@ public sealed class MouseGuard : IDisposable
         // into a newly positioned bottom/side screen while OnTop was true. Dropping the stale state forces the next
         // move through the !HaveLast branch, which re-derives OnTop from the fresh cursor position vs the new barrier.
         _core.Reset();
+        _eventClock.Reset();
     }
 
     public void Start()
@@ -115,6 +120,7 @@ public sealed class MouseGuard : IDisposable
         ResetProbe();
         if (_hook != IntPtr.Zero) return;
         _core.Reset();
+        _eventClock.Reset();
         _hook = Native.SetWindowsHookEx(Native.WH_MOUSE_LL, _proc, Native.GetModuleHandle(null), 0);
     }
 
@@ -170,6 +176,7 @@ public sealed class MouseGuard : IDisposable
         // Moves were missed while the hook was down, so the last-position state is stale: drop it and let the
         // next move re-derive the side of the barrier the cursor is on (same reasoning as Configure's re-baseline).
         _core.Reset();
+        _eventClock.Reset();
         _hook = Native.SetWindowsHookEx(Native.WH_MOUSE_LL, _proc, Native.GetModuleHandle(null), 0);
     }
 
@@ -194,13 +201,26 @@ public sealed class MouseGuard : IDisposable
         if ((data.flags & (Native.LLMHF_INJECTED | Native.LLMHF_LOWER_IL_INJECTED)) != 0)
             return Native.CallNextHookEx(_hook, nCode, wParam, lParam);
 
-        if (_core.Decide(data.pt.X, data.pt.Y, GateOpen, SideContain, out int bx, out int by) == GuardAction.Block)
+        long counter = Stopwatch.GetTimestamp();
+        (int X, int Y)? origin = Native.GetCursorPos(out var current) ? (current.X, current.Y) : null;
+        if (DecideHookMove(data, origin, counter, out int bx, out int by) == GuardAction.Block)
         {
             Native.SetCursorPos(bx, by);   // re-enters as injected, which we ignore
             return (IntPtr)1;              // swallow the original move
         }
 
         return Native.CallNextHookEx(_hook, nCode, wParam, lParam);
+    }
+
+    // The production adapter is testable without installing a hook or moving the system cursor.
+    internal GuardAction DecideHookMove(Native.MSLLHOOKSTRUCT data, (int X, int Y)? origin,
+                                        long counter, out int bx, out int by)
+    {
+        bx = data.pt.X; by = data.pt.Y;
+        if ((data.flags & (Native.LLMHF_INJECTED | Native.LLMHF_LOWER_IL_INJECTED)) != 0)
+            return GuardAction.Pass;
+        double seconds = _eventClock.Interval(data.time, counter, Stopwatch.Frequency);
+        return _core.Decide(origin, data.pt.X, data.pt.Y, GateOpen, SideContain, seconds, out bx, out by);
     }
 
     public void Dispose() => Stop();

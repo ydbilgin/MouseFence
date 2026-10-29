@@ -77,7 +77,46 @@ public sealed partial class GuardCore
         };
         int orthogonal = t.Direction is BoundaryDirection.Up or BoundaryDirection.Down
             ? Math.Abs(x - LastX) : Math.Abs(y - LastY);
-        return DeliberateCross ? primary >= t.PushMin && orthogonal <= primary + t.PushSlack : primary > 0;
+        return HasEventIntent(primary, orthogonal, t.PushMin, t.PushSlack,
+            t.Direction is BoundaryDirection.Left or BoundaryDirection.Right);
+    }
+
+    private bool HasEventIntent(int primary, int orthogonal, int minimum, int slack, bool side)
+    {
+        if (!DeliberateCross) return primary > 0;
+        if (!_timedDecision) return primary >= minimum && orthogonal <= primary + slack;
+        var learner = side ? _sideArrivals : _upArrivals;
+        double speed = LearnFromMyArrivals && learner.Threshold > 0
+            ? learner.Threshold : InstantCrossSpeedPxPerSecond;
+        return InstantaneousPush.Crosses(primary, orthogonal, _eventSeconds, speed * minimum / 3.0, slack);
+    }
+
+    private bool OriginTouchesEdge(RuntimeTransition t) => t.Direction switch
+    {
+        BoundaryDirection.Up => LastY <= t.From.T + t.EdgeHoldbackPx,
+        BoundaryDirection.Down => LastY >= t.From.B - 1 - t.EdgeHoldbackPx,
+        BoundaryDirection.Left => LastX <= t.From.L + t.EdgeHoldbackPx,
+        BoundaryDirection.Right => LastX >= t.From.R - 1 - t.EdgeHoldbackPx,
+        _ => false,
+    };
+
+    // Port only the corner-repair part of 851158f, without its dwell behavior.
+    private bool RectIsFreelyReachableFromLast((int L, int T, int R, int B) monitor)
+    {
+        if (Transitions.Length == 0 || !HaveLast || !TryActiveMonitor(LastX, LastY, out var source)) return true;
+        if (monitor == source) return true;
+        bool hasSourceTransition = false;
+        for (int i = 0; i < Transitions.Length; i++)
+        {
+            var edge = Transitions[i];
+            if (edge.From != source) continue;
+            hasSourceTransition = true;
+            if (EffectiveBehavior(edge, _gatesEnabledForDecision, _sideContainForDecision) != BoundaryBehavior.Free)
+                continue;
+            var allowed = edge.AllowedLandingsFor(_gatesEnabledForDecision, _sideContainForDecision);
+            for (int j = 0; j < allowed.Length; j++) if (allowed[j] == monitor) return true;
+        }
+        return !hasSourceTransition;
     }
 
     private static void HoldOnSource(RuntimeTransition t, int x, int y, ref int bx, ref int by)

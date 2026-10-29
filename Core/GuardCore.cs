@@ -19,6 +19,13 @@ public sealed partial class GuardCore
     public int CrossMinUp = 3;     // min upward px in a move to count as a deliberate cross
     public int CrossSlack = 5;     // allowed horizontal beyond the vertical component
     public bool DeliberateCross = true;   // true: a deliberate push is required; false: any upward move crosses
+    public double InstantCrossSpeedPxPerSecond = 3000;
+    public bool LearnFromMyArrivals;
+    private bool _timedDecision;
+    private double _eventSeconds;
+    private readonly ArrivalLearner _upArrivals = new();
+    private readonly ArrivalLearner _sideArrivals = new();
+    private RuntimeTransition _arrivalContact;
 
     // Side-barrier sensitivity, kept INDEPENDENT of the up-barrier's CrossMinUp/CrossSlack so the user can dial the
     // side barrier's stiffness on its own: the min horizontal px in one move to count as a DELIBERATE side crossing,
@@ -78,6 +85,7 @@ public sealed partial class GuardCore
     {
         HaveLast = false;
         OnTop = false;
+        _upArrivals.Reset(); _sideArrivals.Reset(); _arrivalContact = null;
     }
 
     private static bool InSameGate(int x, int lastX, List<(int Min, int Max)> gates)

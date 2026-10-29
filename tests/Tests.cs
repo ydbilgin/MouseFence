@@ -117,6 +117,8 @@ void Check(string name, bool ok, string detail = "")
 }
 
 Console.WriteLine("MouseFence barrier logic — scenario tests\n");
+OldFeelScenarios.Regressions(Check);
+OldFeelScenarios.Instantaneous(Check);
 
 {
     using var first = new HotKeyWindow();
@@ -692,12 +694,12 @@ foreach (string language in new[] { "en", "tr" })
     var advanced = (Control)typeof(SettingsForm).GetField("_advancedPanel", flags).GetValue(form);
     var numericGrid = advanced.Controls.Cast<Control>().First(control => (control.Tag as string) == "numericGrid");
     var numericText = DescendantsAndSelf(numericGrid).OfType<Label>().Select(label => label.Text).ToHashSet();
-    string strength = language == "en" ? "3 = default · 20 = firm · 60 = very firm."
-        : "3 = varsayılan · 20 = sıkı · 60 = çok sıkı.";
+    string strength = language == "en" ? "3 = selected crossing speed. 6 = twice that speed. Kept for existing settings."
+        : "3 = seçilen geçiş hızı. 6 = bu hızın iki katı. Mevcut ayarlar korunur.";
     string holdback = language == "en"
         ? "0 = exactly at the edge (default). Applies wherever the pointer is stopped — Never crosses and a failed firm push alike. These are physical pixels."
         : "0 = tam kenarda (varsayılan). İşaretçinin durdurulduğu her yerde uygulanır: hem Asla geçmez hem de başarısız sıkı itiş için. Bunlar fiziksel piksellerdir.";
-    Check($"B2 numeric helpers ({language}): frozen strength and hold-back sentences are present in the Advanced grid",
+    Check($"B2 numeric helpers ({language}): speed scaling and hold-back explanations are present in the Advanced grid",
         Strings.Ui("UpStrengthHelp") == strength && Strings.Ui("EdgeHoldbackHelpV2") == holdback
         && numericText.Contains(strength) && numericText.Contains(holdback));
 
@@ -2409,6 +2411,7 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
     var persisted = typeof(Settings).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
         .Where(p => p.Name != nameof(Settings.SettingsVersion)
                  && p.GetGetMethod() != null && p.GetSetMethod() != null
+                 && p.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonExtensionDataAttribute), true).Length == 0
                  && p.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), true).Length == 0)
         .Select(p => p.Name)
         .ToHashSet();
