@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report. Please do not include personal information you do not want to be public.
+  - type: input
+    id: version
+    attributes:
+      label: MouseFence version
+      description: From the release you downloaded, or the commit if you built from source.
+      placeholder: v1.1.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: layout
+    attributes:
+      label: Screen layout
+      description: How many screens, how they are arranged, and their scaling (for example "main 2560x1440 at 100%, one above at 150%"). A screenshot of Settings → Displays helps.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Set the edge between Main and Top to Needs a firm push
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the relevant lines from %APPDATA%\MouseFence\error.log if there are any.
+    validations:
+      required: true
