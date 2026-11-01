@@ -30,6 +30,8 @@ tray, or build into a separate folder with `dotnet build MouseFence.csproj -c Re
   events. When behaviour changes, try it with a real mouse on Windows and say so in the pull request.
 - If the UI changes, regenerate the README pictures with `--screenshot-demo` (see the README's
   "Build from source"). More notes: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+- The README hero, feature table, screenshot gallery and social preview are generated from
+  `docs/showcase/showcase.yml`; edit that file and follow [docs/showcase/UPDATING.md](docs/showcase/UPDATING.md).
 
 ## Pull requests
 

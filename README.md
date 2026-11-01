@@ -1,34 +1,27 @@
-<p align="center">
-  <img src="docs/icon.png" alt="MouseFence icon: a red fence bar above a mouse pointer" width="112">
-</p>
-
+<!-- showcase:hero:start (generated from docs/showcase/showcase.yml) -->
+<p align="center"><img src="docs/icon.png" alt="MouseFence icon" width="112"></p>
 <h1 align="center">MouseFence</h1>
-
 <p align="center">
   <strong>Keep the mouse pointer on the screen you meant to use.</strong><br>
   A small Windows tray app that puts gentle fences on the edges between your monitors.
 </p>
-
 <p align="center">
-  <a href="https://github.com/ydbilgin/MouseFence/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/ydbilgin/MouseFence?include_prereleases&sort=semver"></a>
+  <a href="https://github.com/ydbilgin/MouseFence/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/ydbilgin/MouseFence?include_prereleases&amp;sort=semver"></a>
   <img alt="Platform: Windows 10 and 11" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
-
+<p align="center"><img src="docs/demo.gif" alt="Illustration: the pointer stops at the edge of the screen above, crosses with one firm push, and never enters a screen marked Keep pointer off" width="800"></p>
+<p align="center"><sub>Illustration of the behaviour, drawn from the app&#x27;s own screenshots — not a screen recording.</sub></p>
 <p align="center">
-  <img src="docs/demo.gif" alt="Illustration: the pointer stops at the edge of the screen above, crosses with one firm push, and never enters a screen marked Keep pointer off" width="800"><br>
-  <sub>Illustration of the behaviour, drawn from the app's own screenshots — not a screen recording.</sub>
+  <a href="https://github.com/ydbilgin/MouseFence/releases/latest"><b>Download</b></a> ·
+  <a href="#what-it-does"><b>What it does</b></a> ·
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#everyday-use"><b>Use</b></a> ·
+  <a href="#build-from-source"><b>Build</b></a> ·
+  <a href="#questions"><b>FAQ</b></a> ·
+  <a href="#türkçe"><b>Türkçe</b></a>
 </p>
-
-<p align="center">
-  <a href="https://github.com/ydbilgin/MouseFence/releases/latest"><strong>Download</strong></a>
-  &nbsp;·&nbsp; <a href="#what-each-edge-can-do">What it does</a>
-  &nbsp;·&nbsp; <a href="#install">Install</a>
-  &nbsp;·&nbsp; <a href="#everyday-use">Use</a>
-  &nbsp;·&nbsp; <a href="#build-from-source">Build</a>
-  &nbsp;·&nbsp; <a href="#questions">FAQ</a>
-  &nbsp;·&nbsp; <a href="#türkçe">Türkçe</a>
-</p>
+<!-- showcase:hero:end -->
 
 ## The problem
 
@@ -40,26 +33,23 @@ always open.
 MouseFence leaves your Windows display layout exactly as it is and only decides what happens when the
 pointer reaches the edge between two screens.
 
-## What each edge can do
+## What it does
 
-Click the small gate between two screens and choose:
+Click the small gate between two screens and choose what that edge does. Each direction is set on its own:
+going up into the top screen can need a firm push while coming back down crosses freely.
 
-| Edge behaviour | What it feels like |
-|---|---|
-| **Crosses freely** | A normal Windows monitor edge. |
-| **Needs a firm push** | Slow drift stops at the edge; one quick, deliberate move crosses. |
-| **Never crosses** | The pointer stays on its side. |
-
-Each direction is set on its own: going up into the top screen can need a firm push while coming back down
-crosses freely. On top of the edges:
-
-- **Keep pointer off** a screen: the pointer never enters it, and Windows keeps using it as normal.
-- **Game mode** holds the pointer on whichever screen it is on (windowed and borderless games).
-- **Upward passage** and **side protection** switches, plus **Pause**, each with a global shortcut and a
-  tray menu entry.
-- **Safety:** after a layout change MouseFence keeps a way out of every screen, so the pointer is never
-  sealed in.
-- Light, Dark or system theme, English and Turkish, settings backup and restore.
+<!-- showcase:features:start (generated from docs/showcase/showcase.yml) -->
+| Setting | What it does |
+| --- | --- |
+| **Crosses freely** | The edge behaves like a normal Windows monitor edge. |
+| **Needs a firm push** | Slow drift stops at the edge; one quick, deliberate move crosses. The speed is set in Advanced (default 3000 px/s). |
+| **Never crosses** | The pointer stays on its side of the edge. |
+| **Keep pointer off** | The pointer never enters that screen, and Windows keeps using it as normal. |
+| **Game mode** | Holds the pointer on whichever screen it is on, for windowed and borderless games. |
+| **Switches and Pause** | Upward passage, side protection and Pause, each with a global shortcut and a tray menu entry. |
+| **Safety escapes** | After a layout change MouseFence keeps a way out of every screen, so the pointer is never sealed in. |
+| **Theme and language** | Light, Dark or system theme, English and Turkish, settings backup and restore. |
+<!-- showcase:features:end -->
 
 It is a single-instance tray app, per-monitor DPI-aware, with no installer and no network code, and it never
 changes your display settings.
@@ -115,43 +105,19 @@ the Intel driver uses `Ctrl + Alt + arrow` to rotate the screen.
 These are real captures of the app, drawn off-screen by its `--screenshot-demo` mode with a made-up
 three-screen layout (Main 2560 × 1440, Top above it, Laptop to the right), not anyone's real monitors.
 
-**Displays**
-
-<p>
-  <img src="docs/screenshots/displays-light.png" alt="Displays page in Light theme" width="49%">
-  <img src="docs/screenshots/displays-dark.png" alt="Displays page in Dark theme" width="49%">
-</p>
-
-**Advanced**
-
-<p>
-  <img src="docs/screenshots/advanced-light.png" alt="Advanced settings in Light theme" width="49%">
-  <img src="docs/screenshots/advanced-dark.png" alt="Advanced settings in Dark theme" width="49%">
-</p>
-
-**Shortcuts**
-
-<p>
-  <img src="docs/screenshots/shortcuts-light.png" alt="Shortcut settings in Light theme" width="49%">
-  <img src="docs/screenshots/shortcuts-dark.png" alt="Shortcut settings in Dark theme" width="49%">
-</p>
-
-**General**
-
-<p>
-  <img src="docs/screenshots/general-light.png" alt="General settings in Light theme" width="49%">
-  <img src="docs/screenshots/general-dark.png" alt="General settings in Dark theme" width="49%">
-</p>
-
-**Tray menu** and **Turkish**
+<!-- showcase:gallery:start (generated from docs/showcase/showcase.yml) -->
+<table>
+<tr><td width="50%" valign="top"><img src="docs/screenshots/displays-light.png" alt="Displays page in Light theme" width="100%"><br><sub>Displays · Light</sub></td><td width="50%" valign="top"><img src="docs/screenshots/displays-dark.png" alt="Displays page in Dark theme" width="100%"><br><sub>Displays · Dark</sub></td></tr>
+<tr><td width="50%" valign="top"><img src="docs/screenshots/advanced-light.png" alt="Advanced settings in Light theme" width="100%"><br><sub>Advanced · Light</sub></td><td width="50%" valign="top"><img src="docs/screenshots/advanced-dark.png" alt="Advanced settings in Dark theme" width="100%"><br><sub>Advanced · Dark</sub></td></tr>
+<tr><td width="50%" valign="top"><img src="docs/screenshots/shortcuts-light.png" alt="Shortcut settings in Light theme" width="100%"><br><sub>Shortcuts · Light</sub></td><td width="50%" valign="top"><img src="docs/screenshots/shortcuts-dark.png" alt="Shortcut settings in Dark theme" width="100%"><br><sub>Shortcuts · Dark</sub></td></tr>
+<tr><td width="50%" valign="top"><img src="docs/screenshots/general-light.png" alt="General settings in Light theme" width="100%"><br><sub>General · Light</sub></td><td width="50%" valign="top"><img src="docs/screenshots/general-dark.png" alt="General settings in Dark theme" width="100%"><br><sub>General · Dark</sub></td></tr>
+<tr><td width="50%" valign="top"><img src="docs/screenshots/boundary-editor-dark-tr.png" alt="Turkish edge editor in Dark theme" width="100%"><br><sub>Edge editor in Turkish · Dark</sub></td></tr>
+</table>
+<!-- showcase:gallery:end -->
 
 <p>
   <img src="docs/screenshots/tray-menu-light.png" alt="Tray menu in Light theme: Upward passage, Side protection, Game mode, Pause, Settings, Exit, each with its shortcut" width="240">
   <img src="docs/screenshots/tray-menu-dark.png" alt="Tray menu in Dark theme" width="240">
-</p>
-
-<p>
-  <img src="docs/screenshots/boundary-editor-dark-tr.png" alt="Turkish edge editor in Dark theme" width="80%">
 </p>
 </details>
 
