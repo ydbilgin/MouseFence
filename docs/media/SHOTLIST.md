@@ -1,6 +1,6 @@
 # Shot list: real recordings for the README
 
-The README hero today is `docs/demo.gif`, an **illustration** rendered from `docs/demo/scene.html` and captioned
+The README hero animation today is `docs/demo.gif`, an **illustration** rendered from `docs/demo/scene.html` and captioned
 as such. The Settings pictures in `docs/screenshots/` are real captures from the app's `--screenshot-demo` mode.
 What is still missing is a **real screen recording** of the pointer meeting a fence. The scenes below are the
 ones to record on Windows. Each has a placeholder (`*.placeholder.svg`) in this folder that shows the target
@@ -54,10 +54,11 @@ size and file name.
 
 ## Swapping the recordings into the README
 
-- Scene 1 becomes the hero: in `README.md`, change the hero `<img src="docs/demo.gif" ...>` to
-  `docs/media/firm-push.gif`, update the `alt` text, and replace the caption "Illustration of the behaviour …"
-  with a short one such as "Recorded on Windows 11 at 100% scaling." Keep `docs/demo.gif` and link it from
-  [docs/demo/README-demo.md](../demo/README-demo.md) if you still want the illustration.
+- Scene 1 becomes the hero. The hero is generated: in `docs/showcase/showcase.yml` set `hero.media` to
+  `docs/media/firm-push.gif`, update `hero.alt`, and replace `hero.caption` ("Illustration of the behaviour …")
+  with a short one such as "Recorded on Windows 11 at 100% scaling". Then run
+  `python3 docs/showcase/showcase.py` (see [docs/showcase/UPDATING.md](../showcase/UPDATING.md)). Keep
+  `docs/demo.gif` and link it from [docs/demo/README-demo.md](../demo/README-demo.md) if you still want it.
 - Scene 2 goes under **Everyday use**, after the three setup steps, at `width="720"`; it can replace the
   static edge-editor picture there.
 - Delete the matching `*.placeholder.svg` once its recording is in.

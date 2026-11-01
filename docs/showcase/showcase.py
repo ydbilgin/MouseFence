@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Regenerate the README showcase blocks and the banner / social-preview art from docs/showcase/showcase.yml.
 
+Content lives in showcase.yml; design lives in docs/showcase/templates/ (one <block>.md per README block,
+one or more *.svg art templates). See docs/showcase/UPDATING.md.
+
 Usage (from the repository root):
-    python3 docs/showcase/showcase.py            # rewrite README blocks, SVGs, and PNGs when a renderer is found
+    python3 docs/showcase/showcase.py            # rewrite README blocks and SVGs; render PNGs for changed SVGs
+    python3 docs/showcase/showcase.py --png      # also re-render every PNG
     python3 docs/showcase/showcase.py --no-png   # skip the PNG step
     python3 docs/showcase/showcase.py --check    # exit 1 if README blocks or SVGs are out of date (used by CI)
+    python3 docs/showcase/showcase.py --context  # print the data templates can use
 
 Python 3.8+ standard library only. showcase.yml is read with a small built-in reader that understands a
 strict YAML subset: nested mappings, lists ("- "), plain or quoted scalars, '|' and '>' block scalars and
@@ -172,21 +177,16 @@ def esc(t):
 
 
 def cell(t):
-    return ("" if t is None else str(t)).replace("|", "\\|").replace("\n", " ").strip()
-
-
-def need(d, key, where):
-    if not d.get(key):
-        sys.exit("showcase.yml: '%s' is required in %s" % (key, where))
-    return d[key]
+    return esc(t).replace("|", "\\|").replace("\n", " ").strip()
 
 
 def data_uri(path):
     full = os.path.join(ROOT, path)
     ext = os.path.splitext(path)[1].lower()
-    mime = {".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}.get(ext)
+    mime = {".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".gif": "image/gif", ".webp": "image/webp"}.get(ext)
     if not mime:
-        sys.exit("showcase.yml: icon must be .png, .svg, .jpg or .gif: %s" % path)
+        sys.exit("showcase: cannot embed %s (use png, svg, jpg, gif or webp)" % path)
     with open(full, "rb") as f:
         return "data:%s;base64,%s" % (mime, base64.b64encode(f.read()).decode("ascii"))
 
@@ -195,220 +195,291 @@ def slug(text):
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
 
 
-# --------------------------------------------------------------------------- README blocks
-def block_hero(c):
-    h = c.get("hero") or {}
-    out = []
-    if h.get("banner"):
-        out.append('<p align="center"><img src="%s" alt="%s: %s" width="100%%"></p>' % (esc(c["art"]["banner"]["out"]), esc(c["name"]), esc(c["tagline"])))
+def num(x):
+    return str(int(x)) if float(x).is_integer() else "%.1f" % x
+
+
+WARNINGS = []
+
+
+def warn(msg):
+    if msg not in WARNINGS:
+        WARNINGS.append(msg)
+
+
+# --------------------------------------------------------------------------- mustache-style templates
+# {{name}} (HTML-escaped), {{name|raw}}, {{name|cell}} (for Markdown table cells), {{name|url}},
+# {{{name}}} (raw), {{#name}}...{{/name}} (list loop / truthy block), {{^name}}...{{/name}} (if empty),
+# {{! comment}}, {{.}} (current item), dotted names (hero.media). A section or comment tag that stands
+# alone on its line removes that whole line, so templates can be laid out readably.
+TAG = re.compile(r"\{\{\{\s*(.+?)\s*\}\}\}|\{\{\s*([#^/!&]?)\s*(.*?)\s*\}\}", re.S)
+STANDALONE = re.compile(r"^[ \t]*(\{\{[#^/!][^}]*\}\})[ \t]*\n", re.M)
+
+
+def parse_template(text, where):
+    text = STANDALONE.sub(r"\1", text)
+    root, stack, pos = [], [], 0
+    cur = root
+    for m in TAG.finditer(text):
+        if m.start() > pos:
+            cur.append(("text", text[pos:m.start()]))
+        pos = m.end()
+        if m.group(1) is not None:
+            cur.append(("var", m.group(1) + "|raw"))
+            continue
+        kind, name = m.group(2), m.group(3)
+        if kind == "!":
+            continue
+        if kind in "#^" and kind:
+            node = ("section" if kind == "#" else "inverted", name, [])
+            cur.append(node)
+            stack.append((node, cur))
+            cur = node[2]
+        elif kind == "/":
+            if not stack or stack[-1][0][1] != name:
+                sys.exit("%s: unexpected {{/%s}}" % (where, name))
+            cur = stack.pop()[1]
+        else:
+            cur.append(("var", name + ("|raw" if kind == "&" else "")))
+    if stack:
+        sys.exit("%s: unclosed {{#%s}}" % (where, stack[-1][0][1]))
+    if pos < len(text):
+        cur.append(("text", text[pos:]))
+    return root
+
+
+def lookup(name, ctx):
+    if name == ".":
+        return ctx[-1]
+    first, *rest = name.split(".")
+    for frame in reversed(ctx):
+        if isinstance(frame, dict) and first in frame:
+            val = frame[first]
+            break
     else:
-        if c.get("icon"):
-            out.append('<p align="center"><img src="%s" alt="%s icon" width="%s"></p>' % (esc(c["icon"]), esc(c["name"]), esc(h.get("icon_width", 96))))
-        out.append('<h1 align="center">%s</h1>' % esc(c["name"]))
-    lead = "<strong>%s</strong>" % esc(c["tagline"])
-    if c.get("description"):
-        lead += "<br>\n  " + esc(c["description"])
-    out.append('<p align="center">\n  %s\n</p>' % lead)
-    badges = c.get("badges") or []
-    if badges:
-        parts = []
-        for b in badges:
-            img = '<img alt="%s" src="%s">' % (esc(need(b, "alt", "badges")), esc(need(b, "image", "badges")))
-            parts.append('<a href="%s">%s</a>' % (esc(b["link"]), img) if b.get("link") else img)
-        out.append('<p align="center">\n  %s\n</p>' % "\n  ".join(parts))
-    if h.get("media"):
-        out.append('<p align="center"><img src="%s" alt="%s" width="%s"></p>' % (esc(h["media"]), esc(h.get("alt", "")), esc(h.get("width", 800))))
-        if h.get("caption"):
-            out.append('<p align="center"><sub>%s</sub></p>' % esc(h["caption"]))
-    nav = h.get("nav") or []
-    if nav:
-        out.append('<p align="center">\n  %s\n</p>' % " ·\n  ".join('<a href="%s"><b>%s</b></a>' % (esc(n["link"]), esc(n["label"])) for n in nav))
-    return "\n".join(out)
+        return None
+    for part in rest:
+        val = val.get(part) if isinstance(val, dict) else None
+    return val
 
 
-def block_features(c):
-    feats = c.get("features") or []
-    if not feats:
-        return ""
-    head = c.get("features_header") or ["Feature", "What it does"]
-    rows = ["| %s | %s |" % (cell(head[0]), cell(head[1])), "| --- | --- |"]
-    for f in feats:
-        text = cell(need(f, "text", "features"))
-        if f.get("media"):
-            text += " ([see it](%s))" % f["media"]
-        rows.append("| **%s** | %s |" % (cell(need(f, "name", "features")), text))
-    return "\n".join(rows)
-
-
-def block_comparison(c):
-    cmp_ = c.get("comparison")
-    if not cmp_:
-        return ""
-    rows = ["| | %s | %s |" % (cell(need(cmp_, "builtin", "comparison")), cell(c["name"])), "| --- | --- | --- |"]
-    for r in need(cmp_, "rows", "comparison"):
-        rows.append("| **%s** | %s | %s |" % (cell(r.get("topic")), cell(r.get("builtin")), cell(r.get("tool"))))
-    out = []
-    if cmp_.get("intro"):
-        out.append(cmp_["intro"].strip() + "\n")
-    out.append("\n".join(rows))
-    if cmp_.get("outro"):
-        out.append("\n" + cmp_["outro"].strip())
-    return "\n".join(out)
-
-
-def block_gallery(c):
-    media = c.get("gallery") or []
-    if not media:
-        return ""
-    cols = int((c.get("gallery_columns") or 2))
-    cells = []
-    for m in media:
-        cap = esc(m.get("caption", ""))
-        cells.append('<td width="%d%%" valign="top"><img src="%s" alt="%s" width="100%%"><br><sub>%s</sub></td>' % (100 // cols, esc(need(m, "file", "gallery")), esc(m.get("alt", m.get("caption", ""))), cap))
-    rows = ["<tr>%s</tr>" % "".join(cells[i:i + cols]) for i in range(0, len(cells), cols)]
-    return "<table>\n%s\n</table>" % "\n".join(rows)
-
-
-def block_cards(c):
-    cards = c.get("cards") or []
-    if not cards:
-        return ""
-    cols = int(c.get("card_columns") or 2)
-    cells = []
-    for card in cards:
-        s = slug(card["name"])
-        light, dark = card_paths(c, s)
-        pic = ('<picture>\n<source media="(prefers-color-scheme: dark)" srcset="%s">\n<img alt="%s: %s" src="%s" width="100%%">\n</picture>'
-               % (esc(dark), esc(card["name"]), esc(card["tagline"]), esc(light)))
-        if card.get("link"):
-            pic = '<a href="%s">\n%s\n</a>' % (esc(card["link"]), pic)
-        cells.append('<td width="%d%%" valign="top">\n%s\n</td>' % (100 // cols, pic))
-    rows = ["<tr>\n%s\n</tr>" % "\n".join(cells[i:i + cols]) for i in range(0, len(cells), cols)]
-    return "<table>\n%s\n</table>" % "\n".join(rows)
-
-
-BLOCKS = {"hero": block_hero, "features": block_features, "comparison": block_comparison, "gallery": block_gallery, "cards": block_cards}
-MARKER = re.compile(r"(<!-- showcase:(\w+):start[^>]*-->\n)(.*?)(<!-- showcase:\2:end -->)", re.S)
-
-
-def render_readme(text, c, path):
-    seen = set()
-
-    def repl(m):
-        name = m.group(2)
-        if name not in BLOCKS:
-            sys.exit("%s: unknown showcase block '%s'" % (path, name))
-        seen.add(name)
-        body = BLOCKS[name](c)
-        return m.group(1) + (body + "\n" if body else "") + m.group(4)
-
-    return MARKER.sub(repl, text), seen
-
-
-# --------------------------------------------------------------------------- art (banner, social preview, cards)
-DEFAULT_SOCIAL = """<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{{bg1}}"/><stop offset="1" stop-color="{{bg2}}"/></linearGradient>
-<radialGradient id="glow" cx="0.85" cy="0.1" r="0.7"><stop offset="0" stop-color="{{accent}}" stop-opacity="0.28"/><stop offset="1" stop-color="{{accent}}" stop-opacity="0"/></radialGradient></defs>
-<rect width="1280" height="640" fill="url(#bg)"/><rect width="1280" height="640" fill="url(#glow)"/>
-<rect width="1280" height="8" fill="{{accent}}"/>
-<g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
-<rect x="96" y="176" width="176" height="176" rx="40" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.10"/>
-<image href="{{icon}}" x="112" y="192" width="144" height="144"/>
-<text x="320" y="262" font-size="84" font-weight="700" fill="#F0F6FC">{{name}}</text>
-<text x="320" y="330" font-size="40" fill="#C9D1D9">{{tagline_1}}</text>
-<text x="320" y="384" font-size="40" fill="#C9D1D9">{{tagline_2}}</text>
-<text x="320" y="438" font-size="40" fill="#C9D1D9">{{tagline_3}}</text>
-<text x="96" y="560" font-size="26" fill="#8B949E">{{subtitle}}</text>
-<text x="1184" y="560" font-size="26" fill="{{accent}}" text-anchor="end" font-weight="600">github.com/{{repo}}</text>
-</g></svg>
-"""
-
-DEFAULT_BANNER = """<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320">
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{{bg1}}"/><stop offset="1" stop-color="{{bg2}}"/></linearGradient></defs>
-<rect width="1280" height="320" rx="24" fill="url(#bg)"/>
-<rect x="0" y="312" width="1280" height="8" fill="{{accent}}"/>
-<g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
-<image href="{{icon}}" x="80" y="88" width="144" height="144"/>
-<text x="264" y="168" font-size="72" font-weight="700" fill="#F0F6FC">{{name}}</text>
-<text x="264" y="224" font-size="32" fill="#C9D1D9">{{tagline}}</text>
-</g></svg>
-"""
-
-CARD = """<svg xmlns="http://www.w3.org/2000/svg" width="420" height="132" viewBox="0 0 420 132">
-<rect x="0.5" y="0.5" width="419" height="131" rx="10" fill="{{bg}}" stroke="{{border}}"/>
-<rect x="0.5" y="0.5" width="5" height="131" rx="2" fill="{{accent}}"/>
-<image href="{{icon}}" x="22" y="22" width="56" height="56"/>
-<g font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-<text x="96" y="40" font-size="18" font-weight="600" fill="{{title}}">{{name}}</text>
-<text x="96" y="66" font-size="14" fill="{{text}}">{{tagline_1}}</text>
-<text x="96" y="88" font-size="14" fill="{{text}}">{{tagline_2}}</text>
-<circle cx="102" cy="111" r="6" fill="{{language_color}}"/>
-<text x="114" y="116" font-size="13" fill="{{muted}}">{{language}}</text>
-<text x="400" y="116" font-size="13" fill="{{muted}}" text-anchor="end">{{note}}</text>
-</g></svg>
-"""
-
-CARD_THEMES = {
-    "light": {"bg": "#ffffff", "border": "#d0d7de", "title": "#0969da", "text": "#1f2328", "muted": "#59636e"},
-    "dark": {"bg": "#0d1117", "border": "#3d444d", "title": "#4493f8", "text": "#e6edf3", "muted": "#9198a1"},
+FILTERS = {
+    "html": esc,
+    "raw": lambda v: "" if v is None else str(v),
+    "cell": cell,
+    "url": lambda v: esc(str(v or "").replace(" ", "%20")),
 }
 
 
-def fill(template, values):
-    def repl(m):
-        key = m.group(1)
-        if key not in values:
-            sys.exit("template uses unknown placeholder {{%s}}" % key)
-        v = values[key]
-        return v if key in ("icon",) else esc(v)
-    return re.sub(r"\{\{(\w+)\}\}", repl, template)
+def render_nodes(nodes, ctx):
+    out = []
+    for node in nodes:
+        if node[0] == "text":
+            out.append(node[1])
+        elif node[0] == "var":
+            name, _, flt = node[1].partition("|")
+            val = lookup(name.strip(), ctx)
+            if isinstance(val, bool):
+                val = "true" if val else ""
+            out.append(FILTERS[(flt or "html").strip()](val))
+        else:
+            val = lookup(node[1], ctx)
+            empty = val in (None, False, "", [], {})
+            if node[0] == "inverted":
+                if empty:
+                    out.append(render_nodes(node[2], ctx))
+            elif not empty:
+                items = val if isinstance(val, list) else [val]
+                for item in items:
+                    out.append(render_nodes(node[2], ctx + [item]))
+    return "".join(out)
 
 
-def art_values(c, a, wrap):
-    lines = textwrap.wrap(c["tagline"], wrap) + ["", "", ""]
-    return {
-        "name": c["name"], "tagline": c["tagline"], "repo": c.get("repo", ""),
-        "tagline_1": lines[0], "tagline_2": lines[1], "tagline_3": lines[2],
-        "subtitle": a.get("subtitle", ""), "accent": c["accent"],
-        "bg1": a.get("bg1", "#0D1117"), "bg2": a.get("bg2", "#161B22"),
-        "icon": data_uri(c["icon"]) if c.get("icon") else "",
-    }
+def render(text, ctx, where="template"):
+    return render_nodes(parse_template(text, where), ctx if isinstance(ctx, list) else [ctx])
 
 
-def load_template(a, default):
-    if a.get("template"):
-        with open(os.path.join(ROOT, a["template"]), encoding="utf-8") as f:
-            return f.read()
-    return default
+# --------------------------------------------------------------------------- template directives
+# A template may start with directive lines, ended by a line "---":
+#   @wrap PATH chars=N lines=N line_height=N (top=Y | center=Y | bottom=Y)
+#       PATH is "field" or "list.field". Adds FIELD_lines (each {text, y, first, last}), FIELD_line_count and
+#       FIELD_truncated. Text longer than the allowed lines is cut at a word with an ellipsis (and warned about).
+#   @grid LIST columns=3,2 [fill=false]
+#       Adds LIST_rows (each {cells}), LIST_columns and LIST_cell_width. Picks the column count that leaves the
+#       fewest empty cells (ties: the first listed) and pads the last row with {filler: true} cells.
+#   @out PATH            (SVG templates) where to write; may use {{slug}} / {{variant}}
+#   @png PATH WxH        (SVG templates) also render a PNG of that size
+#   @each LIST           (SVG templates) render once per item of LIST (the item's fields are in scope)
+#   @variant NAME k=v .. (SVG templates) render once per variant with those values (e.g. light / dark cards)
+def split_directives(text, where):
+    if not text.startswith("@"):
+        return [], text
+    head, sep, body = text.partition("\n---\n")
+    if not sep:
+        sys.exit("%s: directive lines must end with a line '---'" % where)
+    out = []
+    for line in head.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        args, opts = [], {}
+        for p in parts[1:]:
+            if "=" in p and not p.startswith("{{"):
+                k, v = p.split("=", 1)
+                opts[k] = v
+            else:
+                args.append(p)
+        out.append((parts[0][1:], args, opts))
+    return out, body
 
 
-def card_paths(c, s):
-    folder = c.get("card_dir", "assets/cards")
-    return "%s/%s-light.svg" % (folder, s), "%s/%s-dark.svg" % (folder, s)
+def wrap_lines(text, chars, lines):
+    words = textwrap.wrap(str(text or ""), chars)
+    if len(words) <= lines:
+        return words, False
+    kept = words[:lines]
+    last = " ".join(words[lines - 1:])
+    cut = textwrap.wrap(last, chars - 1)[0]
+    kept[-1] = cut.rstrip(" ,.;:-") + "…"
+    return kept, True
+
+
+def apply_wrap(ctx, path, opts, where):
+    chars, lines = int(opts.get("chars", 40)), int(opts.get("lines", 2))
+    lh = float(opts.get("line_height", 20))
+    if "." in path:
+        lst, field = path.split(".", 1)
+        targets = [t for t in (ctx.get(lst) or []) if isinstance(t, dict)]
+    else:
+        field, targets = path, [ctx]
+    for t in targets:
+        got, cut = wrap_lines(t.get(field), chars, lines)
+        if cut:
+            warn("%s: '%s' was shortened to fit %d lines: %r" % (where, field, lines, t.get(field)))
+        n = len(got)
+        if "center" in opts:
+            y0 = float(opts["center"]) - (n - 1) * lh / 2
+        elif "bottom" in opts:
+            y0 = float(opts["bottom"]) - (n - 1) * lh
+        else:
+            y0 = float(opts.get("top", 0))
+        t[field + "_lines"] = [{"text": s, "y": num(y0 + i * lh), "first": i == 0, "last": i == n - 1} for i, s in enumerate(got)]
+        t[field + "_line_count"] = str(n)
+        t[field + "_truncated"] = cut
+
+
+def apply_grid(ctx, name, opts):
+    items = [i for i in (ctx.get(name) or [])]
+    choices = [int(c) for c in opts.get("columns", "3,2").split(",")]
+    n = len(items)
+    cols = min(choices, key=lambda c: ((-n) % c, choices.index(c))) if n else choices[0]
+    cols = min(cols, max(n, 1))
+    rows = []
+    for i in range(0, n, cols):
+        cells = list(items[i:i + cols])
+        if opts.get("fill", "true") != "false":
+            cells += [{"filler": True}] * (cols - len(cells))
+        rows.append({"cells": cells})
+    ctx[name + "_rows"] = rows
+    ctx[name + "_columns"] = str(cols)
+    ctx[name + "_cell_width"] = str(100 // cols)
+
+
+# --------------------------------------------------------------------------- context
+def enrich(node):
+    """Add slug, index, first/last and *_data (embedded images) to every mapping, recursively."""
+    if isinstance(node, dict):
+        for k in list(node.keys()):
+            v = node[k]
+            if (k == "icon" or k.endswith("_icon")) and isinstance(v, str) and v:
+                node[k + "_data"] = data_uri(v)
+            enrich(v)
+        if "slug" not in node:
+            key = node.get("name") or node.get("file") or node.get("label")
+            if key:
+                node["slug"] = slug(os.path.splitext(os.path.basename(str(key)))[0] if node.get("file") and not node.get("name") else key)
+    elif isinstance(node, list):
+        for i, item in enumerate(node):
+            if isinstance(item, dict):
+                item.setdefault("index", str(i + 1))
+                item["first"], item["last"] = i == 0, i == len(node) - 1
+            enrich(item)
+
+
+def load_config():
+    with open(CONFIG, encoding="utf-8") as f:
+        c = load_yaml(f.read())
+    for key in ("name", "tagline"):
+        if not c.get(key):
+            sys.exit("showcase.yml: '%s' is required" % key)
+    enrich(c)
+    return c
+
+
+def prepared(c, directives, where):
+    import copy
+    ctx = copy.deepcopy(c)
+    for name, args, opts in directives:
+        if name == "wrap":
+            apply_wrap(ctx, args[0], opts, where)
+        elif name == "grid":
+            apply_grid(ctx, args[0], opts)
+    return ctx
+
+
+# --------------------------------------------------------------------------- README blocks and art
+TEMPLATES = os.path.join(HERE, "templates")
+MARKER = re.compile(r"(<!-- showcase:([\w-]+):start[^>]*-->\n)(.*?)(<!-- showcase:\2:end -->)", re.S)
+
+
+def render_block(name, c):
+    path = os.path.join(TEMPLATES, name + ".md")
+    if not os.path.exists(path):
+        sys.exit("README uses block '%s' but docs/showcase/templates/%s.md does not exist" % (name, name))
+    with open(path, encoding="utf-8") as f:
+        directives, body = split_directives(f.read(), "templates/%s.md" % name)
+    ctx = prepared(c, directives, "templates/%s.md" % name)
+    text = render(body, ctx, "templates/%s.md" % name)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip("\n")
+    return text + "\n" if text else ""
+
+
+def render_readme(text, c):
+    return MARKER.sub(lambda m: m.group(1) + render_block(m.group(2), c) + m.group(4), text)
 
 
 def art_outputs(c):
-    """Return {relative_path: svg_text} plus a list of (svg, png, w, h) to rasterise."""
     files, pngs = {}, []
-    art = c.get("art") or {}
-    for kind, default, size in (("social", DEFAULT_SOCIAL, (1280, 640)), ("banner", DEFAULT_BANNER, (1280, 320))):
-        a = art.get(kind)
-        if not a:
+    if not os.path.isdir(TEMPLATES):
+        return files, pngs
+    for fn in sorted(os.listdir(TEMPLATES)):
+        if not fn.endswith(".svg"):
             continue
-        svg = fill(load_template(a, default), art_values(c, a, int(a.get("wrap", 34))))
-        files[need(a, "out", "art." + kind)] = svg
-        if a.get("png"):
-            pngs.append((a["out"], a["png"], size[0], size[1]))
-    for card in c.get("cards") or []:
-        s = slug(card["name"])
-        lines = textwrap.wrap(need(card, "tagline", "cards"), 44) + ["", ""]
-        for theme, path in zip(("light", "dark"), card_paths(c, s)):
-            v = dict(CARD_THEMES[theme])
-            v.update({"name": card["name"], "tagline_1": lines[0], "tagline_2": lines[1],
-                      "language": card.get("language", ""), "language_color": card.get("language_color", "#8b949e"),
-                      "note": card.get("note", ""), "accent": card.get("accent", "#8b949e"),
-                      "icon": data_uri(need(card, "icon", "cards"))})
-            files[path] = fill(CARD, v)
+        where = "templates/" + fn
+        with open(os.path.join(TEMPLATES, fn), encoding="utf-8") as f:
+            directives, body = split_directives(f.read(), where)
+        out = [a for d, a, _ in directives if d == "out"]
+        if not out:
+            sys.exit("%s: needs an '@out PATH' line" % where)
+        png = [a for d, a, _ in directives if d == "png"]
+        each = [a[0] for d, a, _ in directives if d == "each"]
+        variants = [(a[0], o) for d, a, o in directives if d == "variant"] or [("", {})]
+        base = prepared(c, directives, where)
+        items = base.get(each[0]) or [] if each else [{}]
+        tree = parse_template(body, where)
+        for item in items:
+            for vname, vals in variants:
+                frame = dict(vals, variant=vname)
+                ctx = [base, item, frame]
+                path = render(out[0][0], ctx, where)
+                svg = render_nodes(tree, ctx)
+                if path in files:
+                    sys.exit("%s: two renders write %s (add {{slug}} or {{variant}} to @out)" % (where, path))
+                files[path] = svg
+                if png:
+                    w, h = (int(x) for x in png[0][1].lower().split("x"))
+                    pngs.append((path, render(png[0][0], ctx, where), w, h))
     return files, pngs
 
 
@@ -453,8 +524,17 @@ def rasterise(svg_rel, png_rel, w, h):
     svg, png = os.path.join(ROOT, svg_rel), os.path.join(ROOT, png_rel)
     if shutil.which("rsvg-convert") and _try(["rsvg-convert", "-w", str(w), "-h", str(h), "-o", png, svg]):
         return "rsvg-convert"
-    if shutil.which("node") and _try(["node", "-e", PLAYWRIGHT_JS, svg, png, str(w), str(h)]):
-        return "node + playwright"
+    if shutil.which("node"):
+        env = dict(os.environ)
+        npm = shutil.which("npm")
+        if npm:
+            try:
+                root = subprocess.run([npm, "root", "-g"], capture_output=True, text=True, timeout=30).stdout.strip()
+                env["NODE_PATH"] = os.pathsep.join(p for p in (env.get("NODE_PATH"), root) if p)
+            except (subprocess.SubprocessError, OSError):
+                pass
+        if _try(["node", "-e", PLAYWRIGHT_JS, svg, png, str(w), str(h)], env=env):
+            return "node + playwright"
     browser = find_browser()
     if browser:
         with tempfile.TemporaryDirectory() as tmp:
@@ -474,16 +554,21 @@ def rasterise(svg_rel, png_rel, w, h):
 # --------------------------------------------------------------------------- main
 def main(argv):
     check = "--check" in argv
-    with open(CONFIG, encoding="utf-8") as f:
-        c = load_yaml(f.read())
-    for key in ("name", "tagline", "accent"):
-        need(c, key, "showcase.yml")
+    c = load_config()
+    if "--context" in argv:
+        import json
+        def strip(v):
+            if isinstance(v, dict):
+                return {k: strip(x) for k, x in v.items() if not k.endswith("_data")}
+            return [strip(x) for x in v] if isinstance(v, list) else v
+        print(json.dumps(strip(c), indent=2, ensure_ascii=False))
+        return 0
     stale = []
     for readme in c.get("readmes") or ["README.md"]:
         path = os.path.join(ROOT, readme)
         with open(path, encoding="utf-8") as f:
             old = f.read()
-        new, _ = render_readme(old, c, readme)
+        new = render_readme(old, c)
         if new != old:
             stale.append(readme)
             if not check:
@@ -496,9 +581,11 @@ def main(argv):
         if old != text:
             stale.append(rel)
             if not check:
-                os.makedirs(os.path.dirname(path), exist_ok=True)
+                os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
                 with open(path, "w", encoding="utf-8", newline="\n") as f:
                     f.write(text)
+    for w in WARNINGS:
+        print("warning: " + w)
     if check:
         if stale:
             print("Out of date with docs/showcase/showcase.yml: " + ", ".join(stale))
@@ -510,6 +597,8 @@ def main(argv):
         print("updated " + rel)
     if "--no-png" not in argv:
         for svg_rel, png_rel, w, h in pngs:
+            if svg_rel not in stale and os.path.exists(os.path.join(ROOT, png_rel)) and "--png" not in argv:
+                continue
             tool = rasterise(svg_rel, png_rel, w, h)
             print(("rendered %s with %s" % (png_rel, tool)) if tool else
                   "skipped %s: no renderer found (install rsvg-convert, or Chrome/Edge, or set SHOWCASE_BROWSER)" % png_rel)

@@ -1,10 +1,12 @@
-# Single source of truth for the README hero, feature table, screenshot gallery and social preview.
-# Edit this file, then run: python3 docs/showcase/showcase.py   (see docs/showcase/UPDATING.md)
+# Content for the README hero, edge and feature grids, screenshot gallery, banner and social preview.
+# The design lives in docs/showcase/templates/. Edit this file, then run: python3 docs/showcase/showcase.py
+# (see docs/showcase/UPDATING.md)
 name: MouseFence
 repo: ydbilgin/MouseFence
+kicker: Fences for multi-monitor Windows
 tagline: Keep the mouse pointer on the screen you meant to use.
-description: A small Windows tray app that puts gentle fences on the edges between your monitors.
-accent: "#E44A4A"   # the red of docs/icon.png
+description: A small Windows tray app that puts gentle fences on the edges between your monitors. It never changes your display layout.
+subtitle: Windows 10/11 tray app · .NET 9 · MIT
 icon: docs/icon.png
 readmes:
   - README.md
@@ -20,81 +22,66 @@ badges:
     link: LICENSE
 
 hero:
-  banner: false
-  icon_width: 112
   media: docs/demo.gif
   alt: "Illustration: the pointer stops at the edge of the screen above, crosses with one firm push, and never enters a screen marked Keep pointer off"
-  width: 800
   caption: Illustration of the behaviour, drawn from the app's own screenshots — not a screen recording.
-  nav:
-    - label: Download
-      link: https://github.com/ydbilgin/MouseFence/releases/latest
-    - label: What it does
-      link: "#what-it-does"
-    - label: Install
-      link: "#install"
-    - label: Use
-      link: "#everyday-use"
-    - label: Build
-      link: "#build-from-source"
-    - label: FAQ
-      link: "#questions"
-    - label: Türkçe
-      link: "#türkçe"
 
-features_header:
-  - Setting
-  - What it does
-features:
+nav:
+  - label: Download
+    link: https://github.com/ydbilgin/MouseFence/releases/latest
+  - label: What it does
+    link: "#what-it-does"
+  - label: Install
+    link: "#install"
+  - label: Use
+    link: "#everyday-use"
+  - label: Build
+    link: "#build-from-source"
+  - label: FAQ
+    link: "#questions"
+  - label: Türkçe
+    link: "#türkçe"
+
+# The three choices for every edge between two screens (glyphs in docs/media/edges/).
+edges:
   - name: Crosses freely
-    text: The edge behaves like a normal Windows monitor edge.
+    text: A normal Windows monitor edge.
+    glyph: docs/media/edges/crosses-freely.svg
   - name: Needs a firm push
-    text: Slow drift stops at the edge; one quick, deliberate move crosses. The speed is set in Advanced (default 3000 px/s).
+    text: Slow drift stops at the edge; one quick, deliberate move crosses.
+    glyph: docs/media/edges/needs-a-firm-push.svg
   - name: Never crosses
-    text: The pointer stays on its side of the edge.
+    text: The pointer stays on its side.
+    glyph: docs/media/edges/never-crosses.svg
+
+features:
   - name: Keep pointer off
-    text: The pointer never enters that screen, and Windows keeps using it as normal.
+    text: Mark a screen the pointer must never enter; Windows keeps using it as normal.
   - name: Game mode
     text: Holds the pointer on whichever screen it is on, for windowed and borderless games.
-  - name: Switches and Pause
+  - name: Quick switches
     text: Upward passage, side protection and Pause, each with a global shortcut and a tray menu entry.
+  - name: Crossing speed
+    text: Tune how firm a firm push is, in pixels per second (default 3000).
   - name: Safety escapes
     text: After a layout change MouseFence keeps a way out of every screen, so the pointer is never sealed in.
-  - name: Theme and language
-    text: Light, Dark or system theme, English and Turkish, settings backup and restore.
+  - name: Small and local
+    text: Tray app, no installer, no network code; Light or Dark, English or Turkish, settings backup.
 
-gallery_columns: 2
 gallery:
   - file: docs/screenshots/displays-light.png
-    caption: Displays · Light
-    alt: Displays page in Light theme
-  - file: docs/screenshots/displays-dark.png
-    caption: Displays · Dark
-    alt: Displays page in Dark theme
+    dark: docs/screenshots/displays-dark.png
+    caption: Displays — your screens as Windows arranges them
+    alt: Settings, Displays page
   - file: docs/screenshots/advanced-light.png
-    caption: Advanced · Light
-    alt: Advanced settings in Light theme
-  - file: docs/screenshots/advanced-dark.png
-    caption: Advanced · Dark
-    alt: Advanced settings in Dark theme
+    dark: docs/screenshots/advanced-dark.png
+    caption: Advanced — defaults, crossing speed, safety
+    alt: Settings, Advanced page
   - file: docs/screenshots/shortcuts-light.png
-    caption: Shortcuts · Light
-    alt: Shortcut settings in Light theme
-  - file: docs/screenshots/shortcuts-dark.png
-    caption: Shortcuts · Dark
-    alt: Shortcut settings in Dark theme
+    dark: docs/screenshots/shortcuts-dark.png
+    caption: Shortcuts — one global key for each switch
+    alt: Settings, Shortcuts page
   - file: docs/screenshots/general-light.png
-    caption: General · Light
-    alt: General settings in Light theme
-  - file: docs/screenshots/general-dark.png
-    caption: General · Dark
-    alt: General settings in Dark theme
-  - file: docs/screenshots/boundary-editor-dark-tr.png
-    caption: Edge editor in Turkish · Dark
-    alt: Turkish edge editor in Dark theme
-
-art:
-  social:
-    out: docs/media/social-preview.svg
-    png: docs/media/social-preview.png
-    subtitle: Windows 10/11 tray app · .NET 9 · MIT
+    dark: docs/screenshots/general-dark.png
+    caption: General — theme, language, start-up, backup
+    alt: Settings, General page
