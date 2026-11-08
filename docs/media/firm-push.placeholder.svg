@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" rx="16" fill="#161B22"/>
+<rect x="12" y="12" width="1256" height="696" rx="12" fill="none" stroke="#E44A4A" stroke-opacity="0.55" stroke-width="3" stroke-dasharray="14 10"/>
+<g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" text-anchor="middle">
+<circle cx="640.0" cy="290.0" r="34" fill="#E44A4A" fill-opacity="0.18"/><path d="M630.0 272.0 L656.0 290.0 L630.0 308.0 Z" fill="#E44A4A"/>
+<text x="640.0" y="370.0" font-size="32" font-weight="600" fill="#F0F6FC">Real recording: a firm push crosses, a slow drift stops</text>
+<text x="640.0" y="410.0" font-size="20" fill="#8B949E">Recording coming soon · will be replaced by docs/media/firm-push.gif</text>
+</g></svg>

@@ -73,7 +73,6 @@ so Windows SmartScreen may ask you to confirm the download. Compare its SHA256 w
 
 ```powershell
 Get-FileHash -Algorithm SHA256 .\MouseFence-win-x64.exe
-gh attestation verify MouseFence-win-x64.exe -R (gh repo view --json nameWithOwner --jq .nameWithOwner)
 ```
 
 **Upgrading from 1.x:** exit the running instance once, replace the executable once, then start 2.0.
