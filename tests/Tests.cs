@@ -1,11 +1,11 @@
 using MouseFence;
 using System.Text.Json;
 
-// Deterministic tests for the barrier decision logic, using the user's real monitor geometry:
-//   DISPLAY3 left  X -1920..0    Y 14..1094
+// Deterministic tests for the barrier decision logic, using a synthetic monitor layout:
+//   DISPLAY3 left  X -1600..0    Y 14..914
 //   DISPLAY1 MAIN  X 0..2560     Y 0..1440   (primary; barrier line = Y 0)
-//   DISPLAY2 right X 2560..4480  Y 0..1080
-//   DISPLAY4 TOP   X -440..3000  Y -1440..0  (above; void above DISPLAY2 right part: X 3000..4480, Y<0)
+//   DISPLAY2 right X 2560..4160  Y 0..900
+//   DISPLAY4 TOP   X -360..3000  Y -1440..0  (above; void above DISPLAY2 right part: X 3000..4160, Y<0)
 // Gate = MAIN inset by 24 -> [24, 2536).
 
 int fails = 0;
@@ -104,7 +104,7 @@ GuardCore NewSides()
     var c = new GuardCore { HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) },
         HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
         Monitors = new List<(int L, int T, int R, int B)>
-            { (0, 0, 2560, 1440), (-1920, 0, 0, 1080), (2560, 0, 4480, 1080), (-440, -1440, 3000, 0) } };
+            { (0, 0, 2560, 1440), (-1600, 0, 0, 900), (2560, 0, 4160, 900), (-360, -1440, 3000, 0) } };
     c.Reset();
     return c;
 }
@@ -782,14 +782,14 @@ foreach (string language in new[] { "en", "tr" })
         && accessible.GetChild(monitors.Count).Name.Contains(Strings.Ui("DrawerTitle"), StringComparison.Ordinal));
 }
 
-// Owner's exact July 2026 layout with the 800x600 dummy DISCONNECTED. The right monitor starts at Y=58,
-// while the ultrawide above ends at X=2952. Thus X>2952,Y<58 is a real desktop void. These are intentionally
+// Sample layout with the 800x600 dummy DISCONNECTED. The right monitor starts at Y=47,
+// while the ultrawide above ends at X=2952. Thus X>2952,Y<47 is a real desktop void. These are intentionally
 // monitor-aware assertions: every returned cursor point (Pass target or Block clamp) must lie on a usable monitor.
 {
     var monitors = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
-        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+        (-1600, 63, 0, 963), (-396, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 47, 4160, 947),
     };
     var c = new GuardCore
     {
@@ -797,35 +797,35 @@ foreach (string language in new[] { "en", "tr" })
         HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
         Monitors = monitors,
     };
-    SetLast(c, 4478, 59);                              // on Samsung, one pixel below its top-right corner
-    var r = Move(c, 4485, -10, true, true);            // up/right beyond it; old up-clamp was (4485,0), a void
+    SetLast(c, 4158, 48);                              // on the right monitor, one pixel below its top-right corner
+    var r = Move(c, 4165, -10, true, true);            // up/right beyond it; old up-clamp was (4165,0), a void
     Check("void invariant: reporter right-corner up-block lands on a usable monitor",
         IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})");
 }
 {
     var monitors = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
-        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+        (-1600, 63, 0, 963), (-396, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 47, 4160, 947),
     };
     var c = new GuardCore { HasTop = true, BarrierY = 0, Monitors = monitors };
-    SetLast(c, 4478, 59);
-    var r = Move(c, 4479, 50, true);                   // shallow OS/easing target above Samsung, below global barrier
+    SetLast(c, 4158, 48);
+    var r = Move(c, 4159, 50, true);                   // shallow OS/easing target above the right monitor, below global barrier
     Check("void invariant: reporter shallow right-corner Pass target is contained on-screen",
         IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})");
 }
 
-// Exact reporter seam-void repro: free-roam across the top overhang, descend through X[2560,2952),Y[0,58),
+// Seam-void repro: free-roam across the top overhang, descend through X[2560,2952),Y[0,47),
 // then try upward twice at the same outside-gate X. Descent must choose Samsung below, not bounce to TOP.Y=-1.
 // The repeated up attempts are legitimately gated at X=2700; moving back into the gate must still allow re-entry,
 // proving the cursor is not stranded above the barrier with stale OnTop=false.
 {
-    (int L, int T, int R, int B) top = (-488, -1440, 2952, 0);
+    (int L, int T, int R, int B) top = (-396, -1440, 2952, 0);
     (int L, int T, int R, int B) main = (0, 0, 2560, 1440);
-    (int L, int T, int R, int B) samsung = (2560, 58, 4480, 1138);
+    (int L, int T, int R, int B) rightMon = (2560, 47, 4160, 947);
     var monitors = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), top, main, samsung,
+        (-1600, 63, 0, 963), top, main, rightMon,
     };
     var c = new GuardCore
     {
@@ -838,16 +838,16 @@ foreach (string language in new[] { "en", "tr" })
     var descend = Move(c, 2700, 30, true);
     var upAgain = Move(c, 2700, -100, true);
     var upAgain2 = Move(c, 2700, -200, true);
-    var returnToGate = Move(c, 2500, 58, true);
+    var returnToGate = Move(c, 2500, 47, true);
     var crossUpAgain = Move(c, 2500, -100, true);
 
-    Check("seam-void descent: nearest legal landing is down on Samsung, never TOP.Y=-1",
-        descend.act == GuardAction.Block && descend.bx == 2700 && descend.by == samsung.T && !descend.onTop
-        && InRect(samsung, descend.bx, descend.by),
+    Check("seam-void descent: nearest legal landing is down on the right monitor, never TOP.Y=-1",
+        descend.act == GuardAction.Block && descend.bx == 2700 && descend.by == rightMon.T && !descend.onTop
+        && InRect(rightMon, descend.bx, descend.by),
         $"act={descend.act} point=({descend.bx},{descend.by}) onTop={descend.onTop}");
     Check("seam-void descent: repeated outside-gate up attempts do not recreate the stale TOP.Y=-1 fixpoint",
-        upAgain.act == GuardAction.Block && upAgain.bx == 2700 && upAgain.by == samsung.T && !upAgain.onTop
-        && upAgain2.act == GuardAction.Block && upAgain2.bx == 2700 && upAgain2.by == samsung.T && !upAgain2.onTop,
+        upAgain.act == GuardAction.Block && upAgain.bx == 2700 && upAgain.by == rightMon.T && !upAgain.onTop
+        && upAgain2.act == GuardAction.Block && upAgain2.bx == 2700 && upAgain2.by == rightMon.T && !upAgain2.onTop,
         $"up1={upAgain.act}/({upAgain.bx},{upAgain.by})/{upAgain.onTop} "
         + $"up2={upAgain2.act}/({upAgain2.bx},{upAgain2.by})/{upAgain2.onTop}");
     Check("seam-void descent: cursor can return to the gate and regain consistent top free-roam",
@@ -867,14 +867,14 @@ foreach (string language in new[] { "en", "tr" })
 {
     var monitors = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
-        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+        (-1600, 63, 0, 963), (-396, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 47, 4160, 947),
     };
     var c = new GuardCore { HasTop = true, BarrierY = 0, Monitors = monitors };
     SetLast(c, -1919, 500);
-    var r = Move(c, -1920, 500, true);
+    var r = Move(c, -1600, 500, true);
     Check("void invariant: reporter left-screen outer edge remains an unchanged legal Pass",
-        r.act == GuardAction.Pass && r.bx == -1920 && r.by == 500 && IsLegalWallResult(c, r.bx, r.by),
+        r.act == GuardAction.Pass && r.bx == -1600 && r.by == 500 && IsLegalWallResult(c, r.bx, r.by),
         $"act={r.act} point=({r.bx},{r.by})");
 }
 
@@ -1129,7 +1129,7 @@ foreach (string language in new[] { "en", "tr" })
 
 // ---- GAME MODE (confine cursor to its monitor) ----
 {
-    var c = NewConfine((0, 0, 2560, 1440), (2560, 0, 4480, 1080));
+    var c = NewConfine((0, 0, 2560, 1440), (2560, 0, 4160, 900));
     Move(c, 1000, 500, true);                  // baseline on monitor 1
     var inside = Move(c, 2000, 600, true);     // still on monitor 1
     var cross = Move(c, 3000, 500, true);      // try to leave to monitor 2
@@ -1137,7 +1137,7 @@ foreach (string language in new[] { "en", "tr" })
     Check("game mode: leaving active monitor is blocked", cross.act == GuardAction.Block, $"act={cross.act}");
 }
 {
-    var c = NewConfine((0, 0, 2560, 1440), (2560, 0, 4480, 1080));
+    var c = NewConfine((0, 0, 2560, 1440), (2560, 0, 4160, 900));
     Move(c, 1000, 500, true);                  // on monitor 1
     var up = Move(c, 1000, -10, true);         // try to go above monitor 1 (no top above it here)
     Check("game mode: leaving upward is also blocked", up.act == GuardAction.Block, $"act={up.act}");
@@ -1173,22 +1173,22 @@ foreach (string language in new[] { "en", "tr" })
 }
 
 // ---- ANTI-TRAP SAFETY (C): an isolated screen's sole up-exit is always honoured, but stays owner-bound ----
-// owner = a side screen at Y [0,1080); its only escape is the up-overlap X-span [2830,3000).
+// owner = a side screen at Y [0,900); its only escape is the up-overlap X-span [2830,3000).
 {
-    var c = NewSafety((2830, 3000, 0, 1080));
+    var c = NewSafety((2830, 3000, 0, 900));
     Move(c, 2900, 0, false);                       // origin on the owner screen, crossing CLOSED
     var r = Move(c, 2900, -15, false);             // deliberate up push
     Check("safety: sole-up-exit crosses even when crossing is CLOSED", r.act == GuardAction.Pass && r.onTop, $"act={r.act} onTop={r.onTop}");
 }
 {
-    var c = NewSafety((2830, 3000, 0, 1080));
+    var c = NewSafety((2830, 3000, 0, 900));
     Move(c, 2900, 0, false);
     var r = Move(c, 2960, -2, false);              // dx=60, dyUp=2 -> slide/jitter, not a deliberate push
     Check("safety: slide-jitter does NOT leak through the safety gate", r.act == GuardAction.Block && !r.onTop, $"act={r.act}");
 }
 {
     // OWNER-BOUND (fix #2): a different screen stacked in the SAME X-column (different Y) must NOT ride the gate.
-    var c = NewSafety((2830, 3000, 0, 1080));
+    var c = NewSafety((2830, 3000, 0, 900));
     Move(c, 2900, 2500, false);                    // origin Y=2500 -> below the owner's Y-band
     var r = Move(c, 2900, -5, false);
     Check("safety: a screen in the same X-column but different Y can't cross the safety gate", r.act == GuardAction.Block && !r.onTop, $"act={r.act}");
@@ -1197,12 +1197,12 @@ foreach (string language in new[] { "en", "tr" })
     // Independent of user gates: with the master toggle CLOSED, a user gate blocks but the safety gate passes.
     var c = new GuardCore { HasTop = true, BarrierY = 0,
         Gates = new List<(int, int)> { (24, 2536) },
-        SafetyGates = new List<(int, int, int, int)> { (2830, 3000, 0, 1080) } };
+        SafetyGates = new List<(int, int, int, int)> { (2830, 3000, 0, 900) } };
     c.Reset();
     Move(c, 2900, 0, false); var s = Move(c, 2900, -15, false);
     var c2 = new GuardCore { HasTop = true, BarrierY = 0,
         Gates = new List<(int, int)> { (24, 2536) },
-        SafetyGates = new List<(int, int, int, int)> { (2830, 3000, 0, 1080) } };
+        SafetyGates = new List<(int, int, int, int)> { (2830, 3000, 0, 900) } };
     c2.Reset();
     Move(c2, 1280, 0, false); var u = Move(c2, 1280, -15, false);
     Check("safety: independent of user gates (safety passes, user gate blocks, toggle closed)",
@@ -1214,34 +1214,34 @@ foreach (string language in new[] { "en", "tr" })
     // Real bug: left, MAIN, right (270px gap from MAIN), top. Only the right screen is isolated.
     var mons = new List<(int, int, int, int)>
     {
-        (-1920, 0, 0, 1080),     // 0 left
+        (-1600, 0, 0, 900),     // 0 left
         (0, 0, 2560, 1440),      // 1 MAIN
-        (2830, 0, 4480, 1080),   // 2 right (gap: 2830 vs MAIN's 2560)
-        (-450, -1440, 2990, 0),  // 3 top
+        (2830, 0, 4160, 900),   // 2 right (gap: 2830 vs MAIN's 2560)
+        (-380, -1440, 2990, 0),  // 3 top
     };
     var (warn, gates) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
     Check("topology: the 270px-gap right screen is the only isolated one",
         warn.Count == 1 && warn[0] == 2, $"warn=[{string.Join(",", warn)}]");
     Check("topology: its safety gate is clipped to the up-overlap, owner-bound",
-        gates.Count == 1 && gates[0] == (2830, 2990, 0, 1080), $"gates=[{string.Join(";", gates)}]");
+        gates.Count == 1 && gates[0] == (2830, 2990, 0, 900), $"gates=[{string.Join(";", gates)}]");
 }
 {
     var mons = new List<(int, int, int, int)>
-    { (-1920, 0, 0, 1080), (0, 0, 2560, 1440), (2560, 0, 4480, 1080), (-450, -1440, 2990, 0) };
+    { (-1600, 0, 0, 900), (0, 0, 2560, 1440), (2560, 0, 4160, 900), (-380, -1440, 2990, 0) };
     var (warn, gates) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
     Check("topology: edge-touching right screen is NOT isolated", warn.Count == 0 && gates.Count == 0, $"warn=[{string.Join(",", warn)}]");
 }
 {
     // SeamTol (fix #1): a 1px seam (mixed-DPI rounding) is treated as aligned, NOT isolated.
     var mons = new List<(int, int, int, int)>
-    { (-1920, 0, 0, 1080), (0, 0, 2560, 1440), (2561, 0, 4480, 1080), (-450, -1440, 2990, 0) };
+    { (-1600, 0, 0, 900), (0, 0, 2560, 1440), (2561, 0, 4160, 900), (-380, -1440, 2990, 0) };
     var (warn, _) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
     Check("topology: a 1px seam is tolerated (SeamTol) -> NOT isolated", warn.Count == 0, $"warn=[{string.Join(",", warn)}]");
 }
 {
     // Fully-islanded screen (no neighbour any side, no top above): warns but gets NO gate (would gate into a void).
     var mons = new List<(int, int, int, int)>
-    { (-1920, 0, 0, 1080), (0, 0, 2560, 1440), (5000, 5000, 6000, 6000), (-450, -1440, 2990, 0) };
+    { (-1600, 0, 0, 900), (0, 0, 2560, 1440), (5000, 5000, 6000, 6000), (-380, -1440, 2990, 0) };
     var (warn, gates) = GuardCore.AntiTrap(mons, new HashSet<int> { 3 });
     Check("topology: a four-sided island warns but yields NO safety gate",
         warn.Contains(2) && gates.Count == 0, $"warn=[{string.Join(",", warn)}] gates={gates.Count}");
@@ -1255,21 +1255,21 @@ foreach (string language in new[] { "en", "tr" })
     Check("topology: partial vertical overlap is Right-adjacency", GuardCore.Adjacent(a, b, Dir.Right));
 }
 {
-    var mons = new List<(int, int, int, int)> { (0, 0, 2560, 1440), (-450, -1440, 2990, 0) };
+    var mons = new List<(int, int, int, int)> { (0, 0, 2560, 1440), (-380, -1440, 2990, 0) };
     var (warn, _) = GuardCore.AntiTrap(mons, new HashSet<int> { 1 });
     Check("topology: a top-set screen is never in warn/gates", !warn.Contains(1), $"warn=[{string.Join(",", warn)}]");
 }
 {
     Check("topology: IsTop classifies an above-origin monitor",
-        GuardCore.IsTop((-450, -1440, 2990, 0)) && !GuardCore.IsTop((0, 0, 2560, 1440)));
+        GuardCore.IsTop((-380, -1440, 2990, 0)) && !GuardCore.IsTop((0, 0, 2560, 1440)));
 }
 
 // ---- DESCENT ROUTING (opt-in): clamp a descent's exit X back onto the linked bottom monitor ----
-// Layout: wide TOP (-440,-1440,3000,0); MAIN landing (0,0,2560,1440); right side screen (2560,0,4480,1080) sits
+// Layout: wide TOP (-360,-1440,3000,0); MAIN landing (0,0,2560,1440); right side screen (2560,0,4160,900) sits
 // under the top's overhang (X 2560..3000). Barrier = top.B = 0. Route: Top=TOP, Landing=MAIN.
-var TOP = (-440, -1440, 3000, 0);
+var TOP = (-360, -1440, 3000, 0);
 var MAINrect = (0, 0, 2560, 1440);
-var RIGHT = (2560, 0, 4480, 1080);
+var RIGHT = (2560, 0, 4160, 900);
 
 // A core that is already OnTop (cross up through MAIN's column first), with an explicit monitor set.
 GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int B) Landing) route,
@@ -1423,14 +1423,14 @@ GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int
         Monitors = new List<(int, int, int, int)> { MAINrect, RIGHT } };
     c.Reset();
     Move(c, 2800, 500, true);                // baseline on RIGHT
-    var r = Move(c, 4500, 500, true);        // try to leave RIGHT (X 2560..4480) -> confine blocks; route untouched
+    var r = Move(c, 4180, 500, true);        // try to leave RIGHT (X 2560..4160) -> confine blocks; route untouched
     Check("DescentRouting_ConfineOverridesRoute",
         r.act == GuardAction.Block, $"act={r.act}");
 }
 // DescentRouting_SideFromDevice_NotBelowTop_NoRoute (SF-1) — a From=side link whose Landing.T < Top.B emits NO
 // route, so a center descent is NOT yanked sideways. Emulate the tray's emission rule (Landing.T >= Top.B) here.
 {
-    var sideLanding = (2560, -200, 4480, 880);       // overlaps the top's Y -> Landing.T (-200) < Top.B (0)
+    var sideLanding = (2560, -200, 4160, 700);       // overlaps the top's Y -> Landing.T (-200) < Top.B (0)
     bool emitted = sideLanding.Item2 >= TOP.Item4;   // the tray's SF-1 test
     var routes = new List<((int, int, int, int), (int, int, int, int))>();
     if (emitted) routes.Add((TOP, sideLanding));
@@ -1451,11 +1451,11 @@ GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int
     var rects = new Dictionary<string, (int, int, int, int)>
     {
         ["MAIN"] = (0, 0, 2560, 1440),
-        ["TOP"]  = (-440, -1440, 3000, 0),
+        ["TOP"]  = (-360, -1440, 3000, 0),
     };
     var routes = GuardCore.DeriveRoutes(new[] { ("MAIN", "TOP") }, rects, new HashSet<string> { "TOP" });
     Check("derive: a valid below-and-overlapping link emits one route",
-        routes.Count == 1 && routes[0].Top == (-440, -1440, 3000, 0) && routes[0].Landing == (0, 0, 2560, 1440),
+        routes.Count == 1 && routes[0].Top == (-360, -1440, 3000, 0) && routes[0].Landing == (0, 0, 2560, 1440),
         $"routes={routes.Count}");
 }
 {
@@ -1464,7 +1464,7 @@ GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int
     var rects = new Dictionary<string, (int, int, int, int)>
     {
         ["FAR"] = (5000, 0, 6000, 1080),       // far to the right of TOP -> no X-overlap
-        ["TOP"] = (-440, -1440, 3000, 0),
+        ["TOP"] = (-360, -1440, 3000, 0),
     };
     var routes = GuardCore.DeriveRoutes(new[] { ("FAR", "TOP") }, rects, new HashSet<string> { "TOP" });
     Check("derive: a non-X-overlapping link emits NO route (no teleport across the gap)",
@@ -1474,8 +1474,8 @@ GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int
     // SF-1 vertical guard: a From=side link whose Landing.T < Top.B (overlaps the top's Y band) emits NO route.
     var rects = new Dictionary<string, (int, int, int, int)>
     {
-        ["SIDE"] = (2560, -200, 4480, 880),    // Landing.T (-200) < Top.B (0)
-        ["TOP"]  = (-440, -1440, 3000, 0),
+        ["SIDE"] = (2560, -200, 4160, 700),    // Landing.T (-200) < Top.B (0)
+        ["TOP"]  = (-360, -1440, 3000, 0),
     };
     var routes = GuardCore.DeriveRoutes(new[] { ("SIDE", "TOP") }, rects, new HashSet<string> { "TOP" });
     Check("derive: a not-genuinely-below landing (Landing.T < Top.B) emits NO route", routes.Count == 0, $"routes={routes.Count}");
@@ -1486,7 +1486,7 @@ GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int
     {
         ["A"]   = (0, 0, 1500, 1440),
         ["B"]   = (1500, 0, 3000, 1440),
-        ["TOP"] = (-440, -1440, 3000, 0),
+        ["TOP"] = (-360, -1440, 3000, 0),
     };
     var routes = GuardCore.DeriveRoutes(new[] { ("A", "TOP"), ("B", "TOP") }, rects, new HashSet<string> { "TOP" });
     Check("derive: an ambiguous top (multiple distinct FromDevices) emits NO route", routes.Count == 0, $"routes={routes.Count}");
@@ -1496,7 +1496,7 @@ GuardCore OnTopCore(((int L, int T, int R, int B) Top, (int L, int T, int R, int
     var rects = new Dictionary<string, (int, int, int, int)>
     {
         ["MAIN"] = (0, 0, 2560, 1440),
-        ["TOP"]  = (-440, -1440, 3000, 0),
+        ["TOP"]  = (-360, -1440, 3000, 0),
     };
     var routes = GuardCore.DeriveRoutes(new[] { ("MAIN", "TOP") }, rects, new HashSet<string>());   // TOP not in top-set
     Check("derive: a link whose target is not a top device emits NO route", routes.Count == 0, $"routes={routes.Count}");
@@ -1734,39 +1734,39 @@ var DUMMY = (2560, 0, 3360, 600);
 // monitor. These scenarios are deliberately shaped so the pre-fix clamp's entry/nearest edge lands in a desktop
 // void. They are pure GuardCore checks; injected mouse input cannot exercise the low-level hook correctly.
 
-// Reporter repro, exact live geometry. The pre-fix result was (4479,1400): outside the dummy but below monitor 4.
+// Reporter-style repro, sample geometry. The pre-fix result was (4159,1400): outside the dummy but below monitor 4.
 {
     var monitors = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
-        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+        (-1600, 63, 0, 963), (-396, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 47, 4160, 947),
     };
     var monitor4 = monitors[3];
-    var c = NewMonitorAwareWall(monitors, (4480, 845, 5280, 1445));
-    SetLast(c, 4470, 1000);
+    var c = NewMonitorAwareWall(monitors, (4160, 700, 4960, 1300));
+    SetLast(c, 4150, 900);
     var r = Move(c, 4900, 1400, true);
     Check("wall-off monitor-aware: reporter teleport returns to monitor 4, never the void below it",
-        r.act == GuardAction.Block && r.bx < 4480 && InRect(monitor4, r.bx, r.by) && IsLegalWallResult(c, r.bx, r.by),
+        r.act == GuardAction.Block && r.bx < 4160 && InRect(monitor4, r.bx, r.by) && IsLegalWallResult(c, r.bx, r.by),
         $"act={r.act} bx={r.bx} by={r.by} onM4={InRect(monitor4, r.bx, r.by)} legal={IsLegalWallResult(c, r.bx, r.by)}");
 }
 
 // Wall FEEL regression: hitting the dummy seam from monitor 4 must NOT jump the cursor vertically to the OS-eased
-// target height — it must stop at monitor 4's right edge at ~the ENTRY height. Live-captured symptom this guards:
-// (4476,290) -> (4479,902), a ~600px downward jump that read as "still broken" even though the cursor stayed on-screen.
+// target height — it must stop at monitor 4's right edge at ~the ENTRY height. Observed symptom this guards:
+// (4156,290) -> (4159,902), a ~600px downward jump that read as "still broken" even though the cursor stayed on-screen.
 {
     var monitors = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0),
-        (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+        (-1600, 63, 0, 963), (-396, -1440, 2952, 0),
+        (0, 0, 2560, 1440), (2560, 47, 4160, 947),
     };
     var monitor4 = monitors[3];
-    var c = NewMonitorAwareWall(monitors, (4480, 845, 5280, 1445));
-    SetLast(c, 4476, 290);
+    var c = NewMonitorAwareWall(monitors, (4160, 700, 4960, 1300));
+    SetLast(c, 4156, 290);
     var r = Move(c, 4900, 902, true);   // Windows-eased deep target into the dummy
     Check("wall-off monitor-aware: seam hit keeps entry height (no ~600px vertical jump)",
-        r.act == GuardAction.Block && r.bx < 4480 && InRect(monitor4, r.bx, r.by) && Math.Abs(r.by - 290) <= 5
+        r.act == GuardAction.Block && r.bx < 4160 && InRect(monitor4, r.bx, r.by) && Math.Abs(r.by - 290) <= 5
             && IsLegalWallResult(c, r.bx, r.by),
-        $"act={r.act} bx={r.bx} by={r.by} (want bx=4479, by~290, on monitor 4)");
+        $"act={r.act} bx={r.bx} by={r.by} (want bx=4159, by~290, on monitor 4)");
 }
 
 // A taller dummy on each side of a smaller usable neighbour. Each deep target is beyond the neighbour on the
@@ -1925,11 +1925,11 @@ var DUMMY = (2560, 0, 3360, 600);
     // via its real seam with MAIN, with NO gate spuriously created by the dummy.
     var withDummy = new List<(int, int, int, int)>
     {
-        (-1920, 0, 0, 1080),     // 0 left
+        (-1600, 0, 0, 900),     // 0 left
         (0, 0, 2560, 1440),      // 1 MAIN
-        (2560, 0, 4480, 1080),   // 2 right (touches MAIN at x=2560)
-        (-450, -1440, 2990, 0),  // 3 top
-        (4480, 0, 5280, 600),    // 4 DUMMY abutting the right screen
+        (2560, 0, 4160, 900),   // 2 right (touches MAIN at x=2560)
+        (-380, -1440, 2990, 0),  // 3 top
+        (4160, 0, 4960, 600),    // 4 DUMMY abutting the right screen
     };
     // Drop the excluded dummy (index 4) before deriving topology — what Configure() does with the two-list split.
     var dropped = withDummy.Where((m, i) => i != 4).ToList();
@@ -2227,8 +2227,8 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
     // Reporter geometry includes negative coordinates, a gap/offset, and an abutting dummy at m4.R == m5.L.
     var source = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0), (0, 0, 2560, 1440),
-        (2560, 58, 4480, 1138), (4480, 845, 5280, 1445),
+        (-1600, 63, 0, 963), (-396, -1440, 2952, 0), (0, 0, 2560, 1440),
+        (2560, 47, 4160, 947), (4160, 700, 4960, 1300),
     };
     var mapped = GuardCore.MapLayout(source, 960, 520, 14);
     var again = GuardCore.MapLayout(source, 960, 520, 14);
@@ -2252,10 +2252,10 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
     var seed = new List<MonitorInfo>
     {
         M("stable-z", "DISPLAY-Z", 0, 0, 1920, 1080),
-        M("stable-right", "DISPLAY-R", 2560, 58, 4480, 1138),
-        M("stable-left", "DISPLAY-L", -1920, 71, 0, 1151),
+        M("stable-right", "DISPLAY-R", 2560, 47, 4160, 947),
+        M("stable-left", "DISPLAY-L", -1600, 63, 0, 963),
         M("stable-a", "DISPLAY-A", 0, 0, 2560, 1440),
-        M("stable-top", "DISPLAY-T", -488, -1440, 2952, 0),
+        M("stable-top", "DISPLAY-T", -396, -1440, 2952, 0),
     };
     List<(string Stable, int Index)> Run(IEnumerable<MonitorInfo> input)
     {
@@ -2583,7 +2583,7 @@ bool ValidMapLayout(string name, IReadOnlyList<(int L, int T, int R, int B)> sou
     // COUNCIL GAP (cx): game-mode Confine takes precedence over side containment (its branch returns first).
     var c = new GuardCore { HasTop = false, Confine = true, HasSides = true,
         MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
-        Monitors = new List<(int L, int T, int R, int B)> { (0, 0, 2560, 1440), (2560, 0, 4480, 1080) } };
+        Monitors = new List<(int L, int T, int R, int B)> { (0, 0, 2560, 1440), (2560, 0, 4160, 900) } };
     c.Reset();
     Move(c, 1000, 500, true, true);                 // baseline on main
     var r = Move(c, 3000, 500, true, true);         // leave main -> Confine blocks (clamps to main's right edge)
@@ -3067,16 +3067,16 @@ foreach (var preview in new[] { (Tab: 0, Mode: "list"), (Tab: -1, Mode: "drawer"
     Check("i18n: placeholder arity matches across EN and TR", ok, bad);
 }
 
-// ===== BUGHUNT (owner's REAL captured geometry) — the VOID BELOW the right monitor + the EXCLUDED dummy =====
-// Physical px: left(-1920,71,0,1151) top(-488,-1440,2952,0) main*(0,0,2560,1440) right(2560,58,4480,1138).
-// right is 58px down-offset AND 1080 tall next to main's 1440 -> a ~1920x302 VOID sits directly below it
-// (X 2560..4480, Y 1138..1440) = the historical "cursor disappears bottom-right" region. dummy(4480,845,
-// 5280,1445) is EXCLUDED (Forbidden). The existing "reporter" tests cover the top-right corner; these cover
+// ===== BUGHUNT (sample geometry) — the VOID BELOW the right monitor + the EXCLUDED dummy =====
+// Physical px: left(-1600,63,0,963) top(-396,-1440,2952,0) main*(0,0,2560,1440) right(2560,47,4160,947).
+// right is 47px down-offset AND 900 tall next to main's 1440 -> a ~1600x493 VOID sits directly below it
+// (X 2560..4160, Y 947..1440) = the historical "cursor disappears bottom-right" region. dummy(4160,700,
+// 4960,1300) is EXCLUDED (Forbidden). The existing "reporter" tests cover the top-right corner; these cover
 // the bottom void + the dummy, which they don't. Every decided landing must be a usable, non-forbidden pixel.
 {
     var usable = new List<(int L, int T, int R, int B)>
     {
-        (-1920, 71, 0, 1151), (-488, -1440, 2952, 0), (0, 0, 2560, 1440), (2560, 58, 4480, 1138),
+        (-1600, 63, 0, 963), (-396, -1440, 2952, 0), (0, 0, 2560, 1440), (2560, 47, 4160, 947),
     };
     GuardCore Rig()
     {
@@ -3084,7 +3084,7 @@ foreach (var preview in new[] { (Tab: 0, Mode: "list"), (Tab: -1, Mode: "drawer"
         {
             HasTop = true, BarrierY = 0, Gates = new List<(int Min, int Max)> { (24, 2536) },
             HasSides = true, MainL = 0, MainR = 2560, MainT = 0, MainB = 1440,
-            Monitors = usable, Forbidden = new List<(int L, int T, int R, int B)> { (4480, 845, 5280, 1445) },
+            Monitors = usable, Forbidden = new List<(int L, int T, int R, int B)> { (4160, 700, 4960, 1300) },
         };
         c.Reset();
         return c;
@@ -3108,7 +3108,7 @@ foreach (var preview in new[] { (Tab: 0, Mode: "list"), (Tab: -1, Mode: "drawer"
       Check("bughunt real-geo: the main/right/void corner move lands legal",
             IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
     { var c = Rig(); SetLast(c, 3500, 60); var r = Move(c, 3500, 20, true, true);
-      Check("bughunt real-geo: thin void above right (Y 0..58) lands legal",
+      Check("bughunt real-geo: thin void above right (Y 0..47) lands legal",
             IsLegalWallResult(c, r.bx, r.by), $"act={r.act} point=({r.bx},{r.by})"); }
 }
 

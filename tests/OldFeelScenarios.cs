@@ -61,9 +61,9 @@ internal static class OldFeelScenarios
         foreach (bool side in new[] { true, false })
         {
             core = Rig();
-            var act = core.Decide((-1, 1079), -1, 1081, true, side, .001, out int bx, out int by);
+            var act = core.Decide((-1, 899), -1, 901, true, side, .001, out int bx, out int by);
             check($"old-feel timed corner respects protection={side}",
-                act == GuardAction.Block && (side ? bx == -1 && by == 1079 : bx == 0 && by == 1081), $"({bx},{by})");
+                act == GuardAction.Block && (side ? bx == -1 && by == 899 : bx == 0 && by == 901), $"({bx},{by})");
         }
         var learning = new ArrivalLearner();
         for (int i = 0; i < 39; i++) learning.Observe(2000);
@@ -211,9 +211,9 @@ internal static class OldFeelScenarios
     internal static List<BoundaryScreen> Screens() => new()
     {
         new() { StableId = "MAIN", Primary = true, Bounds = (0, 0, 2560, 1440) },
-        new() { StableId = "LEFT", Bounds = (-1920, 0, 0, 1080) },
-        new() { StableId = "RIGHT", Bounds = (2560, 0, 4480, 1080) },
-        new() { StableId = "TOP", Bounds = (-421, -1440, 3019, 0) },
+        new() { StableId = "LEFT", Bounds = (-1600, 0, 0, 900) },
+        new() { StableId = "RIGHT", Bounds = (2560, 0, 4160, 900) },
+        new() { StableId = "TOP", Bounds = (-341, -1440, 3019, 0) },
     };
 
     internal static GuardCore Rig()
@@ -234,10 +234,10 @@ internal static class OldFeelScenarios
         foreach (int x in new[] { -1, 2560 })
         {
             var core = Rig();
-            core.LastX = x; core.LastY = 1079; core.HaveLast = true;
-            var action = core.Decide(x, 1081, true, true, out int bx, out int by);
+            core.LastX = x; core.LastY = 899; core.HaveLast = true;
+            var action = core.Decide(x, 901, true, true, out int bx, out int by);
             check($"old-feel corner: {x} bottom drift stays on source",
-                action == GuardAction.Block && bx == x && by == 1079, $"{action} ({bx},{by})");
+                action == GuardAction.Block && bx == x && by == 899, $"{action} ({bx},{by})");
         }
         const string json = """{"SettingsVersion":4,"PushIntentMode":"Pressure","FutureField":{"Nested":[1,2,3]},"UpCrossMin":7,"SideCrossMin":9}""";
         var original = JsonSerializer.Deserialize<Settings>(json);
