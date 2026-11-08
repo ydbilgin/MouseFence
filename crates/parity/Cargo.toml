@@ -1,0 +1,13 @@
+[package]
+name = "parity"
+description = "Checks docs/rust2/parity.tsv: every 1.1.1 behaviour has a row, an owner track and (strict mode) a Rust test."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

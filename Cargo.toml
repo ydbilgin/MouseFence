@@ -1,0 +1,51 @@
+# MouseFence 2.0 (Rust). The pinned 1.1.1 parity reference lives in tools/reference-cs.
+[workspace]
+resolver = "3"
+members = [
+    "crates/fence-types",
+    "crates/fence-engine",
+    "crates/fence-config",
+    "crates/fence-i18n",
+    "crates/fence-trace",
+    "crates/fence-app",
+    "crates/fence-win",
+    "crates/fence-settings-ui",
+    "crates/parity",
+    "apps/mousefence",
+]
+
+[workspace.package]
+version = "2.0.1"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+# Every dependency below is already in the local cargo cache (checked 2026-10-13), so builds run offline.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+# Track C (shared, additive): Win32 bindings for crates/fence-win; each crate names its own features.
+windows-sys = "0.61.2"
+fence-types = { path = "crates/fence-types" }
+fence-engine = { path = "crates/fence-engine" }
+fence-config = { path = "crates/fence-config" }
+fence-i18n = { path = "crates/fence-i18n" }
+fence-trace = { path = "crates/fence-trace" }
+fence-app = { path = "crates/fence-app" }
+fence-win = { path = "crates/fence-win" }
+fence-settings-ui = { path = "crates/fence-settings-ui" }
+# Track D (settings window, PLAN T16): eframe 0.36.1 with the glow renderer, chosen on invisible-desktop screenshot
+# evidence (report TRACK-D.txt); egui is used through eframe's re-export. Cached locally, builds --offline.
+eframe = { version = "=0.36.1", default-features = false, features = ["glow", "default_fonts", "accesskit"] }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[profile.release]
+# panic = "unwind" is required: the hook callback contains panics with catch_unwind (PLAN T12).
+panic = "unwind"
+lto = "thin"
+codegen-units = 4
+debug = "line-tables-only"
+split-debuginfo = "packed"

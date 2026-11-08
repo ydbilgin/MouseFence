@@ -1,0 +1,11 @@
+[package]
+name = "fence-i18n"
+description = "MouseFence EN/TR strings (generated from the 1.x C# tables) with key and placeholder parity."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

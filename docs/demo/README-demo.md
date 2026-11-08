@@ -31,8 +31,8 @@ Optional environment variables: `DEMO_CHROMIUM` (path to a Chromium or chrome-he
   each caption with its start and end second, `PATH` the pointer's route, and `BEATS` when each layer
   (screen map, gate settings, tray menu, end card) is visible. `window.DEMO` sets size, frame rate and length.
 - **The app pictures:** the gate settings and tray menu come straight from `docs/screenshots/`. After a UI
-  change, regenerate them with the screenshot harness (see "Build from source" → "Screenshots" in the main
-  [README](../../README.md#build-from-source), and `--screenshot-tray <png> Dark en` for the tray menu), then re-render.
+  change, regenerate them with the screenshot harness (see "Reproduce the generic screenshots" in the main
+  README, and `--screenshot-tray <png> Dark en` for the tray menu), then re-render.
 - **Colours and layout:** the CSS variables at the top of `scene.html`.
 
 Open `scene.html` in a browser and call `renderAt(5)` in the console to check a single moment.

@@ -17,5 +17,9 @@ app/
 ## OS
 Thumbs.db
 desktop.ini
+/target
+tools/reference-cs/obj/
+tools/reference-cs/bin/
+/reference-src/
 
 

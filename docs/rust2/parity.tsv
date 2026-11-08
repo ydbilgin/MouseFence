@@ -1,0 +1,325 @@
+# MouseFence 2.0 parity checklist. Generated 2026-10-13 from the 1.1.1 suite on public main 19b769c (238 PASS)
+# plus the behaviours no C# test covers (B rows), the judged differences (J rows) and the owner's hand checks (H rows).
+# Columns (tab-separated): id, track, how, rust_test_prefix, rust_location, source, behaviour, note
+# A row is DONE when a test function whose name starts with rust_test_prefix exists under rust_location and passes.
+# P rows: the behaviour is the C# Check name; rows marked renamed-in-22665ee use the synthetic name and the synthetic
+# geometry of commit 22665ee (`git show 22665ee:tests/Tests.cs`). Never copy a real desk layout into a fixture.
+# Tracks: S skeleton, A engine, B config + layout helpers, C Windows + tray, D settings UI, O owner (hand check, not run by agents).
+id	track	how	rust_test_prefix	rust_location	source	behaviour	note
+P001	A	unit + reference-diff	p001_	crates/fence-engine	tests/Tests.cs:123	right-screen void: up into void is blocked & clamped to Y=0	-
+P002	D	equivalent headless egui test	p002_	crates/fence-settings-ui	tests/Tests.cs:149	M2 settings transaction: form owns a nested deep draft and Cancel cannot mutate live settings	-
+P003	D	equivalent headless egui test	p003_	crates/fence-settings-ui	tests/Tests.cs:176	B2 footer: dark surface, status, validation action, Cancel, and Save are enrolled in theming	-
+P004	D	equivalent headless egui test	p004_	crates/fence-settings-ui	tests/Tests.cs:239	v2 shell (en): four-page nav, physical-pixel fold, full-width inline editor, static disclosures	-
+P005	D	equivalent headless egui test	p005_	crates/fence-settings-ui	tests/Tests.cs:239	v2 shell (tr): four-page nav, physical-pixel fold, full-width inline editor, static disclosures	-
+P006	D	equivalent headless egui test	p006_	crates/fence-settings-ui	tests/Tests.cs:270	B2 FIX2 (en): inherited overall-behavior link receives its full measured width	-
+P007	D	equivalent headless egui test	p007_	crates/fence-settings-ui	tests/Tests.cs:277	B2 FIX2 (en): active overall-behavior link receives its full measured width	-
+P008	D	equivalent headless egui test	p008_	crates/fence-settings-ui	tests/Tests.cs:270	B2 FIX2 (tr): inherited overall-behavior link receives its full measured width	-
+P009	D	equivalent headless egui test	p009_	crates/fence-settings-ui	tests/Tests.cs:277	B2 FIX2 (tr): active overall-behavior link receives its full measured width	-
+P010	D	equivalent headless egui test	p010_	crates/fence-settings-ui	tests/Tests.cs:296	B2 restore: a confirmed valid exported file produces the replacement Result without mutating live settings	-
+P011	D	equivalent headless egui test	p011_	crates/fence-settings-ui	tests/Tests.cs:314	B2 restore: repairable-invalid import remains a draft and leaves live settings untouched	-
+P012	D	equivalent headless egui test	p012_	crates/fence-settings-ui	tests/Tests.cs:322	B2 restore: repairing the imported draft permits a valid apply Result while the caller-owned live object stays isolated	-
+P013	D	equivalent headless egui test	p013_	crates/fence-settings-ui	tests/Tests.cs:354	B2 split-direction: differing pair shows Different by direction and no selected primary tile	-
+P014	D	equivalent headless egui test	p014_	crates/fence-settings-ui	tests/Tests.cs:362	B2 split-direction: selecting a primary tile reunifies both directions	-
+P015	D	equivalent headless egui test	p015_	crates/fence-settings-ui	tests/Tests.cs:384	B2 status slot: plain inherited behavior agreeing with live state is empty	-
+P016	D	equivalent headless egui test	p016_	crates/fence-settings-ui	tests/Tests.cs:389	B2 status slot: live result diverging from the selected tile is non-empty	-
+P017	D	equivalent headless egui test	p017_	crates/fence-settings-ui	tests/Tests.cs:430	owner excluded-target editor (en): no false selection, plain explanation, primary Allow path	-
+P018	D	equivalent headless egui test	p018_	crates/fence-settings-ui	tests/Tests.cs:430	owner excluded-target editor (tr): no false selection, plain explanation, primary Allow path	-
+P019	D	equivalent headless egui test	p019_	crates/fence-settings-ui	tests/Tests.cs:466	owner excluded-target editor: excluded lower endpoint blocks a vertical boundary and can be allowed	-
+P020	D	equivalent headless egui test	p020_	crates/fence-settings-ui	tests/Tests.cs:506	owner large-window composition: leftover map grows and list/drawer footer bands stay within 12%	The headless test checks every condition of the C# Check (bands within 12% + 2, maximized map larger than compact, map width cap, symmetric padding) plus a map-height range; the C# Check asserts no exact heights (JUDGE-D C14). Join 2026-10-13: s_join_large_window_composition runs against the real crates and passes
+P021	D	equivalent headless egui test	p021_	crates/fence-settings-ui	tests/Tests.cs:533	B2 numeric helpers (en): frozen strength and hold-back sentences are present in the Advanced grid	-
+P022	D	equivalent headless egui test	p022_	crates/fence-settings-ui	tests/Tests.cs:542	B2 status reserve (en): allocated height fits every locale/width candidate	-
+P023	D	equivalent headless egui test	p023_	crates/fence-settings-ui	tests/Tests.cs:533	B2 numeric helpers (tr): frozen strength and hold-back sentences are present in the Advanced grid	-
+P024	D	equivalent headless egui test	p024_	crates/fence-settings-ui	tests/Tests.cs:542	B2 status reserve (tr): allocated height fits every locale/width candidate	-
+P025	D	equivalent headless egui test	p025_	crates/fence-settings-ui	tests/Tests.cs:560	B2 duplicate chord: later-recorded row is flagged and footer names both conflicting actions	-
+P026	D	equivalent headless egui test	p026_	crates/fence-settings-ui	tests/Tests.cs:579	M2 polish backup: successful write persists the draft and posts localized success feedback	-
+P027	B	unit + reference-diff	p027_	crates/fence-config	tests/Tests.cs:592	M2 screen names: tabs/newlines become one line and the limit is 24 Unicode text elements	-
+P028	D	equivalent headless egui test	p028_	crates/fence-settings-ui	tests/Tests.cs:610	M2 map: one tab stop exposes screens and boundary as accessible virtual children with 24x24 target	-
+P029	A	unit + reference-diff	p029_	crates/fence-engine	tests/Tests.cs:633	void invariant: synthetic right-corner up-block lands on a usable monitor	renamed-in-22665ee
+P030	A	unit + reference-diff	p030_	crates/fence-engine	tests/Tests.cs:645	void invariant: synthetic shallow right-corner Pass target is contained on-screen	renamed-in-22665ee
+P031	A	unit + reference-diff	p031_	crates/fence-engine	tests/Tests.cs:675	seam-void descent: nearest legal landing is down on right display, never TOP.Y=-1	renamed-in-22665ee
+P032	A	unit + reference-diff	p032_	crates/fence-engine	tests/Tests.cs:679	seam-void descent: repeated outside-gate up attempts do not recreate the stale TOP.Y=-1 fixpoint	-
+P033	A	unit + reference-diff	p033_	crates/fence-engine	tests/Tests.cs:684	seam-void descent: cursor can return to the gate and regain consistent top free-roam	-
+P034	A	unit + reference-diff	p034_	crates/fence-engine	tests/Tests.cs:691	seam-void descent: every result in the reproduced sequence lands on a usable monitor	-
+P035	A	unit + reference-diff	p035_	crates/fence-engine	tests/Tests.cs:707	void invariant: synthetic left-screen outer edge remains an unchanged legal Pass	renamed-in-22665ee
+P036	A	unit + reference-diff	p036_	crates/fence-engine	tests/Tests.cs:722	void invariant: wider lower-monitor overhang up-block stays on its entry display	-
+P037	A	unit + reference-diff	p037_	crates/fence-engine	tests/Tests.cs:736	void invariant: side-in containment across a gap lands on the origin side display	-
+P038	A	unit + reference-diff	p038_	crates/fence-engine	tests/Tests.cs:749	void invariant: 1 portrait negative-origin monitor contains a corner beyond every screen	-
+P039	A	unit + reference-diff	p039_	crates/fence-engine	tests/Tests.cs:767	void invariant: 2-monitor gap tie is legal and independent of monitor enumeration	-
+P040	A	unit + reference-diff	p040_	crates/fence-engine	tests/Tests.cs:804	void invariant: 8-monitor mixed-layout stress terminates, stays legal, and is deterministic	-
+P041	A	unit + reference-diff	p041_	crates/fence-engine	tests/Tests.cs:814	right-screen overlap: up is blocked	-
+P042	A	unit + reference-diff	p042_	crates/fence-engine	tests/Tests.cs:824	right-screen slide+jitter stays on bottom row	-
+P043	A	unit + reference-diff	p043_	crates/fence-engine	tests/Tests.cs:833	side-left: up is blocked	-
+P044	A	unit + reference-diff	p044_	crates/fence-engine	tests/Tests.cs:840	main gate: deliberate up push crosses	-
+P045	A	unit + reference-diff	p045_	crates/fence-engine	tests/Tests.cs:847	main gate: up-right deliberate push crosses	-
+P046	A	unit + reference-diff	p046_	crates/fence-engine	tests/Tests.cs:854	main slide: small up-jitter blocked	-
+P047	A	unit + reference-diff	p047_	crates/fence-engine	tests/Tests.cs:859	main slide: fast diagonal blocked	-
+P048	A	unit + reference-diff	p048_	crates/fence-engine	tests/Tests.cs:866	gate closed: main up push blocked	-
+P049	A	unit + reference-diff	p049_	crates/fence-engine	tests/Tests.cs:873	inset: up at far-left of main blocked	-
+P050	A	unit + reference-diff	p050_	crates/fence-engine	tests/Tests.cs:878	inset: up at far-right of main blocked	-
+P051	A	unit + reference-diff	p051_	crates/fence-engine	tests/Tests.cs:887	roam on top is free; descending escapes	-
+P052	A	unit + reference-diff	p052_	crates/fence-engine	tests/Tests.cs:897	bottom-row horizontal move passes	-
+P053	A	unit + reference-diff	p053_	crates/fence-engine	tests/Tests.cs:904	side-origin diagonal from DISPLAY2 is blocked	-
+P054	A	unit + reference-diff	p054_	crates/fence-engine	tests/Tests.cs:910	side-origin diagonal from DISPLAY3 is blocked	-
+P055	A	unit + reference-diff	p055_	crates/fence-engine	tests/Tests.cs:918	main-origin deliberate cross still works (origin-aware)	-
+P056	A	unit + reference-diff	p056_	crates/fence-engine	tests/Tests.cs:925	slow slide+jitter (dx10,dy3) blocked with slack=5	-
+P057	A	unit + reference-diff	p057_	crates/fence-engine	tests/Tests.cs:930	near-vertical push still crosses with slack=5	-
+P058	A	unit + reference-diff	p058_	crates/fence-engine	tests/Tests.cs:940	multi-gate: deliberate up in gate A crosses	-
+P059	A	unit + reference-diff	p059_	crates/fence-engine	tests/Tests.cs:946	multi-gate: deliberate up in gate B crosses	-
+P060	A	unit + reference-diff	p060_	crates/fence-engine	tests/Tests.cs:952	multi-gate: up between gates is blocked	-
+P061	A	unit + reference-diff	p061_	crates/fence-engine	tests/Tests.cs:958	multi-gate: cross-gate diagonal blocked (origin-aware)	-
+P062	A	unit + reference-diff	p062_	crates/fence-engine	tests/Tests.cs:967	game mode: move within active monitor passes	-
+P063	A	unit + reference-diff	p063_	crates/fence-engine	tests/Tests.cs:968	game mode: leaving active monitor is blocked	-
+P064	A	unit + reference-diff	p064_	crates/fence-engine	tests/Tests.cs:974	game mode: leaving upward is also blocked	-
+P065	A	unit + reference-diff	p065_	crates/fence-engine	tests/Tests.cs:982	deliberate OFF: any upward move through the gate crosses	-
+P066	A	unit + reference-diff	p066_	crates/fence-engine	tests/Tests.cs:995	reconfigure: correct barrier blocks the side-screen up-leak at the seam	-
+P067	A	unit + reference-diff	p067_	crates/fence-engine	tests/Tests.cs:1002	reconfigure: a STALE barrier leaks (the regression auto-reconfigure prevents)	-
+P068	A	unit + reference-diff	p068_	crates/fence-engine	tests/Tests.cs:1012	safety: sole-up-exit crosses even when crossing is CLOSED	-
+P069	A	unit + reference-diff	p069_	crates/fence-engine	tests/Tests.cs:1018	safety: slide-jitter does NOT leak through the safety gate	-
+P070	A	unit + reference-diff	p070_	crates/fence-engine	tests/Tests.cs:1025	safety: a screen in the same X-column but different Y can't cross the safety gate	-
+P071	A	unit + reference-diff	p071_	crates/fence-engine	tests/Tests.cs:1039	safety: independent of user gates (safety passes, user gate blocks, toggle closed)	-
+P072	A	unit + reference-diff	p072_	crates/fence-engine	tests/Tests.cs:1054	topology: the 270px-gap right screen is the only isolated one	-
+P073	A	unit + reference-diff	p073_	crates/fence-engine	tests/Tests.cs:1056	topology: its safety gate is clipped to the up-overlap, owner-bound	-
+P074	A	unit + reference-diff	p074_	crates/fence-engine	tests/Tests.cs:1063	topology: edge-touching right screen is NOT isolated	-
+P075	A	unit + reference-diff	p075_	crates/fence-engine	tests/Tests.cs:1070	topology: a 1px seam is tolerated (SeamTol) -> NOT isolated	-
+P076	A	unit + reference-diff	p076_	crates/fence-engine	tests/Tests.cs:1077	topology: a four-sided island warns but yields NO safety gate	-
+P077	A	unit + reference-diff	p077_	crates/fence-engine	tests/Tests.cs:1082	topology: zero-width corner touch is NOT adjacency	-
+P078	A	unit + reference-diff	p078_	crates/fence-engine	tests/Tests.cs:1086	topology: partial vertical overlap is Right-adjacency	-
+P079	A	unit + reference-diff	p079_	crates/fence-engine	tests/Tests.cs:1091	topology: a top-set screen is never in warn/gates	-
+P080	A	unit + reference-diff	p080_	crates/fence-engine	tests/Tests.cs:1094	topology: IsTop classifies an above-origin monitor	-
+P081	A	unit + reference-diff	p081_	crates/fence-engine	tests/Tests.cs:1124	DescentRouting_OverhangIntoSide_ClampsXToLinkedLandingEdge	-
+P082	A	unit + reference-diff	p082_	crates/fence-engine	tests/Tests.cs:1141	DescentRouting_OverhangIntoSide_ClampsXToLinkedLandingEdge (mirror left)	-
+P083	A	unit + reference-diff	p083_	crates/fence-engine	tests/Tests.cs:1154	DescentRouting_Disabled_PreservesUngatedDescent	-
+P084	A	unit + reference-diff	p084_	crates/fence-engine	tests/Tests.cs:1162	DescentRouting_WithinLinkedLanding_PassesUnchanged	-
+P085	A	unit + reference-diff	p085_	crates/fence-engine	tests/Tests.cs:1172	DescentRouting_Void_IsContainedOnScreen	-
+P086	A	unit + reference-diff	p086_	crates/fence-engine	tests/Tests.cs:1176	DescentRouting_Void_ResolvedAboveBarrier_KeepsTopFreeRoam	-
+P087	A	unit + reference-diff	p087_	crates/fence-engine	tests/Tests.cs:1193	DescentRouting_LateralRoam_SelectsCurrentTopRoute	-
+P088	A	unit + reference-diff	p088_	crates/fence-engine	tests/Tests.cs:1213	DescentRouting_MixedTopBottomEdges_UsesLocalTopEdge (clamps X, keeps OnTop above barrier)	-
+P089	A	unit + reference-diff	p089_	crates/fence-engine	tests/Tests.cs:1217	DescentRouting_MixedTopBottomEdges: free roam intact above the barrier after a shallow-top route	-
+P090	A	unit + reference-diff	p090_	crates/fence-engine	tests/Tests.cs:1233	DescentRouting_DeepTop_ClampsX_AndClearsOnTopBelowBarrier	-
+P091	A	unit + reference-diff	p091_	crates/fence-engine	tests/Tests.cs:1247	DescentRouting_AmbiguousMultipleFromLinks_PassesUnchanged	-
+P092	A	unit + reference-diff	p092_	crates/fence-engine	tests/Tests.cs:1258	DescentRouting_ConfineOverridesRoute	-
+P093	A	unit + reference-diff	p093_	crates/fence-engine	tests/Tests.cs:1275	DescentRouting_SideFromDevice_NotBelowTop_NoRoute	-
+P094	A	unit + reference-diff	p094_	crates/fence-engine	tests/Tests.cs:1288	derive: a valid below-and-overlapping link emits one route	-
+P095	A	unit + reference-diff	p095_	crates/fence-engine	tests/Tests.cs:1301	derive: a non-X-overlapping link emits NO route (no teleport across the gap)	-
+P096	A	unit + reference-diff	p096_	crates/fence-engine	tests/Tests.cs:1312	derive: a not-genuinely-below landing (Landing.T < Top.B) emits NO route	-
+P097	A	unit + reference-diff	p097_	crates/fence-engine	tests/Tests.cs:1323	derive: an ambiguous top (multiple distinct FromDevices) emits NO route	-
+P098	A	unit + reference-diff	p098_	crates/fence-engine	tests/Tests.cs:1333	derive: a link whose target is not a top device emits NO route	-
+P099	A	unit + reference-diff	p099_	crates/fence-engine	tests/Tests.cs:1346	wall-off: large-delta entry from left clamps to LEFT edge (no far-side tunnel)	-
+P100	A	unit + reference-diff	p100_	crates/fence-engine	tests/Tests.cs:1360	wall-off diagonal: first-crossed edge is TOP (bx kept, by=T-1) despite larger dx	-
+P101	A	unit + reference-diff	p101_	crates/fence-engine	tests/Tests.cs:1372	wall-off diagonal mirror: first-crossed edge is LEFT (by kept, bx=L-1) despite larger dy	-
+P102	A	unit + reference-diff	p102_	crates/fence-engine	tests/Tests.cs:1382	wall-off: entry from left -> clamp X to L-1, keep Y	-
+P103	A	unit + reference-diff	p103_	crates/fence-engine	tests/Tests.cs:1393	wall-off: entry from top -> clamp Y to T-1, keep X	-
+P104	A	unit + reference-diff	p104_	crates/fence-engine	tests/Tests.cs:1404	wall-off: sliding along the seam OUTSIDE passes untouched (no sticking)	-
+P105	A	unit + reference-diff	p105_	crates/fence-engine	tests/Tests.cs:1413	wall-off: empty list is inert (Pass, no clamp)	-
+P106	A	unit + reference-diff	p106_	crates/fence-engine	tests/Tests.cs:1426	wall-off: runs before the barrier (dummy entry is walled, not gated)	-
+P107	A	unit + reference-diff	p107_	crates/fence-engine	tests/Tests.cs:1435	wall-off: a normal gate cross is unaffected by the wall	-
+P108	A	unit + reference-diff	p108_	crates/fence-engine	tests/Tests.cs:1447	wall-off: composes with Confine (walled by step 0 first)	-
+P109	A	unit + reference-diff	p109_	crates/fence-engine	tests/Tests.cs:1454	wall-off: NeedsProcessing is true with only Forbidden set	-
+P110	A	unit + reference-diff	p110_	crates/fence-engine	tests/Tests.cs:1457	wall-off: no top + no confine still walls the dummy	-
+P111	A	unit + reference-diff	p111_	crates/fence-engine	tests/Tests.cs:1462	wall-off: NeedsProcessing is false when nothing is set (hook stays out)	-
+P112	A	unit + reference-diff	p112_	crates/fence-engine	tests/Tests.cs:1475	wall-off: adjacent dummies — clamped point is outside ALL forbidden rects	-
+P113	A	unit + reference-diff	p113_	crates/fence-engine	tests/Tests.cs:1491	wall-off FIX A: no-HaveLast into adjacent pair -> outside BOTH (cx repro: not stuck at x=100)	-
+P114	A	unit + reference-diff	p114_	crates/fence-engine	tests/Tests.cs:1508	wall-off FIX A: Last inside neighbour, move into the other -> outside BOTH (no oscillation)	-
+P115	A	unit + reference-diff	p115_	crates/fence-engine	tests/Tests.cs:1522	wall-off FIX A: three-rect chain, deep tunnel from left -> exits LEFT past the whole region	-
+P116	A	unit + reference-diff	p116_	crates/fence-engine	tests/Tests.cs:1535	wall-off FIX C: Last on TL corner pixel (inside) -> nearest-edge tie picks LEFT, exit L-1	-
+P117	A	unit + reference-diff	p117_	crates/fence-engine	tests/Tests.cs:1548	wall-off FIX C: t==1 inclusive (target on top row) -> both valid, tie to earlier-t LEFT wall	-
+P118	A	unit + reference-diff	p118_	crates/fence-engine	tests/Tests.cs:1560	wall-off FIX C: equal-earliest-t corner entry -> tie picks X, exit L-1	-
+P119	A	unit + reference-diff	p119_	crates/fence-engine	tests/Tests.cs:1579	wall-off monitor-aware: synthetic teleport returns to monitor 4, never the void below it	renamed-in-22665ee
+P120	A	unit + reference-diff	p120_	crates/fence-engine	tests/Tests.cs:1597	wall-off monitor-aware: seam hit keeps entry height (no ~450px vertical jump)	renamed-in-22665ee
+P121	A	unit + reference-diff	p121_	crates/fence-engine	tests/Tests.cs:1610	wall-off monitor-aware: dummy RIGHT -> entry-side usable neighbour (orthogonal clamp)	-
+P122	A	unit + reference-diff	p122_	crates/fence-engine	tests/Tests.cs:1619	wall-off monitor-aware: dummy LEFT -> entry-side usable neighbour (orthogonal clamp)	-
+P123	A	unit + reference-diff	p123_	crates/fence-engine	tests/Tests.cs:1628	wall-off monitor-aware: dummy ABOVE -> entry-side usable neighbour (orthogonal clamp)	-
+P124	A	unit + reference-diff	p124_	crates/fence-engine	tests/Tests.cs:1637	wall-off monitor-aware: dummy BELOW -> entry-side usable neighbour (orthogonal clamp)	-
+P125	A	unit + reference-diff	p125_	crates/fence-engine	tests/Tests.cs:1650	wall-off monitor-aware: corner dummy prefers the real monitor the move came from	-
+P126	A	unit + reference-diff	p126_	crates/fence-engine	tests/Tests.cs:1664	wall-off monitor-aware: shorter offset dummy still returns to its taller real neighbour	-
+P127	A	unit + reference-diff	p127_	crates/fence-engine	tests/Tests.cs:1680	wall-off monitor-aware: adjacent dummies march as one region onto the real screen beyond both	-
+P128	A	unit + reference-diff	p128_	crates/fence-engine	tests/Tests.cs:1699	wall-off monitor-aware: no-baseline deep landing near LEFT edge resolves on-screen	-
+P129	A	unit + reference-diff	p129_	crates/fence-engine	tests/Tests.cs:1699	wall-off monitor-aware: no-baseline deep landing near RIGHT edge resolves on-screen	-
+P130	A	unit + reference-diff	p130_	crates/fence-engine	tests/Tests.cs:1699	wall-off monitor-aware: no-baseline deep landing near TOP edge resolves on-screen	-
+P131	A	unit + reference-diff	p131_	crates/fence-engine	tests/Tests.cs:1699	wall-off monitor-aware: no-baseline deep landing near BOTTOM edge resolves on-screen	-
+P132	A	unit + reference-diff	p132_	crates/fence-engine	tests/Tests.cs:1726	wall-off monitor-aware: nearest-monitor tie is deterministic and independent of monitor list order	-
+P133	A	unit + reference-diff	p133_	crates/fence-engine	tests/Tests.cs:1729	wall-off monitor-aware: Last inside forbidden region falls back to nearest legal monitor	-
+P134	A	unit + reference-diff	p134_	crates/fence-engine	tests/Tests.cs:1745	wall-off monitor-aware: pathological dummy ring terminates on its usable centre	-
+P135	A	unit + reference-diff	p135_	crates/fence-engine	tests/Tests.cs:1769	wall-off topology: excluded device absent -> no spurious isolation/gate; right screen unaffected	-
+P136	B	unit + reference-diff	p136_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1782	wall-off safety: primary is never excluded; one usable monitor remains; prune flagged	-
+P137	B	unit + reference-diff	p137_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1792	wall-off safety: never leaves zero usable monitors (keep-one)	-
+P138	B	unit + reference-diff	p138_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1802	wall-off safety: an absent (imported) id is dormant -> not a prune; present dummy still excluded	-
+P139	B	unit + reference-diff	p139_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1834	wall-off stable-key: the SAME dummy is excluded under both DISPLAYn orderings (identity survives renumber)	-
+P140	B	unit + reference-diff	p140_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1862	wall-off FIX B: identical-EDID panels get DISTINCT StableIds (deterministic by Left); primary untouched	-
+P141	B	unit + reference-diff	p141_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1876	wall-off FIX B: excluding ONE identical panel excludes ONLY that one (the other stays usable)	-
+P142	A	unit + reference-diff	p142_	crates/fence-engine	tests/Tests.cs:1887	wall-off clone overlap: usable clone geometry wins and the first event stays on-screen	-
+P143	B	unit + reference-diff	p143_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1917	layout rules stable-key: ManualMonitors/UpLinks survive DISPLAYn renumber and target the same physical pair	-
+P144	B	unit + reference-diff	p144_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1937	layout stale refs: absent stable ids are inert and never retarget another monitor	-
+P145	B	unit + reference-diff	p145_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1957	layout migration: present DISPLAY keys convert to StableId and stale DISPLAY keys are dropped	-
+P146	B	unit + reference-diff	p146_	crates/fence-engine/src/layout.rs	tests/Tests.cs:1967	layout reset: returns to AutoTop and clears manual monitors plus explicit crossing rules	-
+P147	B	unit + reference-diff	p147_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2012	map layout: single monitor scales and centers exactly	-
+P148	B	unit + reference-diff	p148_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2020	map layout: two side-by-side monitors keep adjacency and order	-
+P149	B	unit + reference-diff	p149_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2028	map layout: a real desktop gap remains visible	-
+P150	B	unit + reference-diff	p150_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2036	map layout: negative-origin left monitor stays left of Main	-
+P151	B	unit + reference-diff	p151_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2044	map layout: portrait geometry preserves its tall aspect	-
+P152	B	unit + reference-diff	p152_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2055	map layout: 8-monitor sprawl stays bounded, ordered, centered, and proportional	-
+P153	B	unit + reference-diff	p153_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2071	map layout: synthetic abutting dummy keeps its seam and is deterministic under input permutation	renamed-in-22665ee
+P154	B	unit + reference-diff	p154_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2101	monitor identity: numbering is deterministic Left,Top order with stable exact-origin ties	-
+P155	B	unit + reference-diff	p155_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2112	layout label: compact, deterministic, and not position/DISPLAY-number based	-
+P156	B	unit + reference-diff	p156_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2119	monitor naming: list label keeps the MouseFence number and adds the nickname	-
+P157	D	equivalent headless egui test	p157_	crates/fence-settings-ui	tests/Tests.cs:2126	monitor naming: identify text is one line with number+name and number-only fallback	-
+P158	B	unit + reference-diff	p158_	crates/fence-config	tests/Tests.cs:2136	schema v4 migration: v3 Default becomes Automatic with no explicit rules	-
+P159	B	unit + reference-diff	p159_	crates/fence-config	tests/Tests.cs:2146	schema v4 migration: v3 Custom becomes Blocked default + explicit OverallFeel allowance	-
+P160	B	unit + reference-diff	p160_	crates/fence-config	tests/Tests.cs:2156	schema v4 migration: empty v3 Manual falls back to AutoTop while empty Custom remains explicit none	-
+P161	B	unit + reference-diff	p161_	crates/fence-config	tests/Tests.cs:2168	schema v4 JSON: rules round-trip and legacy CrossingPathMode/UpLinks stop emitting	-
+P162	B	unit + reference-diff	p162_	crates/fence-config	tests/Tests.cs:2184	settings JSON: MonitorNames persist through export/import including an absent StableId	-
+P163	B	unit + reference-diff	p163_	crates/fence-config	tests/Tests.cs:2195	settings JSON: absent/null MonitorNames are safe empty dictionaries	-
+P164	B	unit + reference-diff	p164_	crates/fence-config	tests/Tests.cs:2205	monitor naming: absent StableId stays inert and never retargets a live monitor	-
+P165	B	unit + reference-diff	p165_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2227	monitor naming: nickname follows StableId across DISPLAYn renumbering and rearrangement	-
+P166	B	unit + reference-diff	p166_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2249	monitor naming: display-only names do not affect identity or numbering determinism	-
+P167	D	equivalent headless egui test	p167_	crates/fence-settings-ui	tests/Tests.cs:2271	settings GUI: persisted fields are edited or explicitly M1-staged; lean BoundaryRule reflection coverage	-
+P168	A	unit + reference-diff	p168_	crates/fence-engine	tests/Tests.cs:2283	side: NeedsProcessing is true with only HasSides set	-
+P169	A	unit + reference-diff	p169_	crates/fence-engine	tests/Tests.cs:2289	side on: deliberate push right crosses	-
+P170	A	unit + reference-diff	p170_	crates/fence-engine	tests/Tests.cs:2295	side on: deliberate push left crosses	-
+P171	A	unit + reference-diff	p171_	crates/fence-engine	tests/Tests.cs:2301	side on: slow right drift blocked, clamped to 2559, Y kept	-
+P172	A	unit + reference-diff	p172_	crates/fence-engine	tests/Tests.cs:2308	side on: slow left drift blocked, clamped to 0, Y kept	-
+P173	A	unit + reference-diff	p173_	crates/fence-engine	tests/Tests.cs:2315	side on: steep diagonal (dx10,dy100) is not a side push -> blocked	-
+P174	A	unit + reference-diff	p174_	crates/fence-engine	tests/Tests.cs:2322	side on: slow side->main drift blocked, clamped to -1, Y kept	-
+P175	A	unit + reference-diff	p175_	crates/fence-engine	tests/Tests.cs:2329	side on: slow side->main drift (right) blocked, clamped to 2560, Y kept	-
+P176	A	unit + reference-diff	p176_	crates/fence-engine	tests/Tests.cs:2337	side on: deliberate side->main push crosses	-
+P177	A	unit + reference-diff	p177_	crates/fence-engine	tests/Tests.cs:2344	side on + deliberate OFF: side->main drift crosses	-
+P178	A	unit + reference-diff	p178_	crates/fence-engine	tests/Tests.cs:2352	side sensitivity: dx=4 blocked when SideCrossMin=8	-
+P179	A	unit + reference-diff	p179_	crates/fence-engine	tests/Tests.cs:2360	side sensitivity: dx=4 crosses at default SideCrossMin=3	-
+P180	A	unit + reference-diff	p180_	crates/fence-engine	tests/Tests.cs:2367	side on: roaming within a side screen is free	-
+P181	A	unit + reference-diff	p181_	crates/fence-engine	tests/Tests.cs:2374	side on: up-left corner drift contained on both axes (bx=0, by=0)	-
+P182	A	unit + reference-diff	p182_	crates/fence-engine	tests/Tests.cs:2381	side on: a centre up-gate crossing still works (no interference)	-
+P183	A	unit + reference-diff	p183_	crates/fence-engine	tests/Tests.cs:2388	side on + deliberate OFF: any sideways move crosses	-
+P184	A	unit + reference-diff	p184_	crates/fence-engine	tests/Tests.cs:2394	side on: a purely vertical move inside main passes	-
+P185	A	unit + reference-diff	p185_	crates/fence-engine	tests/Tests.cs:2406	side on: taller side screen -> blocked drift stays on main (void corrected)	-
+P186	A	unit + reference-diff	p186_	crates/fence-engine	tests/Tests.cs:2419	side on: descent into a below-main screen keeps Y (no over-clamp regression)	-
+P187	A	unit + reference-diff	p187_	crates/fence-engine	tests/Tests.cs:2427	side on: a near-edge up-gate crossing (x stays in main) still crosses	-
+P188	A	unit + reference-diff	p188_	crates/fence-engine	tests/Tests.cs:2437	confine precedence: game mode handles the block before side containment	-
+P189	A	unit + reference-diff	p189_	crates/fence-engine	tests/Tests.cs:2444	side off: sideways drift passes freely (no containment)	-
+P190	B	unit + reference-diff	p190_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2455	intel: Ctrl+Alt+{Up,Down,Left,Right} all detected as rotation clashes	-
+P191	B	unit + reference-diff	p191_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2460	intel: Ctrl+Alt+Shift+Right is NOT a clash (the safe remap)	-
+P192	B	unit + reference-diff	p192_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2462	intel: Ctrl+Alt+Win+Right is NOT a clash	-
+P193	B	unit + reference-diff	p193_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2467	intel: a non-arrow key (G) is not a clash	-
+P194	B	unit + reference-diff	p194_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2468	intel: missing Ctrl is not a clash	-
+P195	B	unit + reference-diff	p195_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2469	intel: missing Alt is not a clash	-
+P196	A	unit + reference-diff	p196_	crates/fence-engine	tests/Tests.cs:2493	M1 compiler: third-screen occlusion splits a corridor and sort is input-order independent	-
+P197	A	unit + reference-diff	p197_	crates/fence-engine	tests/Tests.cs:2507	M1 validator: an authored zero-exit configuration is rejected deterministically	-
+P198	A	unit + reference-diff	p198_	crates/fence-engine	tests/Tests.cs:2509	M1 compiler: geometry-seal backstop demotes widest exits to Push and flags them	-
+P199	A	unit + reference-diff	p199_	crates/fence-engine	tests/Tests.cs:2521	M1 engine: authorized landing stops a fast multi-seam teleport before a blocked second transition	-
+P200	A	unit + reference-diff	p200_	crates/fence-engine	tests/Tests.cs:2526	M1 engine: fast multi-seam move reaches a transitively authorized free monitor	-
+P201	A	unit + reference-diff	p201_	crates/fence-engine	tests/Tests.cs:2534	M1 engine: compiled Free crossing into void is corrected only onto an authorized real screen	-
+P202	A	unit + reference-diff	p202_	crates/fence-engine	tests/Tests.cs:2546	M1 engine: failed/Blocked Push holds back on source and never lands on the blocked monitor	-
+P203	A	unit + reference-diff	p203_	crates/fence-engine	tests/Tests.cs:2555	M1 compiler: excluded screens are absent from transitions and every allowed-landing set	-
+P204	A	unit + reference-diff	p204_	crates/fence-engine	tests/Tests.cs:2565	M1 engine: Down-Blocked runs before OnTop legacy descent and state follows the source landing	-
+P205	A	unit + reference-diff	p205_	crates/fence-engine	tests/Tests.cs:2576	M1 engine: compiled Down-Free applies global descent guidance after transition resolution	-
+P206	A	unit + reference-diff	p206_	crates/fence-engine	tests/Tests.cs:2591	M1 descent routing: fast diagonal uses the local-edge intersection after endpoint leaves the top X-span	-
+P207	A	unit + reference-diff	p207_	crates/fence-engine	tests/Tests.cs:2605	M1 engine: Automatic follows the live Up switch while Always ignores it	-
+P208	A	unit + reference-diff	p208_	crates/fence-engine	tests/Tests.cs:2619	M1 engine: Automatic Blocked side rule becomes end-to-end Free only while side protection is off	-
+P209	A	unit + reference-diff	p209_	crates/fence-engine	tests/Tests.cs:2635	M1 engine: transitive authorized landing honors the live Up toggle on downstream edges	-
+P210	A	unit + reference-diff	p210_	crates/fence-engine	tests/Tests.cs:2650	M1 identity dormancy: absent IDs stay inert, persist, and reactivate only on exact-identity return	the engine half is here; the persistence half (Normalize keeps rules with absent ids, JSON round trip) is fence-config's p161_ test and the config reference diff (JUDGE-A O-A5)
+P211	A	unit + reference-diff	p211_	crates/fence-engine	tests/Tests.cs:2664	M1 gap semantics: void attempt stays source-authorized; OS landing on To activates the saved gap rule	-
+P212	A	unit + reference-diff	p212_	crates/fence-engine	tests/Tests.cs:2679	M1 simultaneous-intersection tie: true corner fires no edge; authorized repair is deterministic	-
+P213	A	unit + reference-diff	p213_	crates/fence-engine	tests/Tests.cs:2688	M1 schema: a newly empty v4 Manual upper group is literal none (Automatic Up resolves Free)	-
+P214	A	unit + reference-diff	p214_	crates/fence-engine	tests/Tests.cs:2701	M1 anti-trap: sole-up exit remains a deliberate Push while the normal Up gate is closed	-
+P215	A	unit + reference-diff	p215_	crates/fence-engine	tests/Tests.cs:2713	M1 anti-trap: SafetyEscapes off permits the expert runtime seal and validator remains total	-
+P216	A	unit + reference-diff	p216_	crates/fence-engine	tests/Tests.cs:2730	M1 anti-trap: geometry-demoted Up exit remains Push while the ordinary Up toggle is closed	-
+P217	A	unit + reference-diff	p217_	crates/fence-engine	tests/Tests.cs:2752	M1 anti-trap: live Up closure cannot seal an otherwise-Free Automatic exit	-
+P218	B	unit + reference-diff	p218_	crates/fence-config	tests/Tests.cs:2763	schema v4 migration: field-absent legacy JSON migrates as v0 and preserves custom UpLinks	-
+P219	A	unit + reference-diff	p219_	crates/fence-engine	tests/Tests.cs:2788	M1 validator: imported primary exclusion is sanitized identically to runtime topology	-
+P220	B	unit + reference-diff	p220_	crates/fence-config	tests/Tests.cs:2796	M1 import: unknown enum values remain a repairable draft and never silently collapse	-
+P221	B	unit + reference-diff	p221_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2803	A-FIX-1: extreme-span 640x480 dummy retains a minimum 12x12 logical footprint	-
+P222	B	unit + reference-diff	p222_	crates/fence-engine/src/layout.rs	tests/Tests.cs:2815	A-FIX-2: exact-clone suffix tie breaks by ordinal raw identity, not enumeration order	-
+P223	D	equivalent headless egui test	p223_	crates/fence-settings-ui	tests/Tests.cs:2824	docs demo: fixed three-screen geometry and neutral identities never depend on live monitor enumeration	-
+P224	D	equivalent headless egui test	p224_	crates/fence-settings-ui	tests/Tests.cs:2856	docs capture: synthetic dark client is aligned and owner-drawn controls stay themed	-
+P225	S	unit (done in skeleton)	p225_	crates/fence-i18n	tests/Tests.cs:2872	i18n: EN and TR dictionaries have identical keys	-
+P226	S	unit (done in skeleton)	p226_	crates/fence-i18n	tests/Tests.cs:2888	i18n: placeholder arity matches across EN and TR	-
+P227	A	unit + reference-diff	p227_	crates/fence-engine	tests/Tests.cs:2914	offset fixture: drift down off right's bottom into the void lands on a usable monitor (never disappears)	renamed-in-22665ee
+P228	A	unit + reference-diff	p228_	crates/fence-engine	tests/Tests.cs:2917	offset fixture: deep eased flick to the void's bottom lands legal	renamed-in-22665ee
+P229	A	unit + reference-diff	p229_	crates/fence-engine	tests/Tests.cs:2920	offset fixture: ease-teleport main -> void below right never lands in the void	renamed-in-22665ee
+P230	A	unit + reference-diff	p230_	crates/fence-engine	tests/Tests.cs:2923	offset fixture: move into the EXCLUDED dummy is kept out (usable, not dummy)	renamed-in-22665ee
+P231	A	unit + reference-diff	p231_	crates/fence-engine	tests/Tests.cs:2926	offset fixture: teleport deep into the dummy's bottom is kept out, lands legal	renamed-in-22665ee
+P232	A	unit + reference-diff	p232_	crates/fence-engine	tests/Tests.cs:2929	offset fixture: the main/right/void corner move lands legal	renamed-in-22665ee
+P233	A	unit + reference-diff	p233_	crates/fence-engine	tests/Tests.cs:2932	offset fixture: thin void above right (Y 0..40) lands legal	renamed-in-22665ee
+P234	S	unit (done in skeleton)	p234_	crates/fence-engine/src/hook_health.rs	tests/Tests.cs:2944	hook health: traffic since the last probe => Alive	-
+P235	S	unit (done in skeleton)	p235_	crates/fence-engine/src/hook_health.rs	tests/Tests.cs:2947	hook health: traffic without cursor movement (clicks/wheel only) is still Alive	-
+P236	S	unit (done in skeleton)	p236_	crates/fence-engine/src/hook_health.rs	tests/Tests.cs:2950	hook health: the cursor moved but NOT ONE callback arrived => Dead (silently unhooked)	-
+P237	S	unit (done in skeleton)	p237_	crates/fence-engine/src/hook_health.rs	tests/Tests.cs:2953	hook health: nothing moved and nothing arrived => Inconclusive, never a reinstall	-
+P238	S	unit (done in skeleton)	p238_	crates/fence-engine/src/hook_health.rs	tests/Tests.cs:2960	hook health: a zero delta on a non-zero counter is not evidence of death	-
+# B rows: behaviours of 1.1.1 that no C# test covers (source = the C# file:line that defines them).
+B001	C	unit (fake ports)	b001_	crates/fence-app	Ui/TrayApplicationContext.cs:47-98	startup order: load settings, apply language, register hotkeys before Configure, Configure, gate = !StartGateClosed, side = StartSideContainOn, start the hook, start the 750 ms display debounce and the 3 s hook probe, menu text, UpdateUi, Intel warning	-
+B002	C	unit (fake ports)	b002_	crates/fence-app	Ui/TrayApplicationContext.cs:63-70	tray menu order: gate, side, game, pause, separator, settings, exit	-
+B003	C	unit (fake ports)	b003_	crates/fence-app	Ui/TrayApplicationContext.cs:73	double-click on the tray icon toggles the gate	-
+B004	C	unit (fake ports)	b004_	crates/fence-app	Ui/TrayApplicationContext.cs:75-78	hotkey wiring: gate hotkey toggles the gate, confine hotkey toggles game mode, pause hotkey toggles pause, side hotkey toggles side containment	-
+B005	C	unit (fake ports)	b005_	crates/fence-app	Ui/TrayApplicationContext.cs:273-286	hotkey registration failures: gate and confine always warn (3000 ms, TipHotkeyFail); side warns only when set; pause warns only when set and failed; the pause registration result is remembered for the escape-key label	-
+B006	C	unit (fake ports)	b006_	crates/fence-app	Ui/TrayApplicationContext.cs:295-317	gate/side/game toggles update the UI and show a balloon only while the guard is enabled (1000/1000/1200 ms, TipOpen/TipClosed, TipSideOn/TipSideOff, TipGameOn/TipGameOff)	-
+B007	C	unit (fake ports)	b007_	crates/fence-app	Ui/TrayApplicationContext.cs:319-333	pause toggle: stop or start the guard, re-arm the outage latch, balloon TipPaused or TipResumed (1200 ms), or TipGuardLost (8000 ms, warning) when the resume could not install the hook	-
+B008	C	unit (fake ports)	b008_	crates/fence-app	Ui/TrayApplicationContext.cs:339-351	paused view: paused icon, TrayPaused(hotkey) tooltip, gate and side items disabled with their paused texts, game item disabled, pause item reads Resume and is checked	-
+B009	C	unit (fake ports)	b009_	crates/fence-app	Ui/TrayApplicationContext.cs:353-377	running view: open/closed icon and tooltip by gate, gate/side/game check marks; honesty gate: no hook installed shows the paused icon and TrayGuardLost(hotkey)	-
+B010	C	unit (fake ports + fake clock)	b010_	crates/fence-app	Ui/TrayApplicationContext.cs:112-132; Platform/MouseGuard.cs:136-174	hook probe every 3000 ms: skipped while paused; Inconclusive does nothing; Alive re-arms the latch; Dead reinstalls (core reset) and announces once per outage (TipGuardRestored 4000 ms info if the reinstall took, else TipGuardLost 8000 ms warning)	-
+B011	C	unit (fake clock)	b011_	crates/fence-app	Ui/TrayApplicationContext.cs:86-89,102-106	display change: marshal to the UI thread, restart a 750 ms one-shot timer, then Configure and UpdateUi once per burst	-
+B012	C	unit (fake ports)	b012_	crates/fence-app	Ui/TrayApplicationContext.cs:239-271	Configure balloons: GeometrySealDemoted (5000 ms info), ExcludePruned (5000 ms warning), isolation warning once per distinct set of isolated StableIds (re-armed when it heals) naming "index — name" and the live pause-key label (or NoneRegistered)	-
+B013	C	unit (fake ports)	b013_	crates/fence-app	Ui/TrayApplicationContext.cs:380-399	settings saved: unregister the four hotkeys, adopt and save the new settings, apply language and autostart, re-register, Configure, menu text, UpdateUi, Intel warning; cancel changes nothing	-
+B014	C	unit (fake ports)	b014_	crates/fence-app	Ui/TrayApplicationContext.cs:405-432	Intel warning: nothing without an Intel adapter; IntelDefaultsApplied shows TipIntelDefaults (8000 ms info) with the gate and side hotkey texts; otherwise TipIntelRotation (8000 ms warning) naming every arrow-rotation hotkey (gate, side, confine, pause)	-
+B015	C	unit (fake ports)	b015_	crates/fence-app	Ui/TrayApplicationContext.cs:434-452	exit: unsubscribe display events, stop the timers, hide the tray icon, unhook, unregister the hotkeys, release the icons	-
+B016	C	unit	b016_	crates/fence-win	Ui/TrayApplicationContext.cs:52-54,454-464	three embedded multi-resolution tray icons (closed, open, paused) with 16/20/24/32/40/48/64 frames	-
+B017	C	unit (test-only mutex name)	b017_	crates/fence-win	Program.cs:71-72	single instance: named mutex MouseFence_SingleInstance_2C7A; a second instance exits silently with code 0	-
+B018	C	unit	b018_	apps/mousefence	Program.cs:13-69	dev CLI modes (--screenshot, --screenshot-demo, --identify) and the settings process run before the single-instance check	-
+B019	C	unit (throwaway HKCU test key, never the real Run key)	b019_	crates/fence-win	Platform/AutoStart.cs:11-24	autostart: HKCU Run value "MouseFence" = quoted exe path when enabled, deleted when disabled, errors are non-fatal	-
+B020	C	unit (F24 chord registration and a posted WM_HOTKEY; no key is ever sent)	b020_	crates/fence-win	Platform/HotKeyWindow.cs:12-25	hotkey window: RegisterHotKey with MOD_NOREPEAT; modifiers 0 or key 0 registers nothing; re-register unregisters first; WM_HOTKEY with our id fires the action	-
+B021	C	unit (pure hook step, no real hook)	b021_	crates/fence-win	Platform/MouseGuard.cs:182-189	hook callback counts every event first, then passes nCode<0, non-WM_MOUSEMOVE and not-needs-processing events to CallNextHookEx	-
+B022	C	unit (pure hook step, no real hook)	b022_	crates/fence-win	Platform/MouseGuard.cs:193-195	injected input (LLMHF_INJECTED or LLMHF_LOWER_IL_INJECTED, including our own SetCursorPos) passes through untouched	-
+B023	C	unit (fake cursor port; SetCursorPos is never called in tests)	b023_	crates/fence-win	Platform/MouseGuard.cs:197-201	Block: SetCursorPos(target) and swallow the move (return 1); Pass: CallNextHookEx	-
+B024	C	unit (fake hook installer)	b024_	crates/fence-app	Platform/MouseGuard.cs:112-128,161-180	Start/Stop: Enabled is the intent, HookInstalled the handle; Start resets the engine and the probe; Stop unhooks; reinstall resets the engine	-
+B025	A	unit + reference-diff	b025_	crates/fence-engine	Platform/MouseGuard.cs:84-110	engine configure: BarrierY = max bottom of the blocked tops, gates kept only when Max > Min, empty forbidden rects dropped, state reset (re-baseline)	-
+B026	A	reference-diff (verb run)	b026_	crates/fence-engine	Ui/TrayApplicationContext.cs:134-237	Configure pipeline: normalize, split excluded and topology monitors, compile, gates with GateInset 24, descent routes, safety escapes, side bounds, cross thresholds from settings; produces the same engine input as 1.1.1 for every corpus layout	-
+B027	C	unit (toggle channel); real hook not run	b027_	crates/fence-app	PLAN T9 (new in 2.0)	the hook runs on its own thread with its own message loop at normal priority; toggles reach it through atomics/messages; the hook callback never waits on the UI thread	-
+B028	C	unit	b028_	crates/fence-win	PLAN T12 (new in 2.0)	a panic inside the hook step is contained: the event passes through, the panic is counted, nothing unwinds across the FFI boundary	-
+B029	C	unit (fake process port)	b029_	crates/fence-app	PLAN T16 (new in 2.0)	settings process: the tray starts the same exe with --settings --state; at most one settings process at a time; exit 0 reloads the v2 file and applies it as B013; exit 1 changes nothing; exit 2 is logged and changes nothing; state.txt carries the live gate/side/confine/paused/hook state	-
+B030	B	unit (temp dirs)	b030_	crates/fence-config	Settings.cs:163-197	load order: v2 file, else import the 1.x file read-only, else fresh defaults (Intel: AddShiftToArrowHotkeys); an older version migrates layout keys to stable ids and saves; a corrupt v2 file falls back to last-good and keeps the bad bytes	-
+B031	B	unit (temp dirs)	b031_	crates/fence-config	Settings.cs:372-387	save: normalize, stamp the version, refuse repairable import errors, refuse a sealed layout, write atomically (temp + rename) and keep last-good; the outcome is returned (1.x saves silently)	-
+B032	B	reference-diff (verb normalize)	b032_	crates/fence-config	Settings.cs (whole file)	a settings file written by 1.1.1 loads and normalizes to the same values as 1.1.1; the 2.0 writer emits the same schema-v4 JSON content	-
+B033	B	unit (temp dirs)	b033_	crates/fence-config	PLAN T15 (new in 2.0)	the 1.x settings file is never written: its bytes and modified time are unchanged after load, save and migration	-
+B034	D	unit	b034_	crates/fence-settings-ui	Ui/Theming.cs:57-70	theme: high contrast wins; System follows AppsUseLightTheme; Light and Dark are explicit	-
+B035	D	invisible-desktop (low_run)	b035_	crates/fence-settings-ui	Program.cs:16-41,80-92	--screenshot / --screenshot-demo: argument forms (path, layout, tab, language, scale or WxH, WxH; sizes 320..10000), PNG written, metrics line printed; the demo layout is synthetic	2026-10-13: renderer glow chosen (PLAN T16); renderer=glow on the invisible desktop for every capture, the CPU raster is only a fallback; evidence in TRACK-D.txt
+B036	D	invisible-desktop (low_run)	b036_	crates/fence-settings-ui	Program.cs:46-69; Ui/IdentifyOverlay.cs	--identify: numbered overlay on every monitor, self-closes within about 2.8 s, writes "iters=N remaining=M" to the given file	2026-10-13 on the invisible desktop: overlays=4 iters=175 remaining=0 (TRACK-D.txt)
+B037	D	unit	b037_	crates/fence-settings-ui	PLAN T16 (new in 2.0)	settings window process: reads the live state from --state, exits 0 after a successful save through fence-config, 1 on cancel, 2 on failure	-
+B038	D	headless egui test (temp paths; the file dialog is injected)	b038_	crates/fence-settings-ui	Ui/SettingsForm.General.cs:41-90	backup and restore on the General page: the draft is validated before export; an import goes through the same validation	-
+B039	S	unit (done in skeleton)	s_i18n_resolve	crates/fence-i18n	I18n/Strings.cs:14-20	language "auto" follows the OS UI language (tr gives Turkish, anything else English); "en" and "tr" are explicit	-
+# J rows: judged differences from 1.1.1. Each lands only after exact parity is green; its test proves the new behaviour and the reference diff marks the case "intended".
+J01	A	unit + reference-diff (intended)	j01_	crates/fence-engine	commit cd65f2e (F2)	movement onto the source monitor's own top row and left column of pixels is allowed (cd65f2e, branch chore/net10-2026-10-06)	-
+J02	C	unit (fake ports)	j02_	crates/fence-app	commit 16c1753 (F3); Ui/TrayApplicationContext.cs:82-83	StartConfineOn and StartPaused are applied at startup (1.1.1 ignores them)	-
+J03	C	unit (fake cursor port)	j03_	crates/fence-app	lesson L9 (F4)	after an engine reset the first move is seeded from GetCursorPos, so the first event cannot be misjudged	-
+J04	B	unit (temp dirs)	j04_	crates/fence-config	lesson L12 (F5)	load safety: a settings file that cannot be read never silently becomes defaults that overwrite it	-
+J05	A	unit	j05_	crates/fence-engine	F6	the seal check runs over strongly connected groups, not single screens	judged 2026-10-13 (Track A): a group that holds the primary is never sealed, or the closed Up gate and one-way rules would be demoted open (P199, P207, B026); single screens keep 1.1.1; Fixes::EXACT_1_1_1 and validate_no_seal_with give the 1.1.1 validator for diffs. Join 2026-10-13: the settings validator differs from 1.1.1 in 37 of 2060 seeded seal answers, all by J05; the settings window shows it (s_join_j05_ test: two top screens with Coming down Blocked now read "needs a firm push")
+J06	A	unit	j06_	crates/fence-engine	lesson L8 (F7)	transitive landing: a case that lands on a screen two hops away is tested; fixed only if it reproduces	reproduced 2026-10-13 against the C# reference (shallow diagonal over a Free seam landed behind a Push Up seam); fixed for a passing move over a transition; the no-transition path keeps 1.1.1
+J07	C	unit (fake cursor port)	j07_	crates/fence-win	PLAN T10 (F8)	SetCursorPos failure: the move passes (fail open) and is counted as degraded	-
+J08	C	unit	j08_	crates/fence-win	PLAN T12 (F9)	panic containment (see B028)	-
+J09	A	unit + mutation	j09_	crates/fence-engine	commit a2de8f9 (F01)	full corridor enforces Free/Push/Blocked; inset ends hold Push	approved default; switch j09_full_corridor
+# H rows: the owner's hand checks. Agents never run these (they move the real cursor or need his desk).
+J25	C	fake notification state + mutation	j25_	crates/fence-win	F14	busy/fullscreen/presentation notifications queue newest four and each delivery waits for an accepting state	switch j25_fullscreen_quiet; controller probes even when paused
+J26	C	fixed histogram + counting allocator + mutation	j26_	crates/fence-win	F16	atomic cumulative step timing, callback and reinstall counters reach tray logs every three seconds; 100000 events allocate zero bytes	switch j26_hook_metrics; p99_upper_us is nearest-rank bucket upper bound, not an exact percentile; overflow uses measured maximum
+J13	A	physical-report corpus + mutation	j13_	crates/fence-engine	F11	Classic1k preserves 1000 Hz intent across 1000-8000 Hz reports and bunched timestamps	switch j13_classic_1k
+J14	A	arrival corpus + mutation	j14_	crates/fence-engine	F11	StopThenPush drops arrival/deceleration then counts a continued edge push; no waiting-only crossing	switch j14_stop_then_push
+J15	A	unit + mutation	j15_	crates/fence-engine	F12	Automatic side-to-top seams are blocked except the existing sole-exit safety Push; incidental contact never crosses; one report cannot bypass the normal T default via MAIN; explicit rules keep their existing precedence	switch j15_side_to_top_blocked; docs/rust2/side-to-top.md
+J24	C	synthetic trace files + mutation	j24_	crates/fence-trace	F13	opt-in edge capture, accident labels, bounded local storage and counterfactual replay	switch j24_edge_trace; native ring and hook tests in fence-win
+B040	C	unit + mutation	f10_	crates/fence-win	F10	Windows report milliseconds and cached-QPC callback timestamps reach the decider unchanged	no clock or allocation in the engine
+J10	C	fake cursor + mutation	j10_	crates/fence-win	commit 8cf37f8 (F02)	physical moves use observed origins; warps cannot reuse a requested clamp or top permission	switch j10_observed_origin; unavailable observation retains previous origin
+J11	A	unit + mutation	j11_	crates/fence-engine	commit cb1de05 (F03)	actual multi-seam segment traversal and instance-qualified display keys	switch j11_segment_and_identity
+J12	A	unit + mutation	j12_	crates/fence-engine	commit 361134b void repair (F04)	void correction follows only Free seams, never a Push or Blocked shortcut	switch j12_corner_void
+J22	C	unit + mutation	j22_	crates/fence-win	contained-panic recovery (F17)	a contained panic seeds the event point after reset; no cursor placement during recovery	switch j22_seed_after_panic
+J16	B	unit + mutation	f05_	crates/fence-config	cb1de05 ShortcutValidationScenarios; a2de8f9	required and optional shortcuts validate complete distinct virtual-key chords; invalid imports remain repairable	switch j16_shortcut_validation; shortcut_issue_with_fixes; UI f05_optional
+J17	D	headless + mutation	f05_capture_	crates/fence-settings-ui	a2de8f9 hotkey checks	shortcut capture retains a held Windows modifier without sending input	switch j17_win_capture; Editor::new_with_fixes; native tests use F24 only
+J18	B	unit + mutation	f06_	crates/fence-config	a2de8f9; cb1de05 AuditCleanupScenarios	future/null/corrupt settings preserve bytes; failed-load defaults are write-protected; atomic settings and backup replacement clean owned siblings	switch j18_settings_durability; from_json_v2_with_fixes and save_detailed_with_fixes; UI f03_interrupted_backup
+J19	B	unit + mutation	f07_	crates/fence-config	361134b Settings.JsonExtensionData	v2 round trip preserves ordered unknown top-level JSON fields after known ones; one-time legacy import ignores them	switch j19_unknown_settings; from_json_v2_with_fixes and to_json_v2_with_fixes; legacy exact APIs unchanged
+J20	C	unit + mutation	f08_	crates/fence-win	a2de8f9 CrashLogger	64KiB UTF8 error log rotates one archive and retains newest failure; tray panic logging never writes from hook thread	switch j20_error_log; append_with_fixes and install_panic_hook_with_fixes; tray probe integration
+J21	D	headless + mutation	f09_	crates/fence-settings-ui	8edb705; e2a8dde; 8e46927; ac73c39	screen name stays above gate pill; shortcut rows remain readable; Light and Dark captures report visible page	switch j21_ui_keepers; Editor::new_with_fixes; name_above_pill_with_fixes; tray labels covered separately
+H01	O	hand check	-	-	-	the up barrier on his desk: drift is blocked, a firm push crosses, the gate hotkey opens and closes it	-
+H02	O	hand check	-	-	-	side containment: drift out of the main screen is blocked, a deliberate sideways push crosses	-
+H03	O	hand check	-	-	-	game mode confines the cursor to the current monitor on each monitor	-
+H04	O	hand check	-	-	-	the pause hotkey frees the cursor from any trap and the balloon confirms it	-
+H05	O	hand check	-	-	-	tray icon states, tooltip and menu at his DPI, in English and Turkish	-
+H06	O	hand check	-	-	-	the four real hotkeys, including the Intel warning if it applies	-
+H07	O	hand check	-	-	-	dock, undock or change a display: the fence follows within about one second	-
+H08	O	hand check	-	-	-	the settings window in light, dark and high contrast, English and Turkish; save and cancel	-
+H09	O	hand check (at cut-over only)	-	-	-	start with Windows from the real Run entry	-
+H10	O	hand check	-	-	-	a fullscreen game session with game mode on, no stutter and no escape	-
+H11	O	hand check	-	-	-	the 7-day feel trial (owner question Q1)	-

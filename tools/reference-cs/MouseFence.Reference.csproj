@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Parity reference for MouseFence 2.0 (Rust). A test tool, never shipped.
+       It compiles the UNTOUCHED C# 1.1.1 engine and settings sources and answers JSON-lines requests
+       (see Program.cs and crates/fence-trace/src/case.rs). MfSrc points at a 1.1.1 source tree; the
+       default is the pinned tag extraction created by fetch_sources.py. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>MouseFence.Reference</AssemblyName>
+    <RootNamespace>MouseFence.Reference</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <MfSrc Condition="'$(MfSrc)' == ''">$(MSBuildThisFileDirectory)..\..\reference-src\v1.1.1\</MfSrc>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MfSrc)Core\GuardCore.cs" Link="Src\GuardCore.cs" />
+    <Compile Include="$(MfSrc)Core\GuardCore.Decision.cs" Link="Src\GuardCore.Decision.cs" />
+    <Compile Include="$(MfSrc)Core\GuardCore.Forbidden.cs" Link="Src\GuardCore.Forbidden.cs" />
+    <Compile Include="$(MfSrc)Core\GuardCore.Layout.cs" Link="Src\GuardCore.Layout.cs" />
+    <Compile Include="$(MfSrc)Core\GuardCore.Routes.cs" Link="Src\GuardCore.Routes.cs" />
+    <Compile Include="$(MfSrc)Core\GuardCore.Topology.cs" Link="Src\GuardCore.Topology.cs" />
+    <Compile Include="$(MfSrc)Core\GuardCore.Transitions.cs" Link="Src\GuardCore.Transitions.cs" />
+    <Compile Include="$(MfSrc)Core\HookHealth.cs" Link="Src\HookHealth.cs" />
+    <Compile Include="$(MfSrc)Core\BoundaryGraph.cs" Link="Src\BoundaryGraph.cs" />
+    <Compile Include="$(MfSrc)Core\MonitorInfo.cs" Link="Src\MonitorInfo.cs" />
+    <Compile Include="$(MfSrc)Settings.cs" Link="Src\Settings.cs" />
+    <Compile Include="$(MfSrc)Platform\Native.cs" Link="Src\Native.cs" />
+  </ItemGroup>
+
+</Project>

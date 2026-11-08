@@ -1,0 +1,22 @@
+[package]
+name = "fence-app"
+description = "MouseFence tray controller: the TrayApplicationContext logic behind ports, testable without Windows."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+fence-types.workspace = true
+fence-engine.workspace = true
+fence-config.workspace = true
+fence-i18n.workspace = true
+
+[dev-dependencies]
+# Tests only: the hook step and the hook thread run with fake installers and fake cursors (B027, J03), so
+# the controller's guard is proven against the real hook-side code without a real hook.
+fence-win.workspace = true
+
+[lints]
+workspace = true

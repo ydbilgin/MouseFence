@@ -1,0 +1,23 @@
+[package]
+name = "fence-config"
+description = "MouseFence settings: schema v4 JSON (1.x compatible), migration, typed load, atomic save, backup."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+fence-types.workspace = true
+# Layout helpers (GuardCore.Layout.cs port: case rules, key migration, exclusion sanitizing) and the
+# boundary compiler's seal check that Settings.ValidateNoSeal calls.
+fence-engine.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Extended grapheme clusters for StringInfo.ParseCombiningCharacters (nickname limit). Already in the local
+# cargo cache (offline build); Track B choice 2026-10-13, ruled fit by JUDGE-B (1.1). Pinned exactly: the .NET
+# difference tables in src/text.rs are tuned to this Unicode data, so an update must re-run the reference sweeps.
+unicode-segmentation = "=1.13.3"
+
+[lints]
+workspace = true

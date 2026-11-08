@@ -1,0 +1,591 @@
+[
+ {
+  "name": "written-defaults",
+  "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "written-intel",
+  "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": true,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": true,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": true,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": true,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Shift+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Shift+Right"
+   },
+   "modifiers": [
+    7,
+    3,
+    3,
+    7
+   ]
+  }
+ },
+ {
+  "name": "written-full",
+  "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": true,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": true,\r\n  \"SideHotKey\": 37,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": false,\r\n  \"StartConfineOn\": true,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": false,\r\n  \"AutoStart\": true,\r\n  \"DeliberateCross\": false,\r\n  \"DescentRouting\": true,\r\n  \"UpwardBoundaryDefault\": \"Push\",\r\n  \"SideBoundaryDefault\": \"Blocked\",\r\n  \"DownwardBoundaryDefault\": \"Automatic\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"MONITOR\\\\SYN1000\\\\{main}\",\r\n      \"ToStableId\": \"MONITOR\\\\SYN1001\\\\{top}\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"OverallFeel\",\r\n      \"Control\": \"Automatic\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"MONITOR\\\\SYN1001\\\\{top}\",\r\n      \"ToStableId\": \"MONITOR\\\\SYN1000\\\\{main}\",\r\n      \"Direction\": \"Down\",\r\n      \"Behavior\": \"Free\",\r\n      \"Control\": \"Always\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 12,\r\n  \"UpCrossSlack\": 40,\r\n  \"PassageInsetPx\": 100,\r\n  \"EdgeHoldbackPx\": 7,\r\n  \"SeamTolerancePx\": 9,\r\n  \"SafetyEscapes\": false,\r\n  \"BoundaryTipSeen\": true,\r\n  \"SideCrossMin\": 25,\r\n  \"SideCrossSlack\": 0,\r\n  \"Mode\": \"Manual\",\r\n  \"ManualMonitors\": [\r\n    \"MONITOR\\\\SYN1001\\\\{top}\"\r\n  ],\r\n  \"ExcludedDevices\": [\r\n    \"MONITOR\\\\SYN1009\\\\{dummy}#1\"\r\n  ],\r\n  \"MonitorNames\": {\r\n    \"MONITOR\\\\SYN1000\\\\{main}\": \"Example \\u003CMain\\u003E \\u0026 \\u0022Desk\\u0022\",\r\n    \"MONITOR\\\\SYN1001\\\\{top}\": \"\\u00DCst Ekran\"\r\n  },\r\n  \"Language\": \"tr\",\r\n  \"Theme\": \"Dark\"\r\n}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": true,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": true,\r\n  \"SideHotKey\": 37,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": false,\r\n  \"StartConfineOn\": true,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": false,\r\n  \"AutoStart\": true,\r\n  \"DeliberateCross\": false,\r\n  \"DescentRouting\": true,\r\n  \"UpwardBoundaryDefault\": \"Push\",\r\n  \"SideBoundaryDefault\": \"Blocked\",\r\n  \"DownwardBoundaryDefault\": \"Automatic\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"MONITOR\\\\SYN1000\\\\{main}\",\r\n      \"ToStableId\": \"MONITOR\\\\SYN1001\\\\{top}\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"OverallFeel\",\r\n      \"Control\": \"Automatic\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"MONITOR\\\\SYN1001\\\\{top}\",\r\n      \"ToStableId\": \"MONITOR\\\\SYN1000\\\\{main}\",\r\n      \"Direction\": \"Down\",\r\n      \"Behavior\": \"Free\",\r\n      \"Control\": \"Always\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 12,\r\n  \"UpCrossSlack\": 40,\r\n  \"PassageInsetPx\": 100,\r\n  \"EdgeHoldbackPx\": 7,\r\n  \"SeamTolerancePx\": 9,\r\n  \"SafetyEscapes\": false,\r\n  \"BoundaryTipSeen\": true,\r\n  \"SideCrossMin\": 25,\r\n  \"SideCrossSlack\": 0,\r\n  \"Mode\": \"Manual\",\r\n  \"ManualMonitors\": [\r\n    \"MONITOR\\\\SYN1001\\\\{top}\"\r\n  ],\r\n  \"ExcludedDevices\": [\r\n    \"MONITOR\\\\SYN1009\\\\{dummy}#1\"\r\n  ],\r\n  \"MonitorNames\": {\r\n    \"MONITOR\\\\SYN1000\\\\{main}\": \"Example \\u003CMain\\u003E \\u0026 \\u0022Desk\\u0022\",\r\n    \"MONITOR\\\\SYN1001\\\\{top}\": \"\\u00DCst Ekran\"\r\n  },\r\n  \"Language\": \"tr\",\r\n  \"Theme\": \"Dark\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Shift+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+Win+P",
+    "side": "Ctrl+Alt+Left"
+   },
+   "modifiers": [
+    7,
+    3,
+    11,
+    3
+   ]
+  }
+ },
+ {
+  "name": "full-compact-input",
+  "json": "{\"SettingsVersion\": 4, \"HotKey\": 38, \"ModCtrl\": true, \"ModAlt\": true, \"ModShift\": true, \"ModWin\": false, \"ConfineHotKey\": 71, \"PauseHotKey\": 80, \"PauseModWin\": true, \"SideHotKey\": 37, \"StartGateClosed\": false, \"StartConfineOn\": true, \"StartPaused\": false, \"StartSideContainOn\": false, \"AutoStart\": true, \"DeliberateCross\": false, \"DescentRouting\": true, \"UpwardBoundaryDefault\": \"Push\", \"SideBoundaryDefault\": \"Blocked\", \"DownwardBoundaryDefault\": \"Automatic\", \"BoundaryRules\": [{\"FromStableId\": \"MONITOR\\\\SYN1001\\\\{top}\", \"ToStableId\": \"MONITOR\\\\SYN1000\\\\{main}\", \"Direction\": \"Down\", \"Behavior\": \"Free\", \"Control\": \"Always\"}, {\"FromStableId\": \"MONITOR\\\\SYN1000\\\\{main}\", \"ToStableId\": \"MONITOR\\\\SYN1001\\\\{top}\", \"Direction\": \"Up\", \"Behavior\": \"OverallFeel\", \"Control\": \"Automatic\"}], \"UpCrossMin\": 12, \"UpCrossSlack\": 40, \"PassageInsetPx\": 100, \"EdgeHoldbackPx\": 7, \"SeamTolerancePx\": 9, \"SafetyEscapes\": false, \"BoundaryTipSeen\": true, \"SideCrossMin\": 25, \"SideCrossSlack\": 0, \"Mode\": \"Manual\", \"ManualMonitors\": [\"MONITOR\\\\SYN1001\\\\{top}\"], \"ExcludedDevices\": [\"MONITOR\\\\SYN1009\\\\{dummy}#1\"], \"MonitorNames\": {\"MONITOR\\\\SYN1001\\\\{top}\": \"Üst Ekran\", \"MONITOR\\\\SYN1000\\\\{main}\": \"Example <Main> & \\\"Desk\\\"\"}, \"Language\": \"tr\", \"Theme\": \"Dark\"}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": true,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": true,\r\n  \"SideHotKey\": 37,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": false,\r\n  \"StartConfineOn\": true,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": false,\r\n  \"AutoStart\": true,\r\n  \"DeliberateCross\": false,\r\n  \"DescentRouting\": true,\r\n  \"UpwardBoundaryDefault\": \"Push\",\r\n  \"SideBoundaryDefault\": \"Blocked\",\r\n  \"DownwardBoundaryDefault\": \"Automatic\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"MONITOR\\\\SYN1000\\\\{main}\",\r\n      \"ToStableId\": \"MONITOR\\\\SYN1001\\\\{top}\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"OverallFeel\",\r\n      \"Control\": \"Automatic\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"MONITOR\\\\SYN1001\\\\{top}\",\r\n      \"ToStableId\": \"MONITOR\\\\SYN1000\\\\{main}\",\r\n      \"Direction\": \"Down\",\r\n      \"Behavior\": \"Free\",\r\n      \"Control\": \"Always\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 12,\r\n  \"UpCrossSlack\": 40,\r\n  \"PassageInsetPx\": 100,\r\n  \"EdgeHoldbackPx\": 7,\r\n  \"SeamTolerancePx\": 9,\r\n  \"SafetyEscapes\": false,\r\n  \"BoundaryTipSeen\": true,\r\n  \"SideCrossMin\": 25,\r\n  \"SideCrossSlack\": 0,\r\n  \"Mode\": \"Manual\",\r\n  \"ManualMonitors\": [\r\n    \"MONITOR\\\\SYN1001\\\\{top}\"\r\n  ],\r\n  \"ExcludedDevices\": [\r\n    \"MONITOR\\\\SYN1009\\\\{dummy}#1\"\r\n  ],\r\n  \"MonitorNames\": {\r\n    \"MONITOR\\\\SYN1000\\\\{main}\": \"Example \\u003CMain\\u003E \\u0026 \\u0022Desk\\u0022\",\r\n    \"MONITOR\\\\SYN1001\\\\{top}\": \"\\u00DCst Ekran\"\r\n  },\r\n  \"Language\": \"tr\",\r\n  \"Theme\": \"Dark\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Shift+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+Win+P",
+    "side": "Ctrl+Alt+Left"
+   },
+   "modifiers": [
+    7,
+    3,
+    11,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v0-empty",
+  "json": "{}",
+  "expect": {
+   "loaded_version": 0,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v0-null-doc",
+  "json": "null",
+  "expect": {
+   "loaded_version": 0,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v3-default",
+  "json": "{\"SettingsVersion\": 3, \"CrossingPathMode\": \"Default\", \"UpLinks\": []}",
+  "expect": {
+   "loaded_version": 3,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v3-custom",
+  "json": "{\"SettingsVersion\": 3, \"CrossingPathMode\": \"Custom\", \"UpLinks\": [{\"FromDevice\": \"bottom\", \"ToDevice\": \"top\"}, {\"FromDevice\": \"Bottom\", \"ToDevice\": \"TOP\"}]}",
+  "expect": {
+   "loaded_version": 3,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Blocked\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"Bottom\",\r\n      \"ToStableId\": \"TOP\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"OverallFeel\",\r\n      \"Control\": \"Automatic\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v2-links-no-mode",
+  "json": "{\"SettingsVersion\": 2, \"UpLinks\": [{\"FromDevice\": \"a\", \"ToDevice\": \"b\"}, null]}",
+  "expect": {
+   "loaded_version": 2,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Blocked\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"a\",\r\n      \"ToStableId\": \"b\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"OverallFeel\",\r\n      \"Control\": \"Automatic\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v1-bad-mode",
+  "json": "{\"SettingsVersion\": 1, \"CrossingPathMode\": \"Sometimes\", \"UpLinks\": [], \"Mode\": \"Manual\", \"ManualMonitors\": [], \"EdgeHoldbackPx\": 50, \"StartPaused\": true, \"BoundaryTipSeen\": true}",
+  "expect": {
+   "loaded_version": 1,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v0-field-absent-custom",
+  "json": "{\"CrossingPathMode\": \"Custom\", \"UpLinks\": [{\"FromDevice\": \"bottom\", \"ToDevice\": \"top\"}]}",
+  "expect": {
+   "loaded_version": 0,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Blocked\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"bottom\",\r\n      \"ToStableId\": \"top\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"OverallFeel\",\r\n      \"Control\": \"Automatic\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v3-null-mode",
+  "json": "{\"SettingsVersion\": 3, \"CrossingPathMode\": null, \"UpLinks\": [{\"FromDevice\": null, \"ToDevice\": \"x\"}]}",
+  "expect": {
+   "loaded_version": 3,
+   "repairable": true,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Blocked\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"\",\r\n      \"ToStableId\": \"x\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"OverallFeel\",\r\n      \"Control\": \"Automatic\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v4-legacy-members-ignored",
+  "json": "{\"SettingsVersion\": 4, \"CrossingPathMode\": \"Custom\", \"UpLinks\": [{\"FromDevice\": \"a\", \"ToDevice\": \"b\"}]}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "v5-future",
+  "json": "{\"SettingsVersion\": 5, \"UpwardBoundaryDefault\": \"Blocked\", \"Mode\": \"Manual\"}",
+  "expect": {
+   "loaded_version": 5,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Blocked\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"Manual\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "version-negative",
+  "json": "{\"SettingsVersion\": -3, \"Mode\": \"Manual\", \"ManualMonitors\": [\"a\"]}",
+  "expect": {
+   "loaded_version": -3,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"Manual\",\r\n  \"ManualMonitors\": [\r\n    \"a\"\r\n  ],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "unknown-defaults",
+  "json": "{\"SettingsVersion\": 4, \"UpwardBoundaryDefault\": \"Surprise\", \"SideBoundaryDefault\": 99, \"DownwardBoundaryDefault\": null}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": true,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Unknown\",\r\n  \"SideBoundaryDefault\": \"Unknown\",\r\n  \"DownwardBoundaryDefault\": \"Unknown\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "tolerant-enums",
+  "json": "{\"SettingsVersion\": 4, \"BoundaryRules\": [{\"FromStableId\": \"a\", \"ToStableId\": \"b\", \"Direction\": \"up\", \"Behavior\": \" push \", \"Control\": 2}, {\"FromStableId\": \"c\", \"ToStableId\": \"d\", \"Direction\": \"Up, Down\", \"Behavior\": \"3\", \"Control\": \"Always\"}, {\"FromStableId\": \"e\", \"ToStableId\": \"f\", \"Direction\": 4, \"Behavior\": true, \"Control\": \"always\"}, {\"FromStableId\": \"g\", \"ToStableId\": \"h\", \"Direction\": \"Rıght\", \"Behavior\": \"Puſh\", \"Control\": \"Automatic\"}]}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": true,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"a\",\r\n      \"ToStableId\": \"b\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"Push\",\r\n      \"Control\": \"Always\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"c\",\r\n      \"ToStableId\": \"d\",\r\n      \"Direction\": \"Left\",\r\n      \"Behavior\": \"Blocked\",\r\n      \"Control\": \"Always\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"e\",\r\n      \"ToStableId\": \"f\",\r\n      \"Direction\": \"Right\",\r\n      \"Behavior\": \"Unknown\",\r\n      \"Control\": \"Always\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"g\",\r\n      \"ToStableId\": \"h\",\r\n      \"Direction\": \"Unknown\",\r\n      \"Behavior\": \"Unknown\",\r\n      \"Control\": \"Automatic\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "rules-dedupe-and-invalid",
+  "json": "{\"SettingsVersion\": 4, \"BoundaryRules\": [{\"FromStableId\": \" B \", \"ToStableId\": \"a\", \"Direction\": \"Left\", \"Behavior\": \"Free\", \"Control\": \"Always\"}, {\"FromStableId\": \"b\", \"ToStableId\": \"A\", \"Direction\": \"left\", \"Behavior\": \"Blocked\", \"Control\": \"Automatic\"}, {\"FromStableId\": \"x\", \"ToStableId\": \"X\", \"Direction\": \"Up\", \"Behavior\": \"Free\", \"Control\": \"Always\"}, {\"FromStableId\": \"\", \"ToStableId\": \"y\", \"Direction\": \"Up\", \"Behavior\": \"Free\", \"Control\": \"Always\"}, null, {\"FromStableId\": \"z\", \"ToStableId\": \"y\", \"Direction\": \"Up\", \"Behavior\": \"Free\", \"Control\": \"Always\"}]}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": true,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [\r\n    {\r\n      \"FromStableId\": \"b\",\r\n      \"ToStableId\": \"A\",\r\n      \"Direction\": \"Left\",\r\n      \"Behavior\": \"Blocked\",\r\n      \"Control\": \"Automatic\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"z\",\r\n      \"ToStableId\": \"y\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"Free\",\r\n      \"Control\": \"Always\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"x\",\r\n      \"ToStableId\": \"X\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"Free\",\r\n      \"Control\": \"Always\"\r\n    },\r\n    {\r\n      \"FromStableId\": \"\",\r\n      \"ToStableId\": \"y\",\r\n      \"Direction\": \"Up\",\r\n      \"Behavior\": \"Free\",\r\n      \"Control\": \"Always\"\r\n    }\r\n  ],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "nulls",
+  "json": "{\"SettingsVersion\": 4, \"BoundaryRules\": null, \"ManualMonitors\": null, \"ExcludedDevices\": [null, \"x\", null], \"MonitorNames\": null, \"Language\": null, \"Theme\": null, \"Mode\": null}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [\r\n    null,\r\n    \"x\",\r\n    null\r\n  ],\r\n  \"MonitorNames\": {},\r\n  \"Language\": null,\r\n  \"Theme\": null\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "names-normalized",
+  "json": "{\"SettingsVersion\": 4, \"MonitorNames\": {\"b\": \"  two\\tlines\\r\\nhere  \", \"B\": \"dup\", \" a \": \"x\", \"c\": \"\", \"d\": null, \"e\": \"éééééééééééééééééééééééééééééé\", \"f\": \"👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽\"}}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {\r\n    \"B\": \"dup\",\r\n    \"a\": \"x\",\r\n    \"e\": \"\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\\u00E9\",\r\n    \"f\": \"\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\\uD83D\\uDC4D\\uD83C\\uDFFD\"\r\n  },\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "clamps",
+  "json": "{\"SettingsVersion\": 4, \"UpCrossMin\": -5, \"UpCrossSlack\": 201, \"SideCrossMin\": 0, \"SideCrossSlack\": -1, \"PassageInsetPx\": 501, \"EdgeHoldbackPx\": -9, \"SeamTolerancePx\": 2147483647}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 1,\r\n  \"UpCrossSlack\": 200,\r\n  \"PassageInsetPx\": 500,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 200,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 1,\r\n  \"SideCrossSlack\": 0,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "hotkeys-odd",
+  "json": "{\"SettingsVersion\": 4, \"HotKey\": 65601, \"ConfineHotKey\": -1, \"PauseHotKey\": 0, \"PauseModCtrl\": false, \"PauseModAlt\": false, \"SideHotKey\": 256, \"SideModWin\": true}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 65601,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": -1,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 0,\r\n  \"PauseModCtrl\": false,\r\n  \"PauseModAlt\": false,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 256,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": true,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+A, Shift",
+    "confine": "Ctrl+Alt+KeyCode, Modifiers",
+    "pause": "(none)",
+    "side": "Ctrl+Alt+Win+256"
+   },
+   "modifiers": [
+    3,
+    3,
+    0,
+    11
+   ]
+  }
+ },
+ {
+  "name": "unknown-members",
+  "json": "{\"SettingsVersion\": 4, \"Future\": {\"a\": [1, 2e400, null]}, \"HotKey\": 40}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 40,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Down",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "dup-members",
+  "json": "{\"SettingsVersion\": 2, \"SettingsVersion\": 4, \"Mode\": \"Manual\", \"ManualMonitors\": [\"a\"]}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"Manual\",\r\n  \"ManualMonitors\": [\r\n    \"a\"\r\n  ],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"auto\",\r\n  \"Theme\": \"System\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "escapes",
+  "json": "{\"SettingsVersion\": 4, \"Theme\": \"<&>'+`\\\"\\\\/\\u0001é😀\", \"Language\": \" \"}",
+  "expect": {
+   "loaded_version": 4,
+   "repairable": false,
+   "json": "{\r\n  \"SettingsVersion\": 4,\r\n  \"HotKey\": 38,\r\n  \"ModCtrl\": true,\r\n  \"ModAlt\": true,\r\n  \"ModShift\": false,\r\n  \"ModWin\": false,\r\n  \"ConfineHotKey\": 71,\r\n  \"ConfineModCtrl\": true,\r\n  \"ConfineModAlt\": true,\r\n  \"ConfineModShift\": false,\r\n  \"ConfineModWin\": false,\r\n  \"PauseHotKey\": 80,\r\n  \"PauseModCtrl\": true,\r\n  \"PauseModAlt\": true,\r\n  \"PauseModShift\": false,\r\n  \"PauseModWin\": false,\r\n  \"SideHotKey\": 39,\r\n  \"SideModCtrl\": true,\r\n  \"SideModAlt\": true,\r\n  \"SideModShift\": false,\r\n  \"SideModWin\": false,\r\n  \"StartGateClosed\": true,\r\n  \"StartConfineOn\": false,\r\n  \"StartPaused\": false,\r\n  \"StartSideContainOn\": true,\r\n  \"AutoStart\": false,\r\n  \"DeliberateCross\": true,\r\n  \"DescentRouting\": false,\r\n  \"UpwardBoundaryDefault\": \"Automatic\",\r\n  \"SideBoundaryDefault\": \"Automatic\",\r\n  \"DownwardBoundaryDefault\": \"Free\",\r\n  \"BoundaryRules\": [],\r\n  \"UpCrossMin\": 3,\r\n  \"UpCrossSlack\": 5,\r\n  \"PassageInsetPx\": 24,\r\n  \"EdgeHoldbackPx\": 0,\r\n  \"SeamTolerancePx\": 2,\r\n  \"SafetyEscapes\": true,\r\n  \"BoundaryTipSeen\": false,\r\n  \"SideCrossMin\": 3,\r\n  \"SideCrossSlack\": 5,\r\n  \"Mode\": \"AutoTop\",\r\n  \"ManualMonitors\": [],\r\n  \"ExcludedDevices\": [],\r\n  \"MonitorNames\": {},\r\n  \"Language\": \"\\u2028\",\r\n  \"Theme\": \"\\u003C\\u0026\\u003E\\u0027\\u002B\\u0060\\u0022\\\\/\\u007F\\u0001\\u00E9\\uD83D\\uDE00\"\r\n}",
+   "texts": {
+    "hot": "Ctrl+Alt+Up",
+    "confine": "Ctrl+Alt+G",
+    "pause": "Ctrl+Alt+P",
+    "side": "Ctrl+Alt+Right"
+   },
+   "modifiers": [
+    3,
+    3,
+    3,
+    3
+   ]
+  }
+ },
+ {
+  "name": "bom",
+  "json": "﻿{\"SettingsVersion\": 4, \"HotKey\": 39}",
+  "expect": {
+   "loaded_version": 0,
+   "parse_error": "JsonException"
+  }
+ },
+ {
+  "name": "bad-truncated",
+  "json": "{\"SettingsVersion\": 4,",
+  "expect": {
+   "loaded_version": 0,
+   "parse_error": "JsonException"
+  }
+ },
+ {
+  "name": "bad-comment",
+  "json": "{\"SettingsVersion\": 4 /* c */}",
+  "expect": {
+   "loaded_version": 0,
+   "parse_error": "JsonException"
+  }
+ },
+ {
+  "name": "bad-hotkey-string",
+  "json": "{\"SettingsVersion\": 4, \"HotKey\": \"Up\"}",
+  "expect": {
+   "loaded_version": 4,
+   "parse_error": "JsonException"
+  }
+ },
+ {
+  "name": "bad-int-float",
+  "json": "{\"SettingsVersion\": 4, \"UpCrossMin\": 4.5}",
+  "expect": {
+   "loaded_version": 4,
+   "parse_error": "JsonException"
+  }
+ },
+ {
+  "name": "bad-enum-object",
+  "json": "{\"SettingsVersion\": 4, \"SideBoundaryDefault\": {}}",
+  "expect": {
+   "loaded_version": 4,
+   "parse_error": "JsonException"
+  }
+ },
+ {
+  "name": "bad-array-root",
+  "json": "[]",
+  "expect": {
+   "loaded_version": 0,
+   "parse_error": "JsonException"
+  }
+ },
+ {
+  "name": "bad-version-string",
+  "json": "{\"SettingsVersion\": \"4\"}",
+  "expect": {
+   "loaded_version": 0,
+   "parse_error": "JsonException"
+  }
+ }
+]

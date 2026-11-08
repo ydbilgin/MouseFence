@@ -1,0 +1,20 @@
+[package]
+name = "fence-engine"
+description = "Pure, deterministic MouseFence decision engine: no OS calls, no I/O, no clock, no unsafe."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+fence-types.workspace = true
+
+[dev-dependencies]
+# The parity tests (tests/parity) record every scenario as an reference `core` case and replay it through the C#
+# engine in the ignored reference test; the library itself stays dependency-free.
+fence-trace.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

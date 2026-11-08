@@ -1,0 +1,55 @@
+name: Draft release
+
+on:
+  push:
+    tags:
+      - 'v2.*'
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    if: github.event.repository.private == false && github.repository == github.event.repository.full_name
+    uses: ./.github/workflows/ci.yml
+  draft:
+    if: github.event.repository.private == false && github.repository == github.event.repository.full_name
+    needs: quality
+    runs-on: windows-2025
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: rustfmt, clippy
+      - name: Build standalone x64 executable
+        run: cargo build -p mousefence --release --locked
+      - name: Inspect release resources and runtime imports
+        shell: pwsh
+        run: |
+          $env:MF_BUILT_EXE = Join-Path $pwd 'target/x86_64-pc-windows-msvc/release/MouseFence.exe'
+          cargo test -p mousefence --test resources --locked
+      - name: Package executable and checksum
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist | Out-Null
+          Copy-Item -LiteralPath target/x86_64-pc-windows-msvc/release/MouseFence.exe -Destination dist/MouseFence-win-x64.exe
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath dist/MouseFence-win-x64.exe).Hash.ToLowerInvariant()
+          "$hash  MouseFence-win-x64.exe" | Set-Content -Encoding ascii dist/MouseFence-win-x64.exe.sha256
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/MouseFence-win-x64.exe
+      - name: Create draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = "docs/release-notes/$env:GITHUB_REF_NAME.md"
+          if (-not (Test-Path -LiteralPath $notes)) { throw "Missing release notes: $notes" }
+          gh release create "$env:GITHUB_REF_NAME" dist/MouseFence-win-x64.exe dist/MouseFence-win-x64.exe.sha256 --draft --verify-tag --title "MouseFence $env:GITHUB_REF_NAME" --notes-file "$notes"

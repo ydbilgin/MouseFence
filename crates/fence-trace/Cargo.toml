@@ -1,0 +1,19 @@
+[package]
+name = "fence-trace"
+description = "Parity harness: case format, C# reference client, seeded synthetic layouts and moves, replay."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+fence-types.workspace = true
+# Used by production edge replay and the existing reference-diff tests.
+fence-config.workspace = true
+fence-engine.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
