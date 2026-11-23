@@ -174,8 +174,8 @@ fn validate(path: &Path) -> Result<(), String> {
         return Err("GetFileVersionInfoW failed".into());
     }
     for (key, expected) in [
-        ("FileVersion", "2.0.1.0"),
-        ("ProductVersion", "2.0.1.0"),
+        ("FileVersion", "2.0.2.0"),
+        ("ProductVersion", "2.0.2.0"),
         ("ProductName", "MouseFence"),
         (
             "FileDescription",
@@ -199,9 +199,9 @@ fn validate(path: &Path) -> Result<(), String> {
     // SAFETY: the fixed version is at least 24 bytes, as checked above.
     let fixed = unsafe { std::slice::from_raw_parts(fixed.cast::<u8>(), length as usize) };
     if [dword(fixed, 8), dword(fixed, 12), dword(fixed, 16), dword(fixed, 20)]
-        != [0x0002_0000, 0x0001_0000, 0x0002_0000, 0x0001_0000]
+        != [0x0002_0000, 0x0002_0000, 0x0002_0000, 0x0002_0000]
     {
-        return Err("fixed file/product version must be 2.0.1.0".into());
+        return Err("fixed file/product version must be 2.0.2.0".into());
     }
     Ok(())
 }
@@ -227,7 +227,7 @@ fn f15_self_check_rejects_removed_resources_and_wrong_version() {
         assert!(validate(&temp).is_err(), "removed resource {id} must fail");
     }
     let mut bytes = original;
-    let expected: Vec<u8> = "2.0.1.0\0".encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let expected: Vec<u8> = "2.0.2.0\0".encode_utf16().flat_map(u16::to_le_bytes).collect();
     let offset = bytes
         .windows(expected.len())
         .position(|window| window == expected)

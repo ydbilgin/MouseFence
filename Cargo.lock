@@ -949,7 +949,7 @@ checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
 
 [[package]]
 name = "fence-app"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "fence-config",
  "fence-engine",
@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "fence-config"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "fence-engine",
  "fence-types",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "fence-engine"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "fence-trace",
  "fence-types",
@@ -980,11 +980,11 @@ dependencies = [
 
 [[package]]
 name = "fence-i18n"
-version = "2.0.1"
+version = "2.0.2"
 
 [[package]]
 name = "fence-settings-ui"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "eframe",
  "fence-config",
@@ -998,7 +998,7 @@ dependencies = [
 
 [[package]]
 name = "fence-trace"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "fence-config",
  "fence-engine",
@@ -1009,11 +1009,11 @@ dependencies = [
 
 [[package]]
 name = "fence-types"
-version = "2.0.1"
+version = "2.0.2"
 
 [[package]]
 name = "fence-win"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "fence-engine",
  "fence-types",
@@ -1570,7 +1570,7 @@ dependencies = [
 
 [[package]]
 name = "mousefence"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "embed-resource",
  "fence-app",
@@ -1973,7 +1973,7 @@ dependencies = [
 
 [[package]]
 name = "parity"
-version = "2.0.1"
+version = "2.0.2"
 
 [[package]]
 name = "parking"
