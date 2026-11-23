@@ -19,13 +19,29 @@ use crate::store::FileStore;
 pub const EXIT_INSTANCE_CHECK_FAILED: i32 = 4;
 pub const EXIT_NO_WINDOW: i32 = 5;
 pub const EXIT_NO_HOOK_THREAD: i32 = 6;
+/// The single-instance name is taken, but no MouseFence 2 tray window appeared: an older 1.x or another
+/// program holds the name. This instance still exits (1.x and 2.0 must never enforce at once), but says why
+/// in error.log instead of leaving silently.
+pub const EXIT_NAME_HELD_ELSEWHERE: i32 = 7;
+/// How long a second instance waits for the first one's tray window.
+const TRAY_WINDOW_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// What the single-instance result means for the process: `Some(code)` = exit now.
-pub fn instance_exit_code(check: &InstanceCheck) -> Option<i32> {
+/// What the single-instance result means for the process: `Some(code)` = exit now. `tray_running` is asked
+/// only when the name is taken.
+pub fn instance_exit_code(check: &InstanceCheck, tray_running: impl FnOnce() -> bool) -> Option<i32> {
     match check {
         InstanceCheck::Acquired(_) => None,
-        InstanceCheck::AlreadyRunning => Some(0), // C#: `if (!createdNew) return;`, silently
+        // C#: `if (!createdNew) return;`, silently, when a MouseFence tray is really there.
+        InstanceCheck::AlreadyRunning if tray_running() => Some(0),
+        InstanceCheck::AlreadyRunning => Some(EXIT_NAME_HELD_ELSEWHERE),
         InstanceCheck::Failed(_) => Some(EXIT_INSTANCE_CHECK_FAILED),
+    }
+}
+
+fn log_startup_error(line: &str) {
+    fence_win::debug_log(line);
+    if let Some(root) = fence_win::appdata_dir() {
+        let _ = fence_win::error_log::append(&root.join("MouseFence/v2/error.log"), "startup", line);
     }
 }
 
@@ -36,9 +52,16 @@ pub fn run() -> i32 {
     fence_win::system::enable_per_monitor_dpi_awareness();
 
     let instance = single_instance::acquire(fence_win::SINGLE_INSTANCE_MUTEX);
-    if let Some(code) = instance_exit_code(&instance) {
-        if let InstanceCheck::Failed(err) = instance {
-            fence_win::debug_log(&format!("single-instance check failed (Win32 error {err})"));
+    if let Some(code) = instance_exit_code(&instance, || fence_win::tray::wait_for_tray_window(TRAY_WINDOW_WAIT)) {
+        match instance {
+            InstanceCheck::Failed(err) => {
+                log_startup_error(&format!("single-instance check failed (Win32 error {err})"))
+            }
+            _ if code == EXIT_NAME_HELD_ELSEWHERE => log_startup_error(
+                "not started: another process holds the MouseFence single-instance name, but no MouseFence 2 \
+                 tray is running (an older MouseFence 1.x, or another program). Exit it, or sign out and in again.",
+            ),
+            _ => {}
         }
         return code;
     }
@@ -95,10 +118,19 @@ mod tests {
 
     #[test]
     fn s_app_a_second_instance_exits_silently_with_zero() {
-        assert_eq!(instance_exit_code(&InstanceCheck::AlreadyRunning), Some(0));
+        assert_eq!(instance_exit_code(&InstanceCheck::AlreadyRunning, || true), Some(0));
         assert_eq!(
-            instance_exit_code(&InstanceCheck::Failed(5)),
+            instance_exit_code(&InstanceCheck::Failed(5), || panic!("not asked")),
             Some(EXIT_INSTANCE_CHECK_FAILED)
         );
+    }
+
+    #[test]
+    fn s_app_a_name_held_without_a_mousefence_tray_exits_with_its_own_code() {
+        assert_eq!(
+            instance_exit_code(&InstanceCheck::AlreadyRunning, || false),
+            Some(EXIT_NAME_HELD_ELSEWHERE)
+        );
+        assert_ne!(EXIT_NAME_HELD_ELSEWHERE, 0, "never the silent second-instance code");
     }
 }

@@ -24,12 +24,12 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW,
-    GWLP_USERDATA, GetCursorPos, GetMessageW, GetSystemMetrics, GetWindowLongPtrW, HICON, HMENU, HWND_MESSAGE,
-    KillTimer, MF_CHECKED, MF_GRAYED, MF_SEPARATOR, MF_STRING, MSG, PM_REMOVE, PeekMessageW, PostMessageW,
-    RegisterClassExW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetTimer, SetWindowLongPtrW,
-    TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenuEx, TranslateMessage, WM_APP, WM_DISPLAYCHANGE,
-    WM_HOTKEY, WM_LBUTTONDBLCLK, WM_MBUTTONDBLCLK, WM_NULL, WM_RBUTTONDBLCLK, WM_RBUTTONUP, WM_SETTINGCHANGE, WM_TIMER,
-    WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_OVERLAPPED,
+    FindWindowExW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetSystemMetrics, GetWindowLongPtrW, HICON, HMENU,
+    HWND_MESSAGE, KillTimer, MF_CHECKED, MF_GRAYED, MF_SEPARATOR, MF_STRING, MSG, PM_REMOVE, PeekMessageW,
+    PostMessageW, RegisterClassExW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetTimer,
+    SetWindowLongPtrW, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenuEx, TranslateMessage, WM_APP,
+    WM_DISPLAYCHANGE, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_MBUTTONDBLCLK, WM_NULL, WM_RBUTTONDBLCLK, WM_RBUTTONUP,
+    WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_OVERLAPPED,
 };
 
 use crate::hotkeys;
@@ -570,6 +570,32 @@ impl Drop for TrayWindow {
     }
 }
 
+/// True when a MouseFence 2 tray window exists in this session, hidden top-level (production) or
+/// message-only. The single-instance check uses it to tell a running MouseFence from another program
+/// that merely holds the mutex name.
+pub fn tray_window_exists() -> bool {
+    let class = to_wide(CLASS_NAME);
+    [std::ptr::null_mut(), HWND_MESSAGE].into_iter().any(|parent| {
+        // SAFETY: a NUL-terminated class name; FindWindowExW only reads it.
+        !unsafe { FindWindowExW(parent, std::ptr::null_mut(), class.as_ptr(), std::ptr::null()) }.is_null()
+    })
+}
+
+/// Poll [`tray_window_exists`] until it is true or `timeout` passes. A first instance takes the mutex a
+/// moment before it creates its window, so a second instance started at the same time waits briefly.
+pub fn wait_for_tray_window(timeout: std::time::Duration) -> bool {
+    let start = std::time::Instant::now();
+    loop {
+        if tray_window_exists() {
+            return true;
+        }
+        if start.elapsed() >= timeout {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
 /// Post the settings process's exit code to the tray window (from the waiter thread).
 pub fn post_settings_exit(hwnd_value: usize, code: i32) -> bool {
     // SAFETY: posting plain integers; a stale handle makes the call fail harmlessly.
@@ -579,6 +605,14 @@ pub fn post_settings_exit(hwnd_value: usize, code: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tray_window_is_found_by_the_single_instance_check() {
+        let window = TrayWindow::create(WindowKind::MessageOnly).unwrap();
+        assert!(tray_window_exists(), "a message-only tray window counts");
+        assert!(wait_for_tray_window(std::time::Duration::ZERO));
+        drop(window);
+    }
 
     #[test]
     fn setting_change_invalidates_cached_taskbar_icons() {

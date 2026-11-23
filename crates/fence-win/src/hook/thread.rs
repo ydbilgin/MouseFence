@@ -12,8 +12,8 @@
 use std::cell::RefCell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
-use std::sync::{Arc, OnceLock};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -146,6 +146,10 @@ enum ThreadControl {
     Retire(SyncSender<ThreadResources>),
 }
 
+/// Where a loop that ended on its own (a `WM_QUIT` posted by another program, or a `GetMessageW` error)
+/// leaves its engine, installer and cursor, so [`HookThread::restart`] can start a replacement.
+type Orphan = Arc<Mutex<Option<(ThreadResources, &'static str)>>>;
+
 struct HookCtx {
     core: HookCore,
     cursor: Box<dyn CursorPort + Send>,
@@ -229,6 +233,7 @@ pub struct HookThread {
     shared: Arc<HookShared>,
     join: Option<JoinHandle<()>>,
     done: Receiver<()>,
+    orphan: Orphan,
 }
 
 impl HookThread {
@@ -252,10 +257,12 @@ impl HookThread {
         let (ready_tx, ready_rx) = mpsc::sync_channel::<u32>(1);
         let thread_shared = shared.clone();
         let (done_tx, done) = mpsc::sync_channel(1);
+        let orphan: Orphan = Arc::new(Mutex::new(None));
+        let thread_orphan = orphan.clone();
         let join = std::thread::Builder::new()
             .name("mousefence-hook".to_string())
             .spawn(move || {
-                hook_thread_main(engine, installer, cursor, thread_shared, rx, ready_tx);
+                hook_thread_main(engine, installer, cursor, thread_shared, rx, ready_tx, thread_orphan);
                 let _ = done_tx.send(());
             })?;
         let thread_id = ready_rx
@@ -267,6 +274,7 @@ impl HookThread {
             shared,
             join: Some(join),
             done,
+            orphan,
         })
     }
 
@@ -280,15 +288,16 @@ impl HookThread {
 
     /// Retire the old loop before starting its replacement. A non-answering loop is never joined or
     /// duplicated: the caller gets failure after a bounded wait and the guard limits further attempts.
+    ///
+    /// A loop that already ended on its own (another program posted `WM_QUIT` to it) left its resources
+    /// behind; the replacement is built from those, so the fences come back at the next health check.
     pub fn restart(&mut self) -> bool {
-        let (tx, rx) = mpsc::sync_channel(1);
-        if !self.send(Command::Retire(tx)) {
-            self.record_failure("retire command could not wake hook thread");
-            return false;
-        }
-        let Ok(resources) = rx.recv_timeout(REPLY_TIMEOUT) else {
-            self.record_failure("retire acknowledgement timed out; no replacement started");
-            return false;
+        let (resources, stopped) = match self.retire() {
+            Ok(found) => found,
+            Err(detail) => {
+                self.record_failure(detail);
+                return false;
+            }
         };
         if let Some(join) = self.join.take() {
             // Resources are published only after unhooking, destroying the raw window and releasing
@@ -305,7 +314,46 @@ impl HookThread {
         };
         *self = next;
         self.reset_engine();
-        self.install()
+        let installed = self.install();
+        if let Some(reason) = stopped {
+            // The new loop rewrote the context; keep why the old one stopped for the recovery log line.
+            self.record_failure(&format!("previous hook loop stopped on its own ({reason})"));
+        }
+        installed
+    }
+
+    /// The old loop's resources: from a loop that already stopped, or handed over by a live one.
+    fn retire(&mut self) -> Result<(ThreadResources, Option<&'static str>), &'static str> {
+        if let Some((resources, reason)) = self.take_orphan() {
+            return Ok((resources, Some(reason)));
+        }
+        let (tx, rx) = mpsc::sync_channel(1);
+        let posted = self.send(Command::Retire(tx));
+        if posted {
+            match rx.recv_timeout(REPLY_TIMEOUT) {
+                Ok(resources) => return Ok((resources, None)),
+                Err(RecvTimeoutError::Timeout) => {
+                    return Err("retire acknowledgement timed out; no replacement started");
+                }
+                // The loop ended without answering; its resources are in the orphan slot.
+                Err(RecvTimeoutError::Disconnected) => {}
+            }
+        }
+        // The loop has ended or is ending. It hands its resources over (the reply, or the orphan slot when it
+        // stopped on its own) before it signals `done`, so both are settled after this wait.
+        if self.done.recv_timeout(REPLY_TIMEOUT).is_err() {
+            return Err("retire command could not wake hook thread");
+        }
+        if let Ok(resources) = rx.try_recv() {
+            return Ok((resources, None));
+        }
+        self.take_orphan()
+            .map(|(resources, reason)| (resources, Some(reason)))
+            .ok_or("hook thread ended without handing over its state")
+    }
+
+    fn take_orphan(&self) -> Option<(ThreadResources, &'static str)> {
+        self.orphan.lock().unwrap_or_else(|e| e.into_inner()).take()
     }
 
     fn record_failure(&self, detail: &str) {
@@ -389,6 +437,7 @@ fn hook_thread_main(
     shared: Arc<HookShared>,
     rx: Receiver<Command>,
     ready: SyncSender<u32>,
+    orphan: Orphan,
 ) {
     let prepared = installer.prepare_thread();
     *shared.context.lock().unwrap_or_else(|e| e.into_inner()) = installer.diagnostic();
@@ -415,17 +464,18 @@ fn hook_thread_main(
         return;
     }
 
-    let retire = loop {
+    let end = loop {
         // SAFETY: msg is a valid out-pointer; a low-level hook callback runs inside this call.
         let r = unsafe { GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) };
         if r == 0 || r == -1 {
-            break None;
+            // Nothing here posts WM_QUIT: the tray stops this loop with Command::Quit.
+            break LoopEnd::Stopped(if r == 0 { "WM_QUIT" } else { "GetMessageW error" });
         }
         if msg.hwnd.is_null() && msg.message == WM_APP_HOOK_COMMAND {
             match drain_commands(&rx, installer.as_mut(), &shared, prepared) {
                 ThreadControl::Continue => {}
-                ThreadControl::Quit => break None,
-                ThreadControl::Retire(reply) => break Some(reply),
+                ThreadControl::Quit => break LoopEnd::Quit,
+                ThreadControl::Retire(reply) => break LoopEnd::Retire(reply),
             }
             continue;
         }
@@ -439,9 +489,25 @@ fn hook_thread_main(
     shared.installed.store(false, Ordering::SeqCst);
     installer.finish_thread();
     let ctx = CTX.with(|c| c.borrow_mut().take());
-    if let (Some(reply), Some(ctx)) = (retire, ctx) {
-        let _ = reply.send(ThreadResources { ctx, installer });
+    match (end, ctx) {
+        (LoopEnd::Retire(reply), Some(ctx)) => {
+            let _ = reply.send(ThreadResources { ctx, installer });
+        }
+        (LoopEnd::Stopped(reason), Some(ctx)) => {
+            *orphan.lock().unwrap_or_else(|e| e.into_inner()) = Some((ThreadResources { ctx, installer }, reason));
+        }
+        _ => {}
     }
+}
+
+/// Why the hook loop ended.
+enum LoopEnd {
+    /// The tray asked (Command::Quit, or its channel closed).
+    Quit,
+    /// The tray asked for the resources to start a replacement.
+    Retire(SyncSender<ThreadResources>),
+    /// It ended on its own; the resources wait in the orphan slot.
+    Stopped(&'static str),
 }
 
 fn with_ctx<R>(f: impl FnOnce(&mut HookCtx) -> R) -> Option<R> {
@@ -613,6 +679,40 @@ mod tests {
     }
 
     #[test]
+    fn recovery_after_a_stray_wm_quit_starts_a_new_loop_with_the_same_state() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::WM_QUIT;
+        let (mut t, log, _seen, _cursor) = spawn(true);
+        t.shared().set_toggles(true, true, false);
+        assert!(t.install());
+        assert_eq!(t.simulate(HookEvent::mouse_move(1, 1)), Some(StepOutcome::CallNext));
+        let old_id = t.thread_id();
+        // Any program in the session can post this; it ends GetMessageW.
+        // SAFETY: a message with no pointers, to a thread this test started.
+        assert_ne!(unsafe { PostThreadMessageW(old_id, WM_QUIT, 0, 0) }, 0);
+        assert!(t.done.recv_timeout(REPLY_TIMEOUT).is_ok(), "the old loop ends");
+        assert!(!t.shared().installed(), "and its hook is out");
+        assert!(t.info().is_none(), "nothing answers any more");
+        assert!(
+            t.restart(),
+            "recovery builds a replacement from the stopped loop's resources"
+        );
+        assert_ne!(t.thread_id(), old_id);
+        assert!(t.shared().installed(), "the replacement installs the hook again");
+        assert!(t.info().is_some(), "and answers");
+        assert_eq!(t.simulate(HookEvent::mouse_move(2, 2)), Some(StepOutcome::CallNext));
+        assert_eq!(t.shared().counters().callbacks, 2, "counters carry over");
+        assert_eq!(
+            t.shared().toggles(),
+            fence_types::Toggles {
+                gate_open: true,
+                side_contain: true
+            }
+        );
+        assert!(t.shared().context.lock().unwrap().contains("WM_QUIT"));
+        assert_eq!(*log.lock().unwrap(), vec!["install", "uninstall", "install"]);
+    }
+
+    #[test]
     fn recovery_prepares_each_new_thread_before_install_and_finishes_after_unhook() {
         struct DesktopInstaller(Arc<Mutex<Vec<&'static str>>>);
         impl HookInstaller for DesktopInstaller {
@@ -642,7 +742,12 @@ mod tests {
         )
         .unwrap();
         assert!(!t.install(), "never install on an unprepared desktop");
-        assert!(t.restart());
+        assert!(
+            t.restart(),
+            "restart failed: context {} log {:?}",
+            t.shared().context.lock().unwrap(),
+            log.lock().unwrap()
+        );
         drop(t);
         assert_eq!(
             *log.lock().unwrap(),
