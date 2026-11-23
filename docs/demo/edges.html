@@ -1,0 +1,221 @@
+<!doctype html>
+<!--
+  MouseFence explainer: one pointer movement played against the three edge behaviours side by side.
+  Rendered to ../media/edges.gif by `node docs/demo/render.mjs edges` (see README-demo.md).
+  Every frame is a pure function of time: renderAt(t) replays a small deterministic simulation from 0 to t.
+  The rules are the README's: a free edge passes everything, a firm-push edge passes only a fast enough
+  upward move, a never-crosses edge passes nothing upward; coming back down is free on all three.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 960px; height: 470px; overflow: hidden; background: #111419; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="470"></canvas>
+<script>
+// ---------------------------------------------------------------- TIMELINE (edit here)
+window.DEMO = { width: 960, height: 470, fps: 15, duration: 13 };
+
+// Colours come from the app icon: slate frame, amber fence bar, white pointer on a deep ground.
+const C = {
+  ground: '#111419', screen: '#1a1f27', screenLine: '#323a47', text: '#e9edf3', muted: '#8f99a8',
+  faint: '#5d6676', amber: '#f2b33d', red: '#e5534b', free: '#8f99a8', pointer: '#f5f7fa',
+};
+const FONT = '"Inter", "Segoe UI", system-ui, sans-serif';
+
+// The hand's movement, the same in every column: [time, x, y] in column coordinates. The edge is at y = 200.
+const HAND = [
+  [0.0, 150, 312], [0.8, 150, 312],
+  [3.6, 162, 168],             // slow drift up and over the edge
+  [4.6, 168, 156],             // keeps drifting a little
+  [5.2, 168, 156],
+  [6.1, 156, 272],             // back down
+  [6.7, 156, 272],
+  [7.15, 160, 112],            // one firm push
+  [8.7, 160, 112],
+  [9.8, 150, 300],             // back down
+  [13.0, 150, 312],
+];
+const EDGE_Y = 200;
+const PUSH_SPEED = 220;        // px/s of upward speed a firm push must reach at the edge (illustrative)
+
+const CAPTIONS = [
+  [0.0, 5.4, 'A slow drift toward the screen above', 'Only the free edge lets it through'],
+  [5.4, 9.0, 'One deliberate, firm push', 'The firm-push edge opens for it; Never crosses still holds'],
+  [9.0, 13.0, 'Coming back down', 'Each direction has its own rule; here the way down is free'],
+];
+// ---------------------------------------------------------------- end of TIMELINE
+
+const COLS = [
+  { x: 24, rule: 'free', name: 'Crosses freely', line: 'A normal Windows monitor edge' },
+  { x: 334, rule: 'firm', name: 'Needs a firm push', line: 'Slow drift stops, a push crosses' },
+  { x: 644, rule: 'never', name: 'Never crosses', line: 'The pointer stays on its side' },
+];
+const COL_W = 292;
+const TOP = { x: 46, y: 96, w: 200, h: 104 };   // column-local
+const MAIN = { x: 26, y: 200, w: 240, h: 132 };
+
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2);
+const fade = (t, a, b, f = 0.3) => clamp(Math.min((t - a) / f, (b - t) / f));
+
+function hand(t) {
+  if (t <= HAND[0][0]) return HAND[0].slice(1);
+  for (let i = 1; i < HAND.length; i += 1) {
+    const [t1, x1, y1] = HAND[i];
+    const [t0, x0, y0] = HAND[i - 1];
+    if (t <= t1) { const p = ease((t - t0) / (t1 - t0)); return [x0 + (x1 - x0) * p, y0 + (y1 - y0) * p]; }
+  }
+  return HAND[HAND.length - 1].slice(1);
+}
+
+// Replay the pointer from 0 to t for one rule. Returns the pointer, whether the hand is held at the edge,
+// and when the last upward crossing happened.
+function simulate(rule, t) {
+  const dt = 1 / 240;
+  let above = false; let held = false; let crossedAt = -10; let heldSince = -10;
+  let [px, py] = hand(0);
+  let prevY = py;
+  for (let s = dt; s <= t + 1e-9; s += dt) {
+    const [hx, hy] = hand(s);
+    const up = (prevY - hy) / dt;
+    prevY = hy;
+    if (!above && hy < EDGE_Y) {
+      const pass = rule === 'free' || (rule === 'firm' && up >= PUSH_SPEED && !held);
+      if (pass) { above = true; crossedAt = s; held = false; px = hx; py = hy; continue; }
+      if (!held) heldSince = s;
+      held = true; px = hx; py = EDGE_Y + 1; continue;
+    }
+    if (above && hy >= EDGE_Y) above = false;
+    held = false; px = hx; py = hy;
+  }
+  return { px, py, held, crossedAt, heldSince };
+}
+
+function roundRect(x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+
+function pointer(x, y, alpha = 1, ghost = false) {
+  g.save(); g.translate(x - 2, y - 2); g.globalAlpha = alpha;
+  g.beginPath(); g.moveTo(2, 2); g.lineTo(2, 24); g.lineTo(8, 18.5); g.lineTo(12, 28); g.lineTo(16, 26.3);
+  g.lineTo(12, 17); g.lineTo(20, 17); g.closePath();
+  if (ghost) { g.setLineDash([3, 3]); g.strokeStyle = C.muted; g.lineWidth = 1.4; g.stroke(); }
+  else { g.fillStyle = C.pointer; g.fill(); g.strokeStyle = '#0b0d10'; g.lineWidth = 1.6; g.lineJoin = 'round'; g.stroke(); }
+  g.restore();
+}
+
+function screen(r, label, ox) {
+  roundRect(ox + r.x, r.y, r.w, r.h, 7); g.fillStyle = C.screen; g.fill();
+  g.strokeStyle = C.screenLine; g.lineWidth = 1.5; g.stroke();
+  g.fillStyle = C.faint; g.font = `500 13px ${FONT}`; g.textAlign = 'left';
+  g.fillText(label, ox + r.x + 10, r.y + 20);
+}
+
+function edge(rule, ox, s, t) {
+  const x0 = ox + TOP.x + 6; const x1 = ox + TOP.x + TOP.w - 6; const y = EDGE_Y;
+  const heldFor = s.held ? t - s.heldSince : 0;
+  const pulse = s.held ? 0.55 + 0.45 * Math.sin(heldFor * 9) ** 2 : 0;
+  const flash = clamp(1 - (t - s.crossedAt) / 0.7);
+  if (rule === 'free') {
+    g.setLineDash([6, 6]); g.strokeStyle = C.free; g.globalAlpha = 0.6 + 0.4 * flash; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    return;
+  }
+  const colour = rule === 'firm' ? C.amber : C.red;
+  // A push opens a gap in the bar where the pointer went through, then it closes again.
+  const gap = rule === 'firm' ? 34 * flash : 0;
+  const gx = clamp(s.px, x0 + 20, x1 - 20);
+  g.fillStyle = colour;
+  if (s.held) { g.shadowColor = colour; g.shadowBlur = 14 * pulse; }
+  roundRect(x0, y - 3, Math.max(0, gx - gap / 2 - x0), 6, 3); g.fill();
+  roundRect(gx + gap / 2, y - 3, Math.max(0, x1 - gx - gap / 2), 6, 3); g.fill();
+  g.shadowBlur = 0;
+  if (rule === 'never') {   // posts, like the icon on the gate menu
+    for (const px of [x0 + 26, x1 - 26]) { roundRect(px - 2.5, y - 10, 5, 20, 2.5); g.fill(); }
+  }
+}
+
+function column(col, t) {
+  const ox = col.x;
+  const s = simulate(col.rule, t);
+  screen(TOP, 'Top', ox);
+  screen(MAIN, 'Main', ox);
+  edge(col.rule, ox, s, t);
+  const [hx, hy] = hand(t);
+  if (s.held && hy < EDGE_Y - 4) {     // where the hand is, versus where the pointer stays
+    g.strokeStyle = C.faint; g.setLineDash([2, 4]); g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(ox + hx + 4, hy + 10); g.lineTo(ox + s.px + 4, s.py); g.stroke(); g.setLineDash([]);
+    pointer(ox + hx, hy, 0.9, true);
+  }
+  pointer(ox + s.px, s.py);
+  // Name and one line under the column.
+  g.textAlign = 'center';
+  const accent = col.rule === 'firm' ? C.amber : col.rule === 'never' ? C.red : C.text;
+  g.fillStyle = accent; g.font = `600 17px ${FONT}`;
+  g.fillText(col.name, ox + COL_W / 2, 362);
+  g.fillStyle = C.muted; g.font = `400 13.5px ${FONT}`;
+  g.fillText(col.line, ox + COL_W / 2, 383);
+  // A short state word next to the edge while something happens.
+  let word = ''; let wc = C.muted;
+  if (s.held) { word = 'held at the edge'; wc = accent; }
+  else if (t - s.crossedAt < 1.4) { word = 'crossed'; wc = C.text; }
+  if (word) {
+    g.font = `500 12.5px ${FONT}`; g.fillStyle = wc; g.textAlign = 'left';
+    g.globalAlpha = s.held ? clamp((t - s.heldSince) / 0.25) : clamp(1.4 - (t - s.crossedAt));
+    g.textAlign = 'center'; g.fillText(word, ox + COL_W / 2, TOP.y - 10); g.globalAlpha = 1;
+  }
+}
+
+// The hand's upward speed against the firm-push threshold, so the difference between drift and push is visible.
+function gauge(t) {
+  const x = 640; const y = 432; const w = 296;
+  const [, y1] = hand(Math.max(0, t - 1 / 30)); const [, y2] = hand(t);
+  const up = Math.max(0, (y1 - y2) * 30);
+  const max = 700;
+  g.font = `500 12px ${FONT}`; g.fillStyle = C.muted; g.textAlign = 'left';
+  g.fillText('Upward speed of the hand', x, y - 10);
+  roundRect(x, y, w, 8, 4); g.fillStyle = '#232a35'; g.fill();
+  const fill = clamp(up / max) * w;
+  if (fill > 1) { roundRect(x, y, fill, 8, 4); g.fillStyle = up >= PUSH_SPEED ? C.amber : C.muted; g.fill(); }
+  const tx = x + (PUSH_SPEED / max) * w;
+  g.fillStyle = C.amber; g.fillRect(tx - 1, y - 4, 2, 16);
+  g.font = `500 11.5px ${FONT}`; g.fillStyle = C.amber; g.textAlign = 'left';
+  g.fillText('firm push', tx + 5, y + 22);
+}
+
+window.renderAt = (t) => {
+  g.clearRect(0, 0, 960, 470);
+  g.fillStyle = C.ground; g.fillRect(0, 0, 960, 470);
+  g.textAlign = 'left'; g.fillStyle = C.text; g.font = `600 18px ${FONT}`;
+  g.fillText('MouseFence', 24, 38);
+  const brandW = g.measureText('MouseFence').width;
+  g.fillStyle = C.muted; g.font = `400 15px ${FONT}`;
+  g.fillText('the same hand movement against the three edge behaviours', 24 + brandW + 12, 38);
+  for (let i = 0; i < 2; i += 1) {   // hairlines between columns
+    g.fillStyle = '#1f252e'; g.fillRect(COLS[i + 1].x - 9, 76, 1, 316);
+  }
+  for (const col of COLS) column(col, t);
+  const cap = CAPTIONS.find(([a, b]) => t >= a && t < b);
+  if (cap) {
+    g.globalAlpha = fade(t, cap[0], cap[1], cap[0] === 0 ? 0.01 : 0.25);
+    if (cap[1] === 13.0) g.globalAlpha = clamp((t - cap[0]) / 0.25);
+    g.textAlign = 'left'; g.fillStyle = C.text; g.font = `600 17px ${FONT}`;
+    g.fillText(cap[2], 24, 432);
+    g.fillStyle = C.muted; g.font = `400 13.5px ${FONT}`;
+    g.fillText(cap[3], 24, 453);
+    g.globalAlpha = 1;
+  }
+  gauge(t);
+};
+window.renderAt(0);
+</script>
+</body>
+</html>

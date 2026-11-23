@@ -1,12 +1,13 @@
-// Renders docs/demo/scene.html to docs/demo.gif, frame by frame, with no screen recording.
+// Renders a scene in docs/demo/ to a GIF, frame by frame, with no screen recording.
 // Every frame is a pure function of time: the page exposes window.DEMO = { width, height, duration, fps }
 // and window.renderAt(seconds). This script steps the clock, screenshots each frame in a headless
 // Chromium, then lets ffmpeg build an optimised GIF (palette per file, no dithering noise).
 //
 // Usage (from the repository root):
-//   node docs/demo/render.mjs                 -> docs/demo.gif
-//   node docs/demo/render.mjs --sheet         -> also docs/demo/contact-sheet.png (not committed)
-//   node docs/demo/render.mjs --mp4           -> also docs/demo.mp4
+//   node docs/demo/render.mjs                 -> docs/demo.gif            (scene.html)
+//   node docs/demo/render.mjs edges           -> docs/media/edges.gif     (edges.html)
+//   node docs/demo/render.mjs game-mode       -> docs/media/game-mode.gif (game-mode.html)
+//   add --sheet for a contact sheet next to the scene (not committed), --mp4 for an MP4 beside the GIF
 // Needs Node 18+, the "playwright" package (npm install --no-save playwright) and ffmpeg on PATH.
 // Optional environment: DEMO_CHROMIUM=<path to a Chromium or chrome-headless-shell>, FFMPEG=<path>,
 // DEMO_PLAYWRIGHT_FROM=<folder whose node_modules holds playwright>.
@@ -18,7 +19,18 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const args = new Set(process.argv.slice(2));
+const args = new Set(process.argv.slice(2).filter((a) => a.startsWith('--')));
+const FILMS = {
+  scene: { page: 'scene.html', gif: '../demo.gif' },
+  edges: { page: 'edges.html', gif: '../media/edges.gif' },
+  'game-mode': { page: 'game-mode.html', gif: '../media/game-mode.gif' },
+};
+const name = process.argv.slice(2).find((a) => !a.startsWith('--')) || 'scene';
+const film = FILMS[name];
+if (!film) {
+  console.error(`Unknown film "${name}". Choose one of: ${Object.keys(FILMS).join(', ')}`);
+  process.exit(2);
+}
 const ffmpeg = process.env.FFMPEG || 'ffmpeg';
 
 // Playwright is found next to this repository (npm install --no-save playwright), or in the folder named by
@@ -38,8 +50,9 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ deviceScaleFactor: 1 });
 await page.route(/^https?:/, (route) => route.abort());   // the scene is fully offline
-await page.goto(pathToFileURL(path.join(here, 'scene.html')).href);
+await page.goto(pathToFileURL(path.join(here, film.page)).href);
 await page.evaluate(() => document.fonts.ready);
+await page.evaluate(() => Promise.all([...document.images].map((i) => i.decode().catch(() => {}))));
 const demo = await page.evaluate(() => window.DEMO);
 await page.setViewportSize({ width: demo.width, height: demo.height });
 
@@ -58,20 +71,20 @@ const run = (extra) => {
   if (result.status !== 0) { console.error(`ffmpeg failed (${result.status})`); process.exit(3); }
 };
 
-const gif = path.resolve(here, '..', 'demo.gif');
+const gif = path.resolve(here, film.gif);
 run(['-filter_complex',
   '[0:v]split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle',
   '-loop', '0', gif]);
 console.log(`wrote ${gif} (${(statSync(gif).size / 1048576).toFixed(2)} MB)`);
 
 if (args.has('--mp4')) {
-  const mp4 = path.resolve(here, '..', 'demo.mp4');
+  const mp4 = gif.replace(/\.gif$/, '.mp4');
   run(['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '24', '-movflags', '+faststart', mp4]);
   console.log(`wrote ${mp4}`);
 }
 if (args.has('--sheet')) {
   // One frame per second in a grid, to check every shot by eye before publishing.
-  const sheet = path.join(here, 'contact-sheet.png');
+  const sheet = path.join(here, name === 'scene' ? 'contact-sheet.png' : `contact-sheet-${name}.png`);
   const columns = 4;
   const rows = Math.ceil(demo.duration / columns);
   run(['-vf', `fps=1,scale=${Math.round(demo.width / 2)}:-1,tile=${columns}x${rows}:padding=6:color=white`,

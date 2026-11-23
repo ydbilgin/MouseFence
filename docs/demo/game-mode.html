@@ -1,0 +1,210 @@
+<!doctype html>
+<!--
+  MouseFence explainer: game mode and its shortcut. A fast flick out of a borderless game lands on the side
+  screen; Ctrl + Alt + G holds the pointer on the screen it is on; the same keys release it again.
+  Rendered to ../media/game-mode.gif by `node docs/demo/render.mjs game-mode` (see README-demo.md).
+  Every frame is a pure function of time.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 960px; height: 470px; overflow: hidden; background: #111419; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="470"></canvas>
+<img id="icon" src="../icon.png" alt="" style="display:none">
+<script>
+// ---------------------------------------------------------------- TIMELINE (edit here)
+window.DEMO = { width: 960, height: 470, fps: 15, duration: 13.5 };
+
+const C = {
+  ground: '#111419', screen: '#1a1f27', screenLine: '#323a47', text: '#e9edf3', muted: '#8f99a8',
+  faint: '#5d6676', amber: '#f2b33d', pointer: '#f5f7fa', key: '#232a35', keyLine: '#3a4352',
+};
+const FONT = '"Inter", "Segoe UI", system-ui, sans-serif';
+
+// The hand: [time, x, y] in page coordinates. The Main/Side boundary is at x = EDGE_X.
+const HAND = [
+  [0.0, 330, 200], [0.7, 330, 200],
+  [1.15, 700, 178],            // flick right, no game mode: lands on Side
+  [2.5, 700, 178],
+  [3.1, 330, 200],             // back to the game
+  [4.9, 330, 200],
+  [5.3, 690, 170],             // flick, game mode on: held
+  [6.0, 690, 170],
+  [6.5, 300, 210],
+  [6.9, 300, 210],
+  [7.25, 760, 120],            // a harder flick, still held
+  [8.0, 760, 120],
+  [8.5, 330, 200],
+  [10.1, 330, 200],
+  [10.55, 700, 178],           // game mode off again: crosses
+  [11.8, 700, 178],
+  [12.7, 330, 200],
+  [13.5, 330, 200],
+];
+// Ctrl, Alt, G pressed at these times (each key goes down 0.12 s after the previous one, all up together).
+const CHORDS = [[3.6, 4.35], [8.9, 9.65]];
+// Game mode is on between the two chords.
+const GAME_ON = [3.84, 9.14];
+const CAPTIONS = [
+  [0.0, 3.3, 'A fast flick in a borderless game', 'Without game mode it lands on the side screen'],
+  [3.3, 4.9, 'Ctrl + Alt + G turns game mode on', 'From anywhere, even while the game has focus'],
+  [4.9, 8.7, 'The pointer stays on the screen it is on', 'Every edge of this screen holds, however hard the flick'],
+  [8.7, 13.5, 'The same keys turn it off', 'Edges go back to what you set in Settings'],
+];
+// ---------------------------------------------------------------- end of TIMELINE
+
+const MAIN = { x: 40, y: 70, w: 560, h: 300 };
+const SIDE = { x: 604, y: 120, w: 300, h: 200 };
+const EDGE_X = MAIN.x + MAIN.w;
+
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+const icon = document.getElementById('icon');
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2);
+const fade = (t, a, b, f = 0.3) => clamp(Math.min((t - a) / f, (b - t) / f));
+const gameOn = (t) => t >= GAME_ON[0] && t < GAME_ON[1];
+
+function hand(t) {
+  if (t <= HAND[0][0]) return HAND[0].slice(1);
+  for (let i = 1; i < HAND.length; i += 1) {
+    const [t1, x1, y1] = HAND[i];
+    const [t0, x0, y0] = HAND[i - 1];
+    if (t <= t1) { const p = ease((t - t0) / (t1 - t0)); return [x0 + (x1 - x0) * p, y0 + (y1 - y0) * p]; }
+  }
+  return HAND[HAND.length - 1].slice(1);
+}
+
+// In game mode the pointer is held inside Main; otherwise the Main/Side edge crosses freely.
+function pointerAt(t) {
+  const [hx, hy] = hand(t);
+  if (gameOn(t) && hx > EDGE_X - 2) return { x: EDGE_X - 2, y: hy, held: true, hx, hy };
+  return { x: hx, y: hy, held: false, hx, hy };
+}
+
+function roundRect(x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+
+function pointer(x, y, ghost = false) {
+  g.save(); g.translate(x - 2, y - 2);
+  g.beginPath(); g.moveTo(2, 2); g.lineTo(2, 24); g.lineTo(8, 18.5); g.lineTo(12, 28); g.lineTo(16, 26.3);
+  g.lineTo(12, 17); g.lineTo(20, 17); g.closePath();
+  if (ghost) { g.setLineDash([3, 3]); g.strokeStyle = C.muted; g.lineWidth = 1.4; g.stroke(); }
+  else { g.fillStyle = C.pointer; g.fill(); g.strokeStyle = '#0b0d10'; g.lineWidth = 1.6; g.lineJoin = 'round'; g.stroke(); }
+  g.restore();
+}
+
+// A plain made-up game: a dusk horizon, two ridges and a crosshair. No real game art.
+function game() {
+  const { x, y, w, h } = MAIN;
+  g.save(); roundRect(x, y, w, h, 8); g.clip();
+  const sky = g.createLinearGradient(0, y, 0, y + h);
+  sky.addColorStop(0, '#1d2633'); sky.addColorStop(0.62, '#2b3442'); sky.addColorStop(0.63, '#161b22'); sky.addColorStop(1, '#12161c');
+  g.fillStyle = sky; g.fillRect(x, y, w, h);
+  g.fillStyle = '#222a35';
+  g.beginPath(); g.moveTo(x, y + h * 0.63);
+  for (let i = 0; i <= 14; i += 1) g.lineTo(x + (w * i) / 14, y + h * (0.5 + 0.08 * Math.sin(i * 1.7) + 0.04 * Math.cos(i * 3.1)));
+  g.lineTo(x + w, y + h * 0.63); g.closePath(); g.fill();
+  g.restore();
+  g.fillStyle = C.faint; g.font = `500 12.5px ${FONT}`; g.textAlign = 'left';
+  g.fillText('Main  ·  a borderless game', x + 12, y + 22);
+}
+
+function keycap(label, x, y, w, down) {
+  const lift = down ? 0 : 3;
+  roundRect(x, y + 3, w, 34, 6); g.fillStyle = '#0c0f13'; g.fill();
+  roundRect(x, y + 3 - lift, w, 34, 6); g.fillStyle = down ? '#3a3220' : C.key; g.fill();
+  g.strokeStyle = down ? C.amber : C.keyLine; g.lineWidth = 1.2; g.stroke();
+  g.fillStyle = down ? C.amber : C.text; g.font = `600 14px ${FONT}`; g.textAlign = 'center';
+  g.fillText(label, x + w / 2, y + 25 - lift);
+}
+
+function keys(t) {
+  const keysDef = [['Ctrl', 62], ['Alt', 54], ['G', 40]];
+  let x = 690; const y = 384;
+  keysDef.forEach(([label, w], i) => {
+    const down = CHORDS.some(([a, b]) => t >= a + i * 0.12 && t < b);
+    keycap(label, x, y, w, down);
+    x += w + 10;
+    if (i < 2) { g.fillStyle = C.faint; g.font = `500 14px ${FONT}`; g.textAlign = 'center'; g.fillText('+', x - 5, y + 24); }
+  });
+}
+
+// A small notice near the corner of Main, like the tray balloon.
+function notice(t) {
+  const shows = [[GAME_ON[0], GAME_ON[0] + 2.0, 'Game mode on', 'pointer held on this screen'],
+                 [GAME_ON[1], GAME_ON[1] + 2.0, 'Game mode off', 'edges as set in Settings']];
+  for (const [a, b, title, line] of shows) {
+    const o = fade(t, a, b, 0.2);
+    if (o <= 0) continue;
+    g.globalAlpha = o;
+    const x = MAIN.x + MAIN.w - 236; const y = MAIN.y + MAIN.h - 70 + (1 - o) * 6;
+    roundRect(x, y, 224, 56, 8); g.fillStyle = '#232a35'; g.fill(); g.strokeStyle = C.keyLine; g.lineWidth = 1; g.stroke();
+    if (icon.complete) g.drawImage(icon, x + 10, y + 12, 32, 32);
+    g.textAlign = 'left'; g.fillStyle = C.text; g.font = `600 14px ${FONT}`; g.fillText(title, x + 52, y + 24);
+    g.fillStyle = C.muted; g.font = `400 12.5px ${FONT}`; g.fillText(line, x + 52, y + 42);
+    g.globalAlpha = 1;
+  }
+}
+
+window.renderAt = (t) => {
+  g.fillStyle = C.ground; g.fillRect(0, 0, 960, 470);
+  g.textAlign = 'left'; g.fillStyle = C.text; g.font = `600 18px ${FONT}`;
+  g.fillText('MouseFence', 40, 42);
+  const brandW = g.measureText('MouseFence').width;
+  g.fillStyle = C.muted; g.font = `400 15px ${FONT}`;
+  g.fillText('game mode and its shortcut', 40 + brandW + 12, 42);
+
+  game();
+  roundRect(MAIN.x, MAIN.y, MAIN.w, MAIN.h, 8); g.strokeStyle = C.screenLine; g.lineWidth = 1.5; g.stroke();
+  roundRect(SIDE.x, SIDE.y, SIDE.w, SIDE.h, 8); g.fillStyle = C.screen; g.fill(); g.stroke();
+  g.fillStyle = C.faint; g.font = `500 12.5px ${FONT}`; g.textAlign = 'left';
+  g.fillText('Side', SIDE.x + 12, SIDE.y + 22);
+
+  const p = pointerAt(t);
+  // Game mode: the whole of Main is fenced, drawn as an amber frame that glows while the pointer pushes on it.
+  const on = clamp(Math.min((t - GAME_ON[0]) / 0.25, (GAME_ON[1] - t) / 0.25));
+  if (on > 0) {
+    g.globalAlpha = on; g.strokeStyle = C.amber; g.lineWidth = 3;
+    if (p.held) { g.shadowColor = C.amber; g.shadowBlur = 16; }
+    roundRect(MAIN.x - 1.5, MAIN.y - 1.5, MAIN.w + 3, MAIN.h + 3, 9); g.stroke();
+    g.shadowBlur = 0; g.globalAlpha = 1;
+  }
+  // Crosshair in the game.
+  g.strokeStyle = '#c9d1dc'; g.lineWidth = 1.5; const cx = MAIN.x + MAIN.w / 2; const cy = MAIN.y + MAIN.h / 2 + 10;
+  g.beginPath(); g.moveTo(cx - 12, cy); g.lineTo(cx - 4, cy); g.moveTo(cx + 4, cy); g.lineTo(cx + 12, cy);
+  g.moveTo(cx, cy - 12); g.lineTo(cx, cy - 4); g.moveTo(cx, cy + 4); g.lineTo(cx, cy + 12); g.stroke();
+
+  if (p.held && p.hx > EDGE_X + 6) {
+    g.strokeStyle = C.faint; g.setLineDash([2, 4]); g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(p.x + 4, p.y + 8); g.lineTo(p.hx + 2, p.hy + 8); g.stroke(); g.setLineDash([]);
+    pointer(p.hx, p.hy, true);
+    g.fillStyle = C.amber; g.font = `500 12.5px ${FONT}`; g.textAlign = 'left';
+    g.fillText('held at the edge', SIDE.x + 16, SIDE.y + SIDE.h - 18);
+  }
+  notice(t);
+  pointer(p.x, p.y);
+
+  const cap = CAPTIONS.find(([a, b]) => t >= a && t < b);
+  if (cap) {
+    g.globalAlpha = cap[0] === 0 ? clamp((cap[1] - t) / 0.25) : fade(t, cap[0], cap[1], 0.25);
+    if (cap[1] === window.DEMO.duration) g.globalAlpha = clamp((t - cap[0]) / 0.25);
+    g.textAlign = 'left'; g.fillStyle = C.text; g.font = `600 17px ${FONT}`;
+    g.fillText(cap[2], 40, 404);
+    g.fillStyle = C.muted; g.font = `400 13.5px ${FONT}`;
+    g.fillText(cap[3], 40, 425);
+    g.globalAlpha = 1;
+  }
+  keys(t);
+};
+window.renderAt(0);
+</script>
+</body>
+</html>

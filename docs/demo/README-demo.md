@@ -1,8 +1,18 @@
-# The README demo film
+# The README animations
 
-`docs/demo.gif` is drawn, not recorded. `scene.html` is a small web page that paints any moment of the
-film when asked (`window.renderAt(seconds)`), and `render.mjs` steps through it frame by frame in a headless
-Chromium and lets ffmpeg turn the frames into an optimised GIF. Nobody's screen is captured.
+Three films, all drawn, none recorded. Each is a small web page that paints any moment of the film when asked
+(`window.renderAt(seconds)`); `render.mjs` steps through it frame by frame in a headless Chromium and lets
+ffmpeg turn the frames into an optimised GIF. Nobody's screen is captured.
+
+| Film | Page | GIF | What it shows |
+|---|---|---|---|
+| `scene` | `scene.html` | `docs/demo.gif` | The overview: drift stops, a push crosses, a screen kept off, Settings and tray. |
+| `edges` | `edges.html` | `docs/media/edges.gif` | One hand movement against the three edge behaviours side by side, with its upward speed. |
+| `game-mode` | `game-mode.html` | `docs/media/game-mode.gif` | Game mode and its shortcut: a flick out of a borderless game, held, released. |
+
+`edges.html` replays a small deterministic simulation of the README's rules for every frame: a free edge passes
+everything, a firm-push edge passes only a fast enough upward move, a never-crosses edge passes nothing upward.
+The speed threshold in it is a simplification for the picture, not the app's exact crossing rule.
 
 ## Re-render in one command
 
@@ -10,10 +20,12 @@ From the repository root:
 
 ```powershell
 node docs/demo/render.mjs --sheet
+node docs/demo/render.mjs edges --sheet
+node docs/demo/render.mjs game-mode --sheet
 ```
 
-This rewrites `docs/demo.gif` and writes `docs/demo/contact-sheet.png` (one frame per second, for a quick
-look; it is git-ignored). Add `--mp4` for `docs/demo.mp4` as well.
+Each rewrites its GIF and writes a contact sheet next to the pages (one frame per second, for a quick look;
+git-ignored). Add `--mp4` for an MP4 beside the GIF as well.
 
 Needs Node.js 18 or newer, ffmpeg on `PATH`, and Playwright with a Chromium:
 
@@ -27,7 +39,7 @@ Optional environment variables: `DEMO_CHROMIUM` (path to a Chromium or chrome-he
 
 ## Changing the film
 
-- **Words and timing:** edit the `TIMELINE` block at the top of the script in `scene.html`. `CAPTIONS` holds
+- **Words and timing:** edit the `TIMELINE` block at the top of the script in each page. `CAPTIONS` holds
   each caption with its start and end second, `PATH` the pointer's route, and `BEATS` when each layer
   (screen map, gate settings, tray menu, end card) is visible. `window.DEMO` sets size, frame rate and length.
 - **The app pictures:** the gate settings and tray menu come straight from `docs/screenshots/`. After a UI

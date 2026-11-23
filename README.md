@@ -45,6 +45,10 @@ Click the small gate between two screens and choose what that edge does:
 | **Needs a firm push** | Slow drift stops at the edge; one deliberate push crosses. |
 | **Never crosses** | The pointer stays on its side. |
 
+<p align="center">
+  <img src="docs/media/edges.gif" alt="Drawn animation: the same hand movement against the three edge behaviours side by side. A slow drift up passes only the free edge; the firm-push and never-crosses edges hold the pointer. One fast push then crosses the firm-push edge while never-crosses still holds, and coming back down is free on all three" width="800">
+</p>
+
 Each direction can behave differently: for example, going up into the top screen needs a firm push, while
 coming back down crosses freely. A screen you mark **Keep pointer off** is never entered at all, but Windows
 keeps using it as normal.
@@ -104,6 +108,10 @@ The original settings remain available for rollback. The 1.x release line is uns
 </p>
 
 **Default shortcuts** (change them in **Settings → Shortcuts**):
+
+<p align="center">
+  <img src="docs/media/game-mode.gif" alt="Drawn animation: a fast flick out of a borderless game lands on the side screen; Ctrl + Alt + G turns game mode on and the pointer is held at the edge of the game's screen, however hard the flick; the same keys turn it off and the pointer crosses again" width="800">
+</p>
 
 | Action | Shortcut |
 |---|---|
@@ -191,6 +199,11 @@ Open **Displays**: that screen is probably marked **Keep pointer off**, or the e
 **Do mixed-DPI monitors work?**
 Yes. MouseFence is per-monitor DPI-aware and works in physical pixels.
 
+**It does not start, and no tray icon appears.**
+MouseFence runs once per Windows session. If an older MouseFence 1.x or another program holds its
+single-instance name, 2.0 exits and writes the reason to `error.log`; close the other copy, or sign out and in
+again.
+
 **It will not start and says the settings file is invalid.**
 MouseFence never overwrites a settings file it cannot read. Restore a backup from **General → Restore from a
 file**, or remove `%APPDATA%\MouseFence\v2\settings.json` to start fresh. Details are in `error.log`.
@@ -262,8 +275,9 @@ target/x86_64-pc-windows-msvc/release/MouseFence.exe --screenshot-tray docs/scre
 The view number is `0` Displays, `1` Advanced, `2` Shortcuts, `3` General, `-1` edge editor, and `-2`
 Advanced with the physical-pixel controls open. The last argument is `en` or `tr`.
 
-**Demo GIF.** `docs/demo.gif` is an animation drawn from `docs/demo/scene.html`; re-render it with
-`node docs/demo/render.mjs`. See [docs/demo/README-demo.md](docs/demo/README-demo.md).
+**Animations.** `docs/demo.gif`, `docs/media/edges.gif` and `docs/media/game-mode.gif` are drawn, not
+recorded: each is a small page in `docs/demo/` rendered frame by frame. Re-render one with
+`node docs/demo/render.mjs [scene | edges | game-mode]`. See [docs/demo/README-demo.md](docs/demo/README-demo.md).
 
 ## Contributing
 
