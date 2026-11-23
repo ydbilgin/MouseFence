@@ -2,7 +2,7 @@
 //! against the untouched 1.1.1 C# code in tools/reference-cs. Parity row B032 and the reference half of the
 //! Track B pNNN rows. OWNED BY TRACK B.
 //!
-//! Run (the reference built through low_run, see docs/rust2/CONVENTIONS.md):
+//! Run (the reference built on a hidden desktop, see docs/rust2/CONVENTIONS.md):
 //!   MF_REFERENCE_EXE=<...>/MouseFence.Reference.exe cargo test -p fence-trace --test config_reference_diff --offline
 //!     -- --ignored --nocapture
 //! Every test FAILS (never skips) when MF_REFERENCE_EXE is unset, and fails when it compared nothing.

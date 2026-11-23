@@ -4,7 +4,7 @@
 //! - 2.0 (`Fixes::ALL`, what ships): a case may differ only where a judged fix (parity.tsv J rows) reported that
 //!   it changed the compile or a decision at or before the first differing op; every such case is counted per fix.
 //!
-//! Run: `MF_REFERENCE_EXE=<reference exe> cargo test -p fence-trace --offline -- --ignored` (through low_run). The
+//! Run: `MF_REFERENCE_EXE=<reference exe> cargo test -p fence-trace --offline -- --ignored` (on a hidden desktop). The
 //! tests FAIL, never skip, when the reference is missing. Each failure names its seed; replay one seed with
 //! `MF_ENGINE_SEED=<n>`.
 

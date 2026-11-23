@@ -5,7 +5,7 @@
 //! taskbar; egui's `ViewportCommand::Screenshot` reads the back buffer after a full paint. When the window cannot
 //! be created or the capture comes back blank, the same frame is painted by the CPU rasterizer instead and a
 //! `renderer=` line on stderr says which path ran (so a fallback is never silent). The demo layout is synthetic
-//! and never reads the live monitors or the owner's settings.
+//! and never reads the live monitors or the user's settings.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -357,7 +357,7 @@ pub fn capture_cpu(
     (flat, (r.width, r.height), metrics)
 }
 
-/// The owner's settings for the non-demo `--screenshot`, read without writing anything: no v2 file, no import
+/// The user's settings for the non-demo `--screenshot`, read without writing anything: no v2 file, no import
 /// save, no folder (JUDGE-FINAL M1). C# 1.1.1 `--screenshot` never created a 2.0 file, and 2.0's one-time import
 /// of the 1.x file must happen at its first real start, not during an agent's QA run. `None` (no `%APPDATA%`)
 /// gives defaults.
@@ -430,7 +430,7 @@ mod tests {
         v.iter().map(|s| s.to_string()).collect()
     }
 
-    // Parity row B035 (Program.cs:16-41,80-92). The window capture itself runs through low_run on the invisible
+    // Parity row B035 (Program.cs:16-41,80-92). The window capture itself runs on a hidden desktop on the invisible
     // desktop (evidence in TRACK-D.txt); this test proves the argument forms, the sizes and the metrics line.
     #[test]
     fn b035_screenshot_argument_forms_sizes_and_metrics_line() {
@@ -564,7 +564,7 @@ mod tests {
     }
 
     // JUDGE-FINAL M1: the non-demo --screenshot reads the settings of the %APPDATA% it is given and writes
-    // nothing there. A temp folder stands in for %APPDATA%; the owner's profile is never touched.
+    // nothing there. A temp folder stands in for %APPDATA%; the user's profile is never touched.
     #[test]
     fn s_ui_screenshot_live_settings_never_write_a_v2_file_or_touch_the_1x_file() {
         use std::time::{Duration, SystemTime};

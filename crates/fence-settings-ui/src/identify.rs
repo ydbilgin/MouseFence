@@ -211,7 +211,7 @@ mod tests {
         }
     }
 
-    // Parity row B036 (Program.cs:46-69; Ui/IdentifyOverlay.cs). The window part runs only through low_run on the
+    // Parity row B036 (Program.cs:46-69; Ui/IdentifyOverlay.cs). The window part runs only on a hidden desktop on the
     // invisible desktop (`--identify <file>`, evidence in TRACK-D.txt); this test proves the logic around it.
     #[test]
     fn b036_identify_overlays_cover_every_monitor_self_close_and_report_iters_and_remaining() {

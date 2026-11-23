@@ -59,9 +59,9 @@ All of these must hold, measured on raw counts after the arrival buckets:
 | 4 | 50 | 0.80 |
 | 5 | 40 | 0.80 |
 
-Tuned on the owner's own traces (300 files, ease 5): crossing time p90 fell from
+Tuned on real traces (300 files, ease 5): crossing time p90 fell from
 524 ms to 141 ms and crossings over 150 ms from 29 to 16 of 155. Of 14 held files with
-no crossing, 6 more now cross; each was followed by his real crossing 0.45-1.1 s later.
+no crossing, 6 more now cross; each was followed by a real crossing 0.45-1.1 s later.
 The 2.0.1 quick path already passes overshoots that arrive at full speed and brake
 only after contact (320 of 720 synthetic must-hold cases); the steady path adds none.
 

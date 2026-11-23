@@ -217,7 +217,7 @@ fn b001_a_load_problem_is_logged_and_the_tray_still_starts() {
     let w = h.w.borrow();
     assert!(w.logs.iter().any(|l| l.contains("bad bytes")), "{:?}", w.logs);
     assert!(w.enabled);
-    // 2.0 (join, JUDGE-C ruling 2): he is told in words, not only in the debug log.
+    // 2.0 (join, JUDGE-C ruling 2): the user is told in words, not only in the debug log.
     let b = w.balloons.first().expect("a balloon about the unreadable file");
     assert_eq!(
         (b.millis, b.kind, b.text.as_str()),

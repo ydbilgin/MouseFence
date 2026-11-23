@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn s_app_reload_accepts_only_a_clean_v2_load() {
         // An empty temporary APPDATA has no v2 file: whatever fence-config reports, it is not a clean V2
-        // load, so the tray keeps its live settings. Never touches the owner's %APPDATA%.
+        // load, so the tray keeps its live settings. Never touches the user's %APPDATA%.
         let t = TempDir::new("reload");
         let mut store = FileStore::new(&t.0.join("Roaming"), &t.0.join("Local"));
         assert!(store.reload_saved().is_err());

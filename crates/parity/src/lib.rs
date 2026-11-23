@@ -5,7 +5,7 @@
 //! - `P` rows: the 238 checks of the C# suite on public main 19b769c, in run order.
 //! - `B` rows: behaviours no C# test covers (tray, hotkeys, balloons, startup, settings file, dev CLI).
 //! - `J` rows: judged differences from 1.1.1 (fixes that land after exact parity).
-//! - `H` rows: the owner's hand checks; agents never run them.
+//! - `H` rows: manual checks; automated tests never run them.
 //!
 //! `cargo test -p parity` checks the file's shape. With `MF_PARITY_STRICT=1` it also checks that every
 //! row with a test prefix has a plain (`#[test]`, not `#[ignore]`d) `fn <prefix>...` in the named location;

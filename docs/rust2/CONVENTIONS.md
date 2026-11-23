@@ -44,7 +44,7 @@ references describe the pinned tag. Never change its extracted runtime sources t
 - Reference tests are `#[ignore = "needs MF_REFERENCE_EXE (tools/reference-cs)"]` and FAIL, never skip, when the
   reference is missing, so a parity run cannot pass with zero reference cases.
 
-## Test safety (the owner uses MouseFence 1.x all day)
+## Test safety (MouseFence may be in use on the same machine)
 
 - No test installs a real mouse hook, calls `SetCursorPos` or `ClipCursor`, or sends input.
 - Hotkey tests register only chords on F24 and fire them with a posted `WM_HOTKEY` to our own window.
@@ -52,26 +52,23 @@ references describe the pinned tag. Never change its extracted runtime sources t
 - Autostart tests write a throwaway key under `HKCU\Software\MouseFenceTest-<pid>`, never the Run key.
 - Settings tests use temporary folders, never `%APPDATA%\MouseFence`.
 - No test changes display settings. No test stops or replaces the running MouseFence.exe.
-- Anything that opens a window (screenshots, the identify overlay) runs only through low_run, which
-  starts it on the invisible desktop.
+- Anything that opens a window (screenshots, the identify overlay) runs only on a separate, invisible desktop.
 
 ## Commands
 
-Every build and test goes through low_run (BelowNormal priority, no window, invisible desktop): `<low_run>`
-below stands for `python <path to low_run.py>` as the brief gives it. Run them
-from any shell; `<wt>` is the worktree folder, `<log>` a file under your report folder.
+Builds and tests run at low priority without a window; anything that opens a window runs on an invisible desktop.
 
 ```
-<low_run> --cwd <wt> --log <log> -- cargo.exe test --workspace --offline
-<low_run> --cwd <wt> --log <log> -- cargo.exe clippy --workspace --offline --all-targets -- -D warnings
-<low_run> --cwd <wt> --log <log> -- cargo.exe fmt --all --check
+cargo.exe test --workspace --offline
+cargo.exe clippy --workspace --offline --all-targets -- -D warnings
+cargo.exe fmt --all --check
 ```
 
 The parity reference (C# 1.1.1 engine and settings code behind a JSON-lines interface):
 
 ```
-<low_run> --cwd <wt> --log <log> -- dotnet.exe build tools/reference-cs/MouseFence.Reference.csproj -c Release -o <scratch>/reference
-MF_REFERENCE_EXE=<scratch>/reference/MouseFence.Reference.exe <low_run> --cwd <wt> --log <log> -- cargo.exe test -p fence-trace --offline -- --ignored
+dotnet.exe build tools/reference-cs/MouseFence.Reference.csproj -c Release -o <scratch>/reference
+MF_REFERENCE_EXE=<scratch>/reference/MouseFence.Reference.exe cargo.exe test -p fence-trace --offline -- --ignored
 ```
 
 The settings-document reference test (`config_reference_diff.rs`) also compares the seal answers, which need
@@ -105,19 +102,15 @@ backend and "never crosses" under the fake, so the real-backend run is a green g
 The done gate of a track (fails while any row of the track lacks its test):
 
 ```
-MF_PARITY_STRICT=1 MF_PARITY_TRACK=A <low_run> --cwd <wt> --log <log> -- cargo.exe test -p parity --offline
+MF_PARITY_STRICT=1 MF_PARITY_TRACK=A cargo.exe test -p parity --offline
 ```
 
 The 1.1.1 suite stays green (it is the reference):
 
 ```
-<low_run> --cwd <wt> --log <log> -- dotnet.exe run --project tests/MouseFence.Tests.csproj -c Release
+dotnet.exe run --project tests/MouseFence.Tests.csproj -c Release
 ```
-
-low_run exit 75 means deferred (a game was running), 76 blocked (no invisible desktop): report them as
-such, never as a pass or a failure, and never retry with `--no-hidden-desktop`.
 
 ## Commits
 
-Commit on your own branch after every green test set, path-limited to the files you own. Never push,
-never merge into main: the repository is public and both wait for the owner's yes.
+Work on a branch and open a pull request; main changes through reviewed pull requests only.

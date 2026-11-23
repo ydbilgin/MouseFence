@@ -1,11 +1,11 @@
 //! MouseFence settings window (port of C# `Ui/` behaviour, not of its WinForms drawing code). OWNED BY TRACK D.
 //!
-//! Decisions (PLAN T16-T17): egui/eframe in a separate process that exists only while the owner has the
+//! Decisions (PLAN T16-T17): egui/eframe in a separate process that exists only while the user has the
 //! window open; functional parity with the 1.x window (four pages, map with clickable gates, boundary
 //! drawer, screen names and keep-pointer-off, Advanced numbers, Shortcuts capture and validation, General
 //! with backup/restore, EN/TR, System/Light/Dark/high contrast), proven by headless tests that drive
 //! `egui::Context` with raw input (no window, no GPU). Screenshots and the identify overlay run only
-//! through low_run on the invisible desktop.
+//! on a hidden desktop on the invisible desktop.
 //!
 //! Layout: `editor` holds the behaviour (one method per C# `SettingsForm` handler), `boundary` the map model,
 //! `ui` draws both with egui, `backend` is the port to Tracks A and B, `process` is the settings process

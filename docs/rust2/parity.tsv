@@ -1,10 +1,10 @@
 # MouseFence 2.0 parity checklist. Generated 2026-10-13 from the 1.1.1 suite on public main 19b769c (238 PASS)
-# plus the behaviours no C# test covers (B rows), the judged differences (J rows) and the owner's hand checks (H rows).
+# plus the behaviours no C# test covers (B rows), the judged differences (J rows) and manual checks (H rows).
 # Columns (tab-separated): id, track, how, rust_test_prefix, rust_location, source, behaviour, note
 # A row is DONE when a test function whose name starts with rust_test_prefix exists under rust_location and passes.
 # P rows: the behaviour is the C# Check name; rows marked renamed-in-22665ee use the synthetic name and the synthetic
 # geometry of commit 22665ee (`git show 22665ee:tests/Tests.cs`). Never copy a real desk layout into a fixture.
-# Tracks: S skeleton, A engine, B config + layout helpers, C Windows + tray, D settings UI, O owner (hand check, not run by agents).
+# Tracks: S skeleton, A engine, B config + layout helpers, C Windows + tray, D settings UI, O manual (hand check, not run by automated tests).
 id	track	how	rust_test_prefix	rust_location	source	behaviour	note
 P001	A	unit + reference-diff	p001_	crates/fence-engine	tests/Tests.cs:123	right-screen void: up into void is blocked & clamped to Y=0	-
 P002	D	equivalent headless egui test	p002_	crates/fence-settings-ui	tests/Tests.cs:149	M2 settings transaction: form owns a nested deep draft and Cancel cannot mutate live settings	-
@@ -279,8 +279,8 @@ B031	B	unit (temp dirs)	b031_	crates/fence-config	Settings.cs:372-387	save: norm
 B032	B	reference-diff (verb normalize)	b032_	crates/fence-config	Settings.cs (whole file)	a settings file written by 1.1.1 loads and normalizes to the same values as 1.1.1; the 2.0 writer emits the same schema-v4 JSON content	-
 B033	B	unit (temp dirs)	b033_	crates/fence-config	PLAN T15 (new in 2.0)	the 1.x settings file is never written: its bytes and modified time are unchanged after load, save and migration	-
 B034	D	unit	b034_	crates/fence-settings-ui	Ui/Theming.cs:57-70	theme: high contrast wins; System follows AppsUseLightTheme; Light and Dark are explicit	-
-B035	D	invisible-desktop (low_run)	b035_	crates/fence-settings-ui	Program.cs:16-41,80-92	--screenshot / --screenshot-demo: argument forms (path, layout, tab, language, scale or WxH, WxH; sizes 320..10000), PNG written, metrics line printed; the demo layout is synthetic	2026-10-13: renderer glow chosen (PLAN T16); renderer=glow on the invisible desktop for every capture, the CPU raster is only a fallback; evidence in TRACK-D.txt
-B036	D	invisible-desktop (low_run)	b036_	crates/fence-settings-ui	Program.cs:46-69; Ui/IdentifyOverlay.cs	--identify: numbered overlay on every monitor, self-closes within about 2.8 s, writes "iters=N remaining=M" to the given file	2026-10-13 on the invisible desktop: overlays=4 iters=175 remaining=0 (TRACK-D.txt)
+B035	D	invisible-desktop	b035_	crates/fence-settings-ui	Program.cs:16-41,80-92	--screenshot / --screenshot-demo: argument forms (path, layout, tab, language, scale or WxH, WxH; sizes 320..10000), PNG written, metrics line printed; the demo layout is synthetic	2026-10-13: renderer glow chosen (PLAN T16); renderer=glow on the invisible desktop for every capture, the CPU raster is only a fallback; evidence in TRACK-D.txt
+B036	D	invisible-desktop	b036_	crates/fence-settings-ui	Program.cs:46-69; Ui/IdentifyOverlay.cs	--identify: numbered overlay on every monitor, self-closes within about 2.8 s, writes "iters=N remaining=M" to the given file	2026-10-13 on the invisible desktop: overlays=4 iters=175 remaining=0 (TRACK-D.txt)
 B037	D	unit	b037_	crates/fence-settings-ui	PLAN T16 (new in 2.0)	settings window process: reads the live state from --state, exits 0 after a successful save through fence-config, 1 on cancel, 2 on failure	-
 B038	D	headless egui test (temp paths; the file dialog is injected)	b038_	crates/fence-settings-ui	Ui/SettingsForm.General.cs:41-90	backup and restore on the General page: the draft is validated before export; an import goes through the same validation	-
 B039	S	unit (done in skeleton)	s_i18n_resolve	crates/fence-i18n	I18n/Strings.cs:14-20	language "auto" follows the OS UI language (tr gives Turkish, anything else English); "en" and "tr" are explicit	-
@@ -294,7 +294,7 @@ J06	A	unit	j06_	crates/fence-engine	lesson L8 (F7)	transitive landing: a case th
 J07	C	unit (fake cursor port)	j07_	crates/fence-win	PLAN T10 (F8)	SetCursorPos failure: the move passes (fail open) and is counted as degraded	-
 J08	C	unit	j08_	crates/fence-win	PLAN T12 (F9)	panic containment (see B028)	-
 J09	A	unit + mutation	j09_	crates/fence-engine	commit a2de8f9 (F01)	full corridor enforces Free/Push/Blocked; inset ends hold Push	approved default; switch j09_full_corridor
-# H rows: the owner's hand checks. Agents never run these (they move the real cursor or need his desk).
+# H rows: manual checks. Automated tests never run these (they move the real cursor or need a real desk).
 J25	C	fake notification state + mutation	j25_	crates/fence-win	F14	busy/fullscreen/presentation notifications queue newest four and each delivery waits for an accepting state	switch j25_fullscreen_quiet; controller probes even when paused
 J26	C	fixed histogram + counting allocator + mutation	j26_	crates/fence-win	F16	atomic cumulative step timing, callback and reinstall counters reach tray logs every three seconds; 100000 events allocate zero bytes	switch j26_hook_metrics; p99_upper_us is nearest-rank bucket upper bound, not an exact percentile; overflow uses measured maximum
 J13	A	physical-report corpus + mutation	j13_	crates/fence-engine	F11	Classic1k preserves 1000 Hz intent across 1000-8000 Hz reports and bunched timestamps	switch j13_classic_1k
@@ -312,14 +312,14 @@ J18	B	unit + mutation	f06_	crates/fence-config	a2de8f9; cb1de05 AuditCleanupScen
 J19	B	unit + mutation	f07_	crates/fence-config	361134b Settings.JsonExtensionData	v2 round trip preserves ordered unknown top-level JSON fields after known ones; one-time legacy import ignores them	switch j19_unknown_settings; from_json_v2_with_fixes and to_json_v2_with_fixes; legacy exact APIs unchanged
 J20	C	unit + mutation	f08_	crates/fence-win	a2de8f9 CrashLogger	64KiB UTF8 error log rotates one archive and retains newest failure; tray panic logging never writes from hook thread	switch j20_error_log; append_with_fixes and install_panic_hook_with_fixes; tray probe integration
 J21	D	headless + mutation	f09_	crates/fence-settings-ui	8edb705; e2a8dde; 8e46927; ac73c39	screen name stays above gate pill; shortcut rows remain readable; Light and Dark captures report visible page	switch j21_ui_keepers; Editor::new_with_fixes; name_above_pill_with_fixes; tray labels covered separately
-H01	O	hand check	-	-	-	the up barrier on his desk: drift is blocked, a firm push crosses, the gate hotkey opens and closes it	-
+H01	O	hand check	-	-	-	the up barrier on a real desk: drift is blocked, a firm push crosses, the gate hotkey opens and closes it	-
 H02	O	hand check	-	-	-	side containment: drift out of the main screen is blocked, a deliberate sideways push crosses	-
 H03	O	hand check	-	-	-	game mode confines the cursor to the current monitor on each monitor	-
 H04	O	hand check	-	-	-	the pause hotkey frees the cursor from any trap and the balloon confirms it	-
-H05	O	hand check	-	-	-	tray icon states, tooltip and menu at his DPI, in English and Turkish	-
+H05	O	hand check	-	-	-	tray icon states, tooltip and menu at the real DPI, in English and Turkish	-
 H06	O	hand check	-	-	-	the four real hotkeys, including the Intel warning if it applies	-
 H07	O	hand check	-	-	-	dock, undock or change a display: the fence follows within about one second	-
 H08	O	hand check	-	-	-	the settings window in light, dark and high contrast, English and Turkish; save and cancel	-
 H09	O	hand check (at cut-over only)	-	-	-	start with Windows from the real Run entry	-
 H10	O	hand check	-	-	-	a fullscreen game session with game mode on, no stutter and no escape	-
-H11	O	hand check	-	-	-	the 7-day feel trial (owner question Q1)	-
+H11	O	hand check	-	-	-	the 7-day feel trial	-

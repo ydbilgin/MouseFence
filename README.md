@@ -202,8 +202,10 @@ Saving replaces the file in one step; if the save fails, the previous settings s
 ## Privacy
 
 MouseFence has no network code: it sends nothing anywhere and has no telemetry or update check. It reads
-pointer movement through a standard Windows mouse hook to apply the fences, and only stores your settings and a
-small error log in `%APPDATA%\MouseFence\v2\`.
+pointer movement through a standard Windows mouse hook to apply the fences, and stores your settings and a
+small error log in `%APPDATA%\MouseFence\v2\` and a launch state file in `%LOCALAPPDATA%\MouseFence\v2\`. Movement is
+stored only if you turn on **Record edge moves** (Advanced, off by default): then edge moves go to
+`%LOCALAPPDATA%\MouseFence\v2\traces\`, at most 300 files and 20 MB, and stay on your PC. See [SECURITY.md](SECURITY.md).
 
 ## How it works
 
@@ -272,3 +274,11 @@ hook ignores simulated input on purpose, so real feel cannot be tested with fake
 ## License
 
 [MIT](LICENSE)
+
+## Türkçe
+
+MouseFence, birden fazla monitör kullananlar için küçük bir Windows tepsi uygulaması. Fare imlecinin
+istemeden yan ekrana kaymasını önler: her ekran kenarı için serbest geçiş, sert bir itişle geçiş ya da hiç
+geçmeme seçersiniz; oyun modu imleci tek ekranda tutar. Ağ kodu yoktur, yönetici yetkisi istemez, arayüz
+Türkçe ve İngilizce. İndirmek için [son sürüm](../../releases/latest); exe imzasız olduğu için SmartScreen
+ilk indirmede onay isteyebilir, SHA256 değerini sürüm sayfasıyla karşılaştırabilirsiniz.

@@ -1,6 +1,6 @@
 //! Client for the C# parity reference (tools/reference-cs), built from the untouched 1.1.1 sources.
 //!
-//! The reference is a test tool, never shipped. Build it through low_run (docs/rust2/CONVENTIONS.md), then
+//! The reference is a test tool, never shipped. Build it on a hidden desktop (docs/rust2/CONVENTIONS.md), then
 //! point `MF_REFERENCE_EXE` at `MouseFence.Reference.exe`. Reference tests are `#[ignore]`d so a plain
 //! `cargo test` works without .NET; the parity runs use `-- --ignored` and FAIL when the variable is unset.
 

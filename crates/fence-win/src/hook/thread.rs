@@ -52,7 +52,7 @@ pub trait HookInstaller: Send {
 }
 
 /// The production installer: a real `WH_MOUSE_LL` hook whose callback runs [`HookCore::step`].
-/// Never used by tests (PLAN T19); the owner's hand check H01 is the only run of a real hook.
+/// Never used by tests (PLAN T19); the manual check H01 is the only run of a real hook.
 #[derive(Debug, Default)]
 pub struct LowLevelMouseHook {
     handle: usize,

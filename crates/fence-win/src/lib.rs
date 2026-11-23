@@ -1,13 +1,13 @@
 //! MouseFence Windows layer. OWNED BY TRACK C. The only crate (with the settings UI's identify overlay)
 //! allowed to use `unsafe`, and only for Win32 calls through windows-sys.
 //!
-//! Rules for every test in this crate (PLAN T19; the owner games fullscreen on this PC):
+//! Rules for every test in this crate (tests must never disturb a machine in use):
 //! - never install a real WH_MOUSE_LL hook, never call SetCursorPos or ClipCursor, never send input;
 //! - never register a real MouseFence chord (tests use F24-based chords) and never take the real
 //!   single-instance mutex name (tests use a per-process test name);
 //! - never write `HKCU\...\Run` (autostart takes the key path as a parameter; tests use a throwaway key);
-//! - never read or write the owner's settings files (tests use temp folders);
-//! - read-only display enumeration may run, but tests print no coordinates (his desk layout is private);
+//! - never read or write the user's settings files (tests use temp folders);
+//! - read-only display enumeration may run, but tests print no coordinates (a real desk layout is private);
 //! - never call Shell_NotifyIcon or TrackPopupMenu (tests build the data and the menu, and stop there);
 //! - windows made by tests are message-only (HWND_MESSAGE), never shown, and are destroyed at the end.
 //!

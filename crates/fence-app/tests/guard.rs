@@ -421,7 +421,7 @@ impl Decider for SeamModel {
     }
 }
 
-/// The owner's desk in miniature: where the cursor is, and where the hook placed it. Never the real cursor.
+/// A desk in miniature: where the cursor is, and where the hook placed it. Never the real cursor.
 #[derive(Debug, Default)]
 struct Desk {
     pos: Option<(i32, i32)>,

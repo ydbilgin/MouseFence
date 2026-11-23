@@ -580,7 +580,7 @@ pub(crate) static EN: &[(&str, &str)] = &[
         "TipIntelDefaults",
         "Intel graphics detected — added Shift to the arrow hotkeys to dodge screen rotation (toggle up: {0}, side: {1}).",
     ),
-    // New in 2.0 (join 2026-10-13; JUDGE-C ruling 2): J04 load safety tells him, not only the debug log.
+    // New in 2.0 (join 2026-10-13; JUDGE-C ruling 2): J04 load safety tells the user, not only the debug log.
     (
         "TipSettingsUnreadable",
         "MouseFence couldn't read its settings file, so it is running on default settings. The file was not changed.",

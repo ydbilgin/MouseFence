@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn s_win_system_queries_run_read_only() {
-        // These read the live machine and change nothing; the values are his and are not asserted.
+        // These read the live machine and change nothing; the values belong to the machine and are not asserted.
         let _ = has_intel_gpu();
         let _ = os_ui_is_turkish();
         let _ = is_system_dark();

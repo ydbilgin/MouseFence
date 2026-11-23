@@ -1,5 +1,5 @@
 //! The resident tray process: single instance, the hidden tray window, the hook thread, the controller and
-//! the message loop. Never run by any automated test (it installs the real hook): the owner's hand checks
+//! the message loop. Never run by any automated test (it installs the real hook): manual checks
 //! H01-H09 are its first runs.
 
 use std::path::PathBuf;

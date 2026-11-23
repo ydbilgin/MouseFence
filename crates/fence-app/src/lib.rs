@@ -3,7 +3,7 @@
 //! All OS access goes through the port traits below; fence-win implements them for real (wired in
 //! apps/mousefence), the tests here implement them with fakes. That is how the B-rows of docs/rust2/parity.tsv
 //! (tray, hotkeys, balloons, startup, pause, display change, hook health, Intel warning, settings round trip)
-//! are proven without a real hook, a real tray icon, a real hotkey or a real cursor move on the owner's PC.
+//! are proven without a real hook, a real tray icon, a real hotkey or a real cursor move on the user's PC.
 //!
 //! - [`Controller`] (controller.rs): startup, toggles, pause, the 3 s probe and its outage latch, the 750 ms
 //!   display debounce, Configure balloons and the isolation warning, the Intel warning, the settings process

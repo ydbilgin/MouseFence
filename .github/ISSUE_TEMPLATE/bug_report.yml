@@ -44,6 +44,6 @@ body:
     id: actual
     attributes:
       label: Actual behaviour
-      description: Include the relevant lines from %APPDATA%\MouseFence\v2\error.log if there are any.
+      description: Include the relevant lines from %APPDATA%\MouseFence\v2\error.log if there are any. Replace your Windows user name in paths first.
     validations:
       required: true

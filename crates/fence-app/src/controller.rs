@@ -265,7 +265,7 @@ impl Controller {
     }
 
     /// 2.0 (JUDGE-C S1): the J07/J08 counters reach the log on the 3 s probe when they changed, so a fail-open
-    /// or a contained panic during his trial leaves a trace. No balloon: the move already passed safely.
+    /// or a contained panic during a trial leaves a trace. No balloon: the move already passed safely.
     fn log_hook_faults(&mut self) {
         let now = self.ports.guard.fault_counts();
         if now == self.hook_faults_logged {

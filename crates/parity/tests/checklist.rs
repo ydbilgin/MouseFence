@@ -49,7 +49,7 @@ fn s_parity_tracks_and_locations_are_valid() {
         let kind = r.id.chars().next().unwrap();
         assert!("PBJH".contains(kind), "{}: id must start with P, B, J or H", r.id);
         if r.track == "O" {
-            assert_eq!(r.test_prefix, "-", "{}: owner rows have no agent test", r.id);
+            assert_eq!(r.test_prefix, "-", "{}: manual rows have no automated test", r.id);
             continue;
         }
         assert_ne!(r.test_prefix, "-", "{}: agent rows need a test prefix", r.id);
@@ -86,7 +86,7 @@ fn s_parity_skeleton_rows_are_already_proven() {
 
 #[test]
 fn s_parity_rows_carry_no_real_desk_names() {
-    // L16: fixtures and checklist text use the synthetic names of 22665ee, never the owner's desk.
+    // L16: fixtures and checklist text use the synthetic names of 22665ee, never a real desk.
     let rows = load().unwrap();
     for r in &rows {
         for word in ["real-geo", "Samsung", "reporter "] {

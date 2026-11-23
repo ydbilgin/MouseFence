@@ -577,7 +577,7 @@ pub(crate) static TR: &[(&str, &str)] = &[
         "TipIntelDefaults",
         "Intel ekran kartı algılandı — ekran dönmesini önlemek için ok kısayollarına Shift eklendi (üst geçiş: {0}, yan: {1}).",
     ),
-    // New in 2.0 (join 2026-10-13; JUDGE-C ruling 2): J04 load safety tells him, not only the debug log.
+    // New in 2.0 (join 2026-10-13; JUDGE-C ruling 2): J04 load safety tells the user, not only the debug log.
     (
         "TipSettingsUnreadable",
         "MouseFence ayar dosyasını okuyamadı, bu yüzden varsayılan ayarlarla çalışıyor. Dosya değiştirilmedi.",

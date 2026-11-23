@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn s_win_live_enumeration_is_read_only_and_sane() {
-        // Read-only query of the live displays. Prints nothing: his desk layout stays private (L16).
+        // Read-only query of the live displays. Prints nothing: a real desk layout stays private (L16).
         let list = enumerate();
         assert!(!list.is_empty(), "at least one monitor");
         assert!(list.iter().all(|m| m.bounds.is_valid()), "every monitor has an area");

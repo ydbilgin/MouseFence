@@ -21,10 +21,10 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master 2026-11-23
         with:
           toolchain: 1.98.1
           components: rustfmt, clippy
@@ -42,7 +42,7 @@ jobs:
           Copy-Item -LiteralPath target/x86_64-pc-windows-msvc/release/MouseFence.exe -Destination dist/MouseFence-win-x64.exe
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath dist/MouseFence-win-x64.exe).Hash.ToLowerInvariant()
           "$hash  MouseFence-win-x64.exe" | Set-Content -Encoding ascii dist/MouseFence-win-x64.exe.sha256
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: dist/MouseFence-win-x64.exe
       - name: Create draft release

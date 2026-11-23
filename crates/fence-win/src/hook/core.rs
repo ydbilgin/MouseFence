@@ -2,7 +2,7 @@
 //!
 //! No Windows call happens here: the caller turns the raw callback arguments into a [`HookEvent`] and acts
 //! on the returned [`StepOutcome`] (`CallNext` = CallNextHookEx, `Swallow` = return 1). Cursor placement
-//! goes through [`CursorPort`], so tests use a fake and never move the owner's cursor.
+//! goes through [`CursorPort`], so tests use a fake and never move the user's cursor.
 //!
 //! Rules (in this order, as 1.1.1):
 //! 1. every delivered event is counted first; the counter is the liveness evidence (B021, HookHealth);
@@ -170,7 +170,7 @@ pub enum StepOutcome {
 }
 
 /// Cursor access for the step. The real one (fence-win `cursor::SystemCursor`) calls SetCursorPos and
-/// GetCursorPos; tests use fakes, so no test ever moves the owner's cursor.
+/// GetCursorPos; tests use fakes, so no test ever moves the user's cursor.
 pub trait CursorPort {
     /// SetCursorPos; true when Windows accepted it.
     fn set_cursor_pos(&mut self, x: i32, y: i32) -> bool;
